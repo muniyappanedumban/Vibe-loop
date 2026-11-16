@@ -57,7 +57,7 @@ function generate(brief: string, st: ReturnType<typeof useStore.getState>) {
   const short = topic.split(/\s+/).slice(0, 6).join(' ');
   const patterns = [`POV: ${short.toLowerCase()}`, `${short} — in under 30 seconds`, `Nobody tells you this about ${short.toLowerCase()}`, `3 things I learned from ${short.toLowerCase()}`, `Wait for the last one: ${short.toLowerCase()}`];
   const hooks = patterns.filter(h => !st.neverIdeas.some(n => h.toLowerCase().includes(n.toLowerCase()))).slice(0, 3);
-  const captions = [`${short} ✦ save this for later`, `Which part got you? Tell me below`, `Part 1 of a new series — ${short.toLowerCase()}`];
+  const captions = [`${short}  save this for later`, `Which part got you? Tell me below`, `Part 1 of a new series — ${short.toLowerCase()}`];
   const formats = ['9:16 short (≤35s — your Loops flag 60s+ as slow)', '1:1 carousel recap', '16:9 long-form with chapters'];
   return { hooks, captions, formats, basedOn: wins };
 }

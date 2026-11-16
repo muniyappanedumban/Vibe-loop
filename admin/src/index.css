@@ -133,3 +133,50 @@ input[type=range] { accent-color: var(--pink); flex: 1; }
 .cell.on { background: var(--prism); border-color: transparent; } .cell:disabled { cursor: not-allowed; opacity: .55; } .cell:not(:disabled):hover { border-color: var(--violet); }
 
 @media (max-width: 1100px) { .g2, .g3, .g2-1, .g1-2 { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------- settings / emoji / features / search ---------- */
+.topsearch input { width: 200px; }
+.setgrid { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+.subnav { padding: 10px; display: flex; flex-direction: column; gap: 2px; position: sticky; top: 104px; flex: none; }
+.subnav a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--r1); color: var(--inkSoft); font-weight: 550; }
+.subnav a:hover { background: #F8F6FD; color: var(--ink); }
+.subnav a.on { background: var(--ink); color: #fff; font-weight: 650; } .subnav a.on svg { color: var(--pink); }
+.setpanel input.wide, input.wide { width: 100%; }
+.fctl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; } .fctl input[type=number] { width: 84px; }
+.savebar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 20px; padding: 12px 16px; border-radius: var(--r1); background: #F8F6FD; font-size: 13px; color: var(--inkSoft); }
+.savebar.dirty { background: #FFF0E3; color: #b2541a; font-weight: 600; border: 1px solid #FFD9BE; }
+.rolegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.rolecell { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r1); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; border-radius: 99px; background: #F1EEFA; color: #4b2fc9; font-weight: 600; font-size: 13px; }
+.chip button { border: 0; background: #fff; border-radius: 99px; width: 20px; height: 20px; display: grid; place-items: center; cursor: pointer; color: var(--inkSoft); }
+.preview-brand { display: flex; gap: 12px; align-items: center; margin-top: 16px; padding: 16px; border-radius: var(--r1); background: var(--ink); color: #fff; } .preview-brand small { color: #b9b4d4; }
+.swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.swatch { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: var(--r1); padding: 12px; cursor: pointer; position: relative; }
+.swatch i { height: 56px; border-radius: 10px; display: block; } .swatch input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+.bpreview { border-radius: var(--r2); overflow: hidden; background: var(--ink); }
+.bp-hero { padding: 26px 28px; color: #fff; background: radial-gradient(circle at 90% -20%, rgba(255,61,154,.35), transparent 55%); } .bp-hero h2 { font-size: 22px; margin: 6px 0 14px; }
+.bp-btn { background: var(--bp); color: #fff; font-weight: 700; padding: 9px 18px; border-radius: 99px; }
+.bp-chip { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; color: #fff; }
+.bp-bar { height: 8px; background: #2a2545; } .bp-bar i { display: block; height: 100%; width: 72%; background: var(--bp); }
+.toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; gap: 8px; align-items: center; background: var(--ink); color: #fff; padding: 12px 20px; border-radius: 99px; font-weight: 650; box-shadow: 0 12px 30px -10px rgba(18,15,36,.5); }
+.toast svg { color: var(--lime); }
+
+.moji { display: inline-block; flex-shrink: 0; } .moji svg { width: 100%; height: 100%; display: block; }
+.reacts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.react { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 8px; border: 1px solid var(--line); border-radius: var(--r1); background: #fff; cursor: pointer; } .react:hover { border-color: var(--violet); }
+.catrow { margin-bottom: 14px; } .catrow .tabs { flex-wrap: wrap; }
+.mojigrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; max-height: 560px; overflow: auto; padding: 2px; }
+.mcell { aspect-ratio: 1; border: 1px solid transparent; border-radius: 12px; background: #FBFAFE; display: grid; place-items: center; cursor: pointer; transition: transform .1s; }
+.mcell:hover { border-color: var(--line); transform: scale(1.06); } .mcell.on { border-color: var(--pink); background: #FFF0F7; box-shadow: 0 0 0 3px rgba(255,61,154,.15); }
+.mcell.off { opacity: .3; filter: grayscale(1); }
+.mdetail { align-self: start; position: sticky; top: 104px; }
+.mbig { display: grid; place-items: center; padding: 20px; border-radius: var(--r2); background: radial-gradient(circle, #F4EEFF, #fff 70%); }
+.mname { font-size: 22px; font-weight: 800; margin: 12px 0 10px; text-align: center; }
+.kv { display: grid; grid-template-columns: 90px 1fr; gap: 8px 12px; font-size: 13px; align-items: center; } .kv > span { color: var(--inkSoft); }
+.fsec { position: relative; overflow: hidden; } .fsec-bar { position: absolute; left: 0; top: 0; right: 0; height: 4px; }
+.fsec .frow { padding: 10px 0; } .fn { color: var(--inkSoft); width: 28px; }
+.bigsearch { display: flex; gap: 10px; align-items: center; color: var(--inkSoft); } .bigsearch input { flex: 1; font-size: 16px; padding: 10px 12px; }
+.sres { display: flex; gap: 12px; align-items: center; padding: 11px 6px; border-bottom: 1px solid #F1EEF8; border-radius: 8px; } .sres:hover { background: #FBFAFE; } .sres:last-child { border-bottom: 0; } .sres > svg { color: var(--violet); flex-shrink: 0; }
+@media (max-width: 1100px) { .setgrid { grid-template-columns: 1fr; } .subnav { position: static; } .swatches, .reacts { grid-template-columns: repeat(3, 1fr); } }
+.samepill { border: 0; cursor: pointer; text-transform: none; } .samepill:hover { background: #E2D9FF; }

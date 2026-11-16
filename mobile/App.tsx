@@ -16,6 +16,9 @@ import { CreateHub, Copilot, Editor, Audio } from './src/screens/Create';
 import { Library, Memory } from './src/screens/Library';
 import { ReleaseGate, Profile, Earnings, Payout } from './src/screens/Money';
 import { Notifications, Settings } from './src/screens/System';
+import { Explore, Motion, Sparks, NewPost, Vault } from './src/screens/Social';
+import { Chats, ChatThread, Search, Tribes, Live } from './src/screens/Connect';
+import { Emoji, Features, Growth, Trust, Learn, SettingsHub } from './src/screens/Extras';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -25,9 +28,9 @@ function Tabs() {
   return (
     <Tab.Navigator tabBar={p => <TabBar {...p} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg } } as any}>
       <Tab.Screen name="Home" component={Home} />
-      <Tab.Screen name="Loops" component={LoopsScreen} />
+      <Tab.Screen name="Explore" component={Explore} />
       <Tab.Screen name="Create" component={CreateHub} />
-      <Tab.Screen name="Library" component={Library} />
+      <Tab.Screen name="Motion" component={Motion} />
       <Tab.Screen name="Profile" component={Profile} />
     </Tab.Navigator>
   );
@@ -45,7 +48,7 @@ export default function App() {
   const initial = target === 'Onboarding' || (!target && !onboarded) ? 'Onboarding' : 'Main';
   const onReady = () => {
     if (!target || target === 'Onboarding') return;
-    const params = q?.get('id') ? { id: q.get('id') } : undefined;
+    const params: any = {}; q?.forEach((v, k) => { if (k !== 's') params[k] = v; });
     if (TAB_SCREENS.includes(target)) navRef.navigate('Main', { screen: target }); else navRef.navigate(target, params);
   };
   return (
@@ -68,6 +71,22 @@ export default function App() {
           <Stack.Screen name="Payout" component={Payout} />
           <Stack.Screen name="Notifications" component={Notifications} />
           <Stack.Screen name="Settings" component={Settings} />
+          <Stack.Screen name="Loops" component={LoopsScreen} />
+          <Stack.Screen name="Library" component={Library} />
+          <Stack.Screen name="Sparks" component={Sparks} />
+          <Stack.Screen name="NewPost" component={NewPost} />
+          <Stack.Screen name="Vault" component={Vault} />
+          <Stack.Screen name="Chats" component={Chats} />
+          <Stack.Screen name="ChatThread" component={ChatThread} />
+          <Stack.Screen name="Search" component={Search} />
+          <Stack.Screen name="Tribes" component={Tribes} />
+          <Stack.Screen name="Live" component={Live} />
+          <Stack.Screen name="Emoji" component={Emoji} />
+          <Stack.Screen name="Features" component={Features} />
+          <Stack.Screen name="Growth" component={Growth} />
+          <Stack.Screen name="Trust" component={Trust} />
+          <Stack.Screen name="Learn" component={Learn} />
+          <Stack.Screen name="SettingsHub" component={SettingsHub} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

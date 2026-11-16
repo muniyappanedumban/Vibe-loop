@@ -10,7 +10,7 @@ export const SEED_LOOPS: Loop[] = [
   { id: 'l1', title: 'Chai-break comedy · Ep 4', template: 'Comedy short', sizeLimit: 20, minScore: 70, windowHours: 24, members: MEMBERS.slice(0, 10), status: 'testing', openedAt: o1, notes: ['Try the cold open from Ep 2'], silent: false, paidOnly: false, demo: true,
     dna: { mood: 'Playful', energy: 82, depth: 35, pace: 76 },
     drafts: [
-      { version: 'A', title: 'Cold open: spilled chai', hook: 'POV: your boss walks in mid-sip', caption: 'Monday mood, but make it chai ☕', hue: 265, durationSec: 34, synthetic: false },
+      { version: 'A', title: 'Cold open: spilled chai', hook: 'POV: your boss walks in mid-sip', caption: 'Monday mood, but make it chai ', hue: 265, durationSec: 34, synthetic: false },
       { version: 'B', title: 'Slow build + punchline', hook: 'Three types of office chai drinkers', caption: 'Which one are you?', hue: 330, durationSec: 41, synthetic: false },
     ],
     reactions: mk(o1, [[0, 'A', 'share', 'So relatable, sending to my team', 0.5], [1, 'A', 'forme', 'This is literally me lol great timing', 1], [2, 'B', 'work', 'Punchline lands late, feels slow', 1.4], [3, 'A', 'share', 'Love the cold open', 2], [4, 'B', 'skip', 'Too long for a short', 2.5], [5, 'A', 'work', 'Audio a bit loud at the start', 3], [6, 'B', 'share', 'Fresh idea', 3.6]]) },

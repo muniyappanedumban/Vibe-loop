@@ -20,7 +20,7 @@ export function LoopsScreen({ navigation }: any) {
   const list = loops.filter(l => f === 'all' || l.status === f);
   return (
     <Screen>
-      <Header title="Your Loops" sub="Private testing groups · real people only" back={false} right={<IconBtn name="plus" label="New Loop" onPress={() => navigation.navigate('NewLoop')} />} />
+      <Header title="Your Loops" sub="Private testing groups · real people only" right={<IconBtn name="plus" label="New Loop" onPress={() => navigation.navigate('NewLoop')} />} />
       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
         {(['all', 'testing', 'released', 'archived'] as const).map(k => <Chip key={k} label={k[0].toUpperCase() + k.slice(1)} active={f === k} onPress={() => setF(k)} />)}
       </View>

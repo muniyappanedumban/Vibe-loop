@@ -12,6 +12,7 @@ const out = path.join(root, 'screenshots', 'admin');
 const { chromium } = createRequire(path.join(root, 'admin', 'package.json'))('playwright');
 
 const SLUGS = ['dashboard', 'users', 'moderation', 'payouts', 'health', 'costs', 'flags', 'audit', 'privacy', 'abuse', 'revenue', 'announcements', 'roles'];
+const SETTINGS = ['general', 'security', 'moderation', 'monetisation', 'notifications', 'content', 'privacy', 'integrations', 'branding', 'admins'];
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
 const PORT = 4174;
 
@@ -38,6 +39,25 @@ for (const [i, slug] of SLUGS.entries()) {
   await page.screenshot({ path: path.join(dir, 'screen.png') });
   console.log('saved', path.relative(root, path.join(dir, 'screen.png')));
 }
+async function shot(hash, file) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  await page.goto(`http://localhost:${PORT}/#/${hash}`, { waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'networkidle' }); // hash-only goto doesn't remount; reload gives fresh state
+  await page.waitForSelector('.content');
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: file });
+  console.log('saved', path.relative(root, file));
+}
+for (const [i, sec] of SETTINGS.entries()) await shot(`settings/${sec}`, path.join(out, '14-settings', `${String(i + 1).padStart(2, '0')}-${sec}`, 'screen.png'));
+await shot('emoji', path.join(out, '15-emoji', 'screen.png'));
+await page.click('.mcell:nth-child(12)');
+await page.waitForSelector('.mdetail');
+await page.waitForTimeout(200);
+await page.screenshot({ path: path.join(out, '15-emoji', 'detail.png') });
+console.log('saved screenshots/admin/15-emoji/detail.png');
+await shot('features', path.join(out, '16-features', 'screen.png'));
+await shot('features?tab=social', path.join(out, '16-features', 'social.png'));
+await shot('search?q=riya', path.join(out, '17-search', 'screen.png'));
 await browser.close();
 server.close();
 if (errors.length) { console.error('Console errors:\n' + errors.join('\n')); process.exitCode = 1; } else console.log('No console errors.');

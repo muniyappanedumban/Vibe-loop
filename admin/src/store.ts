@@ -1,3 +1,5 @@
+import { ALL_FEATURES } from './features';
+import { PRD } from './prd';
 export type Role = 'Owner' | 'Creator' | 'Editor' | 'Analyst' | 'Viewer' | 'Fan';
 export const ROLES: Role[] = ['Owner', 'Creator', 'Editor', 'Analyst', 'Viewer', 'Fan'];
 export const PERMS = [
@@ -19,7 +21,24 @@ export interface State {
   users: User[]; mod: ModItem[]; payouts: Payout[]; flags: Flag[]; audit: Audit[];
   dsr: Dsr[]; rules: Rule[]; flagged: Flagged[]; announcements: Announcement[];
   matrix: Record<Role, string[]>; retentionDays: number; feePct: number; lastDryRun: string | null;
+  settings: Settings; emojiOff: number[]; featOn: number[]; prdOn: number[];
 }
+
+export interface Staff { id: string; email: string; name: string; role: 'Super admin' | 'Trust & Safety' | 'Finance' | 'Support' | 'Read-only'; mfa: boolean; last: string }
+export const STAFF_ROLES: Staff['role'][] = ['Super admin', 'Trust & Safety', 'Finance', 'Support', 'Read-only'];
+export interface Settings {
+  general: { name: string; tagline: string; language: string; maintenance: boolean };
+  security: { minLength: number; requireSymbols: boolean; rotationDays: number; mfa: Record<string, boolean>; sessionMins: number; passkeys: boolean };
+  moderation: { holdReports: number; holdRisk: number; reasons: { code: string; label: string }[]; guardWords: string[] };
+  monetisation: { feePct: number; minPayout: number; currencies: string[]; schedule: string };
+  notifications: { push: Record<string, boolean>; email: Record<string, boolean>; quietOn: boolean; quietFrom: string; quietTo: string };
+  content: { maxUploadMb: number; types: Record<string, boolean>; syntheticLabel: boolean; minLoopScore: number };
+  privacy: { retentionDays: number; teenDmOff: boolean; teenPrivateDefault: boolean; teenNoLocation: boolean; dsarSlaDays: number };
+  integrations: { providers: { key: string; label: string; enabled: boolean; connected: boolean }[] };
+  branding: { violet: string; pink: string; tangerine: string; lime: string; mint: string };
+  admins: { staff: Staff[] };
+}
+export type SettingsSection = keyof Settings;
 
 const d = (h: number) => new Date(Date.UTC(2026, 10, 16, 9) - h * 3600e3).toISOString();
 
@@ -94,6 +113,32 @@ export const initialState: State = {
   retentionDays: 90,
   feePct: 10,
   lastDryRun: null,
+  settings: {
+    general: { name: 'VibeLoop', tagline: 'Your World. Your People. Your Moments.', language: 'English (India)', maintenance: false },
+    security: { minLength: 12, requireSymbols: true, rotationDays: 0, mfa: { Owner: true, Creator: false, Editor: true, Analyst: false, Viewer: false, Fan: false, Staff: true }, sessionMins: 30, passkeys: true },
+    moderation: { holdReports: 5, holdRisk: 80, reasons: [
+      { code: 'R-COPY', label: 'Copyright / unlicensed audio' }, { code: 'R-HARASS', label: 'Harassment or bullying' }, { code: 'R-SPAM', label: 'Spam or link bait' },
+      { code: 'R-SELFHARM', label: 'Self-harm risk' }, { code: 'R-HATE', label: 'Hate speech' }, { code: 'R-SYNTH', label: 'Unlabelled synthetic media' }],
+      guardWords: ['free giveaway', 'dm for promo', 'click my bio', 'crypto double'] },
+    monetisation: { feePct: 10, minPayout: 25, currencies: ['INR', 'USD'], schedule: 'Weekly (Monday)' },
+    notifications: { push: { Reactions: true, Comments: true, 'New followers': true, 'Loop invites': true, Marketing: false }, email: { 'Weekly digest': true, 'Payout receipts': true, 'Security alerts': true, Marketing: false }, quietOn: true, quietFrom: '22:00', quietTo: '07:00' },
+    content: { maxUploadMb: 512, types: { 'JPEG / PNG': true, HEIC: true, 'MP4 / MOV': true, GIF: true, 'WebM': false, 'Audio (AAC/MP3)': true }, syntheticLabel: true, minLoopScore: 60 },
+    privacy: { retentionDays: 90, teenDmOff: true, teenPrivateDefault: true, teenNoLocation: true, dsarSlaDays: 30 },
+    integrations: { providers: [
+      { key: 'google', label: 'Google', enabled: true, connected: false }, { key: 'apple', label: 'Sign in with Apple', enabled: true, connected: false },
+      { key: 'phone', label: 'Phone OTP (SMS)', enabled: true, connected: false }, { key: 'meta', label: 'Meta / Instagram import', enabled: false, connected: false },
+      { key: 'x', label: 'X (Twitter)', enabled: false, connected: false }, { key: 'spotify', label: 'Spotify (music)', enabled: false, connected: false }] },
+    branding: { violet: '#6C3BFF', pink: '#FF3D9A', tangerine: '#FF8A3D', lime: '#C8F45A', mint: '#2BD9A8' },
+    admins: { staff: [
+      { id: 's1', email: 'admin@vibeloop', name: 'Platform admin', role: 'Super admin', mfa: true, last: d(1) },
+      { id: 's2', email: 'riya.t@vibeloop', name: 'Riya Thomas', role: 'Trust & Safety', mfa: true, last: d(4) },
+      { id: 's3', email: 'arjun.m@vibeloop', name: 'Arjun Mehta', role: 'Finance', mfa: true, last: d(30) },
+      { id: 's4', email: 'neha.s@vibeloop', name: 'Neha Shah', role: 'Support', mfa: false, last: d(70) },
+      { id: 's5', email: 'auditor@vibeloop', name: 'External auditor', role: 'Read-only', mfa: true, last: d(400) }] },
+  },
+  emojiOff: [],
+  featOn: ALL_FEATURES.filter(f => f.route && !f.same).map(f => f.n),
+  prdOn: PRD.filter(f => f.route).map(f => f.n),
 };
 
 export type Action =
@@ -110,7 +155,11 @@ export type Action =
   | { type: 'flagged.set'; id: string; status: 'cleared' | 'suspended' }
   | { type: 'announce'; title: string; body: string; audience: string }
   | { type: 'matrix.toggle'; role: Role; perm: string }
-  | { type: 'fee.set'; pct: number };
+  | { type: 'fee.set'; pct: number }
+  | { type: 'settings.save'; section: SettingsSection; value: Settings[SettingsSection] }
+  | { type: 'emoji.toggle'; id: number; name: string }
+  | { type: 'feature.toggle'; n: number; name: string }
+  | { type: 'prd.toggle'; n: number; name: string };
 
 const ACTOR = 'admin@vibeloop';
 
@@ -169,6 +218,26 @@ export function reducer(s: State, a: Action): State {
       return log({ ...s, matrix: { ...s.matrix, [a.role]: next } }, has ? 'role.revoke' : 'role.grant', `${a.role}: ${a.perm}`);
     }
     case 'fee.set':
-      return log({ ...s, feePct: a.pct }, 'revenue.fee_set', `${a.pct}%`);
+      return log({ ...s, feePct: a.pct, settings: { ...s.settings, monetisation: { ...s.settings.monetisation, feePct: a.pct } } }, 'revenue.fee_set', `${a.pct}%`);
+    case 'settings.save': {
+      const prev = s.settings[a.section] as unknown as Record<string, unknown>, next = a.value as unknown as Record<string, unknown>;
+      const changed = Object.keys(next).filter(k => JSON.stringify(prev[k]) !== JSON.stringify(next[k]));
+      const ns = { ...s, settings: { ...s.settings, [a.section]: a.value } };
+      if (a.section === 'monetisation') ns.feePct = (a.value as Settings['monetisation']).feePct;
+      if (a.section === 'privacy') ns.retentionDays = (a.value as Settings['privacy']).retentionDays;
+      return log(ns, `settings.${a.section}_save`, changed.length ? changed.join(', ') : 'no changes');
+    }
+    case 'emoji.toggle': {
+      const off = s.emojiOff.includes(a.id);
+      return log({ ...s, emojiOff: off ? s.emojiOff.filter(x => x !== a.id) : [...s.emojiOff, a.id] }, off ? 'emoji.enable' : 'emoji.disable', `#${a.id} ${a.name}`);
+    }
+    case 'prd.toggle': {
+      const on = s.prdOn.includes(a.n);
+      return log({ ...s, prdOn: on ? s.prdOn.filter(x => x !== a.n) : [...s.prdOn, a.n] }, 'feature.prd_' + (on ? 'off' : 'on'), `PRD #${a.n} ${a.name}`);
+    }
+    case 'feature.toggle': {
+      const on = s.featOn.includes(a.n);
+      return log({ ...s, featOn: on ? s.featOn.filter(x => x !== a.n) : [...s.featOn, a.n] }, 'feature.' + (on ? 'off' : 'on'), `#${a.n} ${a.name}`);
+    }
   }
 }

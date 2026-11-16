@@ -26,15 +26,20 @@ export default function Home({ navigation }: any) {
     { icon: 'film', label: 'Edit', route: 'Editor', colors: ['#FFA45C', '#FF7A2E'] },
     { icon: 'mic', label: 'Audio', route: 'Audio', colors: ['#37E0B4', '#14B88D'] },
   ];
+  const more: { icon: IconName; label: string; route: string }[] = [
+    { icon: 'loops', label: 'Loops', route: 'Loops' }, { icon: 'library', label: 'Library', route: 'Library' }, { icon: 'chat', label: 'Chats', route: 'Chats' },
+    { icon: 'users', label: 'Tribes', route: 'Tribes' }, { icon: 'live', label: 'Live', route: 'Live' }, { icon: 'chart', label: 'Growth', route: 'Growth' },
+    { icon: 'smile', label: 'VibeMoji', route: 'Emoji' }, { icon: 'book', label: 'Learn', route: 'Learn' },
+  ];
   return (
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Avatar name={st.user.name} hue={280} size={46} ring />
         <View style={{ flex: 1 }}>
           <Text style={T.small}>{greet},</Text>
-          <Text style={[T.h3, { fontSize: 19 }]}>{st.user.name.split(' ')[0]} ✦</Text>
+          <Text style={[T.h3, { fontSize: 19 }]}>{st.user.name.split(' ')[0]} </Text>
         </View>
-        <IconBtn name="search" label="Search" onPress={() => navigation.navigate('Library')} />
+        <IconBtn name="search" label="Search" onPress={() => navigation.navigate('Search')} />
         <IconBtn name="bell" label="Notifications" badge={unread} onPress={() => navigation.navigate('Notifications')} />
       </View>
 
@@ -75,6 +80,13 @@ export default function Home({ navigation }: any) {
             <Text style={{ fontWeight: '700', fontSize: 12, marginTop: 6, color: C.ink }}>{q.label}</Text>
           </Pressable>
         ))}
+      </View>
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: S.lg }}>
+        {more.map(m => (
+          <Pressable key={m.label} onPress={() => navigation.navigate(m.route)} style={s.more} accessibilityRole="button" accessibilityLabel={m.label}>
+            <Icon name={m.icon} size={18} color={C.violet} /><Text style={{ fontWeight: '700', fontSize: 11, color: C.ink, marginTop: 4 }}>{m.label}</Text>
+          </Pressable>))}
       </View>
 
       <Section title="Waiting on you" action={`${ready.length + st.notices.filter(n => n.kind === 'approval' && !n.read).length} items`}>
@@ -140,5 +152,6 @@ const s = StyleSheet.create({
   pendIcon: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   thumbTop: { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(18,15,36,0.5)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   thumbScore: { position: 'absolute', top: 10, right: 10, backgroundColor: C.lime, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  more: { width: '23%', alignItems: 'center', paddingVertical: 10, borderRadius: 18, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
   ai: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });

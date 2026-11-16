@@ -7,6 +7,8 @@ import { Screen, Header, Card, Btn, Chip, Tag, DemoTag, ScoreRing, Thumb, Avatar
 import { Icon } from '../components/Icon';
 import { useStore, balanceOf, PLATFORM_FEE } from '../store/useStore';
 import { loopScore } from '../lib/score';
+import { useSocial, compact } from '../store/useSocial';
+import { VibeMoji } from '../components/VibeMoji';
 import { ago, money, DAY } from '../lib/util';
 
 /** Hold-to-sign: the explicit human approval step that mints a one-time token. */
@@ -77,38 +79,59 @@ export function ReleaseGate({ navigation, route }: any) {
 }
 
 export function Profile({ navigation }: any) {
-  const st = useStore();
+  const st = useStore(); const so = useSocial();
   const released = st.loops.filter(l => l.status === 'released').length;
+  const mine = so.posts.filter(p => p.mine);
+  const grid = mine.length ? mine : so.posts.slice(0, 6);
   return (
-    <Screen>
-      <LinearGradient colors={['#2A1D63', '#120F24']} style={s.prof}>
-        <View style={s.glow} />
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}><IconBtn dark name="gear" label="Settings" onPress={() => navigation.navigate('Settings')} /></View>
-        <View style={{ alignItems: 'center' }}>
-          <Avatar name={st.user.name} hue={280} size={88} ring />
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 24, marginTop: 10, letterSpacing: -0.6 }}>{st.user.name}</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.6)', fontWeight: '700' }}>{st.user.handle} · Creator</Text>
-        </View>
-        <View style={{ flexDirection: 'row', marginTop: 18 }}>
-          {[[st.loops.length, 'Loops'], [released, 'Released'], [new Set(st.loops.flatMap(l => l.members.map(m => m.id))).size, 'Members']].map(([n, t]) => (
-            <View key={t as string} style={{ flex: 1, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 22 }}>{n}</Text><Text style={{ color: 'rgba(255,255,255,0.6)', fontWeight: '700', fontSize: 12 }}>{t}</Text></View>
-          ))}
+    <Screen pad={false}>
+      <LinearGradient colors={['#6C3BFF', '#FF3D9A', '#FF8A3D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.cover}>
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+          <IconBtn dark name="search" label="Search" onPress={() => navigation.navigate('Search')} />
+          <IconBtn dark name="gear" label="Settings" onPress={() => navigation.navigate('SettingsHub')} />
         </View>
       </LinearGradient>
-      <Card style={{ marginTop: S.lg, flexDirection: 'row', alignItems: 'center' }} onPress={() => navigation.navigate('Earnings')}>
-        <View style={{ flex: 1 }}><Text style={T.small}>Available to withdraw</Text><Text style={T.h1}>{money(balanceOf(st))}</Text></View>
-        <View style={s.go}><Icon name="wallet" color={C.ink} /></View>
-      </Card>
-      <Card style={{ marginTop: 12 }}>
-        <Row icon="wallet" title="Earnings & payouts" onPress={() => navigation.navigate('Earnings')} tint={C.pink} />
-        <Row icon="archive" title="Learning Archive" onPress={() => navigation.navigate('Archive')} tint={C.tangerine} />
-        <Row icon="graph" title="Memory Graph" onPress={() => navigation.navigate('Memory')} />
-        <Row icon="bell" title="Notifications" onPress={() => navigation.navigate('Notifications')} tint="#12A27C" />
-        <Row icon="gear" title="Settings" onPress={() => navigation.navigate('Settings')} tint={C.inkSoft} />
-      </Card>
-      <Section title="Top supporters">
-        {st.txns.slice(0, 4).map(t => <Row key={t.id} title={t.from} sub={`${t.kind.replace('_', ' ')} · ${ago(t.at)}`} right={<Text style={{ fontWeight: '900' }}>{money(t.gross)}</Text>} icon="star" tint={C.pink} />)}
-      </Section>
+      <View style={{ paddingHorizontal: 20, marginTop: -52 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
+          <View><Avatar name={st.user.name} hue={280} size={100} ring /><View style={s.mood}><VibeMoji id={so.profileMood} size={34} /></View></View>
+          <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 6 }}>
+            {[[st.loops.length, 'Loops'], [new Set(st.loops.flatMap(l => l.members.map(m => m.id))).size, 'Members'], [so.following.length, 'Following']].map(([n, t]) => (
+              <View key={t as string} style={{ alignItems: 'center' }}><Text style={{ fontWeight: '900', fontSize: 20 }}>{n}</Text><Text style={T.small}>{t}</Text></View>))}
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 }}><Text style={T.h2}>{st.user.name}</Text><Tag label="CREATOR" /></View>
+        <Text style={T.small}>{st.user.handle} · {released} released</Text>
+        <Text style={[T.body, { marginTop: 8, lineHeight: 20 }]}>{so.bio}</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}><Chip icon="link" label="riya.link/chai" /><Chip icon="shop" label="Presets shop" /></View>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+          <Btn small title="Edit profile" kind="ink" style={{ flex: 1 }} onPress={() => navigation.navigate('Settings', { section: 'account' })} />
+          <Btn small title="New Moment" icon="plus" style={{ flex: 1 }} onPress={() => navigation.navigate('NewPost')} />
+        </View>
+        <Section title="Forever Sparks">
+          <View style={{ flexDirection: 'row', gap: 14 }}>{['Chai eps', 'BTS', 'Fans', 'Travel'].map((h, i) => (
+            <Pressable key={h} style={{ alignItems: 'center' }} onPress={() => navigation.navigate('Sparks', { start: i })}><View style={s.hl}><VibeMoji id={[42, 118, 203, 311][i]} size={40} /></View><Text style={{ fontSize: 11, fontWeight: '700', marginTop: 4 }}>{h}</Text></Pressable>))}</View>
+        </Section>
+        <Card style={{ marginTop: S.lg, flexDirection: 'row', alignItems: 'center' }} onPress={() => navigation.navigate('Earnings')}>
+          <View style={{ flex: 1 }}><Text style={T.small}>Available to withdraw</Text><Text style={T.h1}>{money(balanceOf(st))}</Text></View>
+          <View style={s.go}><Icon name="wallet" color={C.ink} /></View>
+        </Card>
+        <Section title={mine.length ? 'My posts' : 'Content Shelf (sample)'}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{grid.map(p => (
+            <View key={p.id} style={{ width: '32%' }}>{p.kind === 'thought' ? <View style={[s.gridT, { backgroundColor: p.bg ?? C.violet }]}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }} numberOfLines={5}>{p.text}</Text></View> : <Thumb hue={p.hue} w="100%" h={150} radius={14} />}</View>))}</View>
+        </Section>
+        <Card style={{ marginTop: S.lg }}>
+          <Row icon="loops" title="Loops" sub="Private testing groups" onPress={() => navigation.navigate('Loops')} />
+          <Row icon="library" title="Library & Memory Graph" onPress={() => navigation.navigate('Library')} />
+          <Row icon="wallet" title="Earnings & payouts" onPress={() => navigation.navigate('Earnings')} tint={C.pink} />
+          <Row icon="chart" title="Pulse Board" sub="Growth analytics" onPress={() => navigation.navigate('Growth')} tint="#2B7BF0" />
+          <Row icon="chat" title="Messages" onPress={() => navigation.navigate('Chats')} tint="#12A27C" />
+          <Row icon="bookmark" title="My Vault" onPress={() => navigation.navigate('Vault')} />
+          <Row icon="archive" title="Learning Archive" onPress={() => navigation.navigate('Archive')} tint={C.tangerine} />
+          <Row icon="shield" title="Trust & safety" onPress={() => navigation.navigate('Trust')} tint={C.danger} />
+          <Row icon="library" title="All features (200 + 150)" onPress={() => navigation.navigate('Features')} />
+          <Row icon="gear" title="Settings" onPress={() => navigation.navigate('SettingsHub')} tint={C.inkSoft} />
+        </Card>
+      </View>
     </Screen>
   );
 }
@@ -182,6 +205,10 @@ const s = StyleSheet.create({
   sign: { height: 60, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   prof: { borderRadius: 32, padding: 18, overflow: 'hidden' },
   glow: { position: 'absolute', width: 260, height: 260, borderRadius: 130, backgroundColor: C.pink, opacity: 0.22, left: -80, bottom: -120 },
+  cover: { height: 170, paddingTop: 50, paddingHorizontal: 20 },
+  mood: { position: 'absolute', right: -6, bottom: -4, backgroundColor: C.bg, borderRadius: 20, padding: 2 },
+  hl: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: C.line, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
+  gridT: { height: 150, borderRadius: 14, padding: 10, justifyContent: 'center' },
   go: { width: 52, height: 52, borderRadius: 18, backgroundColor: C.lime, alignItems: 'center', justifyContent: 'center' },
   bal: { borderRadius: 30, padding: 20 },
 });

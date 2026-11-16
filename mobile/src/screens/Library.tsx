@@ -17,7 +17,7 @@ export function Library({ navigation }: any) {
   const list = st.assets.filter(a => (k === 'all' || a.kind === k) && a.title.toLowerCase().includes(q.toLowerCase()));
   return (
     <Screen>
-      <Header title="Library" sub={`${st.assets.length} assets · every version kept`} back={false} right={<IconBtn name="graph" label="Memory Graph" onPress={() => navigation.navigate('Memory')} />} />
+      <Header title="Library" sub={`${st.assets.length} assets · every version kept`} right={<IconBtn name="graph" label="Memory Graph" onPress={() => navigation.navigate('Memory')} />} />
       <Pressable onPress={() => navigation.navigate('Memory')}>
         <LinearGradient colors={PRISM as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.mem}>
           <View style={{ flex: 1 }}>

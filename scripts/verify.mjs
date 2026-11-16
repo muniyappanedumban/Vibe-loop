@@ -1,0 +1,26 @@
+// Double-verification: catalogs have no duplicates, every referenced screen exists, every screen has a screenshot.
+import fs from 'node:fs'; import path from 'node:path'; import { execSync } from 'node:child_process'; import { fileURLToPath } from 'node:url'; import { createRequire } from 'node:module';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); const tmp = path.join(root, 'node_modules/.verify'); fs.mkdirSync(tmp, { recursive: true });
+const load = f => { const out = path.join(tmp, path.basename(f) + '.cjs'); execSync(`npx -y esbuild ${f} --bundle --format=cjs --platform=node --outfile=${out} --log-level=error`, { cwd: root }); return createRequire(import.meta.url)(out); };
+let fail = 0; const ok = (c, m) => { console.log(`${c ? '✓' : '✗'} ${m}`); if (!c) fail++; };
+const { PRD } = load('mobile/src/data/prd.ts'); const { ALL_FEATURES, SECTIONS, SAME_AS_PRD } = load('mobile/src/data/features.ts'); const { VIBEMOJI, vibemojiSvg } = load('mobile/src/lib/vibemoji.ts');
+const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+ok(PRD.length === 200, `PRD catalog has ${PRD.length}/200 features`);
+ok(new Set(PRD.map(f => norm(f.name))).size === 200, 'PRD feature names are all unique');
+ok(ALL_FEATURES.length === 150 && SECTIONS.length === 15 && SECTIONS.every(s => s.features.length === 10), 'Social catalog: 15 sections × 10 = 150');
+ok(new Set(ALL_FEATURES.map(f => norm(f.name))).size === 150, 'Social feature names are all unique');
+const cross = ALL_FEATURES.filter(f => PRD.some(p => norm(p.name) === norm(f.name))); ok(cross.length === 0, `No identical names across catalogs (${cross.map(f => f.name).join(', ') || 'none'})`);
+ok(Object.entries(SAME_AS_PRD).every(([s, p]) => ALL_FEATURES[s - 1] && PRD[p - 1]), `${Object.keys(SAME_AS_PRD).length} overlapping capabilities are linked, not duplicated`);
+ok(!ALL_FEATURES.some(f => /dendo/i.test(f.name + f.desc)), 'No "Dendo" naming left — all renamed to VibeLoop');
+ok(VIBEMOJI.length === 500, `VibeMoji count ${VIBEMOJI.length}/500`);
+ok(new Set(VIBEMOJI.map(m => `${m.shape}.${m.pal}.${m.eyes}.${m.mouth}.${m.acc}`)).size === 500, 'All 500 VibeMoji designs are unique combinations');
+ok(new Set(VIBEMOJI.map(m => m.name)).size === 500, 'All 500 VibeMoji names are unique');
+ok(new Set(VIBEMOJI.map(m => vibemojiSvg(m.id))).size === 500, 'All 500 rendered SVGs differ');
+const app = fs.readFileSync(path.join(root, 'mobile/App.tsx'), 'utf8'); const registered = new Set([...app.matchAll(/name="(\w+)"/g)].map(m => m[1]));
+const refs = new Set([...PRD, ...ALL_FEATURES].map(f => f.route).filter(r => r && r !== 'Admin'));
+const missing = [...refs].filter(r => !registered.has(r)); ok(!missing.length, `Every feature route is a registered screen (${refs.size} routes)${missing.length ? ' — missing: ' + missing : ''}`);
+const routes = fs.readFileSync(path.join(root, 'mobile/src/navigation/routes.ts'), 'utf8'); const shots = [...routes.matchAll(/name: '(\w+)', folder: '([\w-]+)'/g)];
+const unshot = [...registered].filter(r => r !== 'Main' && !shots.some(m => m[1] === r)); ok(!unshot.length, `Every registered screen is in the screenshot list${unshot.length ? ' — missing: ' + unshot : ''}`);
+const noPng = shots.filter(m => !fs.existsSync(path.join(root, 'screenshots/user', m[2], 'screen.png'))); ok(!noPng.length, `${shots.length} user screenshots exist${noPng.length ? ' — missing: ' + noPng.map(m => m[2]) : ''}`);
+const adminDirs = fs.readdirSync(path.join(root, 'screenshots/admin')).length; ok(adminDirs >= 17, `${adminDirs} admin screenshot folders`);
+process.exit(fail ? 1 : 0);

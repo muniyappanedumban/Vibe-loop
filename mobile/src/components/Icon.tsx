@@ -8,7 +8,8 @@ export type IconName =
   | 'spark' | 'film' | 'mic' | 'wand' | 'graph' | 'wallet' | 'gear' | 'lock' | 'shield'
   | 'send' | 'check' | 'close' | 'clock' | 'play' | 'pause' | 'scissors' | 'layers' | 'text'
   | 'archive' | 'link' | 'globe' | 'eye' | 'cash' | 'copy' | 'trash' | 'wave' | 'fingerprint'
-  | 'star' | 'flag' | 'bulb' | 'download' | 'undo' | 'redo' | 'chat' | 'calendar';
+  | 'star' | 'flag' | 'bulb' | 'download' | 'undo' | 'redo' | 'chat' | 'calendar'
+  | 'compass' | 'motion' | 'heart' | 'bookmark' | 'comment' | 'flame' | 'pin' | 'live' | 'users' | 'shop' | 'chart' | 'trophy' | 'smile' | 'book' | 'image' | 'music' | 'camera' | 'palette' | 'hash' | 'gift' | 'bolt' | 'more';
 
 const P: Record<IconName, (c: string) => React.ReactNode> = {
   home: c => <><Path d="M4 11.5 12 4l8 7.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-5.5H9v5.5H5.5A1.5 1.5 0 0 1 4 19z" stroke={c} /></>,
@@ -55,6 +56,28 @@ const P: Record<IconName, (c: string) => React.ReactNode> = {
   redo: c => <Path d="m15 7 4.5 4.5L15 16M19 11.5h-9a5 5 0 0 0 0 10h2" stroke={c} />,
   chat: c => <Path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-7l-4.5 3.5V17.5H5A1.5 1.5 0 0 1 3.5 16V7A1.5 1.5 0 0 1 5 5.5z" stroke={c} />,
   calendar: c => <><Rect x="4" y="5.5" width="16" height="15" rx="3" stroke={c} /><Path d="M8 3.5v4M16 3.5v4M4 10.5h16" stroke={c} /></>,
+  compass: c => <><Circle cx="12" cy="12" r="8.5" stroke={c} /><Path d="m15.5 8.5-2 5-5 2 2-5z" stroke={c} /></>,
+  motion: c => <><Rect x="6" y="3.5" width="12" height="17" rx="4" stroke={c} /><Path d="m10.5 9.5 3.5 2.5-3.5 2.5z" stroke={c} /><Path d="M3 8v8M21 8v8" stroke={c} /></>,
+  heart: c => <Path d="M12 19.5s-7.5-4.4-7.5-10A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10z" stroke={c} />,
+  bookmark: c => <Path d="M6.5 4.5h11v16L12 16.5l-5.5 4z" stroke={c} />,
+  comment: c => <Path d="M12 4.5c4.7 0 8.5 3.1 8.5 7s-3.8 7-8.5 7c-1 0-2-.1-2.9-.4L5 19.5l1.2-3.4C4.8 14.9 3.5 13.3 3.5 11.5c0-3.9 3.8-7 8.5-7z" stroke={c} />,
+  flame: c => <Path d="M12 3.5c1 3 4.5 5 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-5 .5-8z" stroke={c} />,
+  pin: c => <><Path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z" stroke={c} /><Circle cx="12" cy="10" r="2.4" stroke={c} /></>,
+  live: c => <><Circle cx="12" cy="12" r="2.5" stroke={c} /><Path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.6 4.6a10.5 10.5 0 0 0 0 14.8M19.4 4.6a10.5 10.5 0 0 1 0 14.8" stroke={c} /></>,
+  users: c => <><Circle cx="9" cy="9" r="3.3" stroke={c} /><Path d="M3 19c.9-3 3.2-4.6 6-4.6s5.1 1.6 6 4.6M15.5 5.8a3.2 3.2 0 0 1 0 6.3M17.5 14.6c1.8.6 3 2 3.5 4.4" stroke={c} /></>,
+  shop: c => <><Path d="M4.5 9.5 6 4.5h12l1.5 5M4.5 9.5h15M5.5 9.5v10h13v-10" stroke={c} /><Path d="M10 19.5v-5h4v5" stroke={c} /></>,
+  chart: c => <Path d="M4.5 19.5h15M7.5 16v-5M12 16V7M16.5 16v-3" stroke={c} />,
+  trophy: c => <><Path d="M8 4.5h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13.5v3M8.5 20h7l-1-3.5h-5z" stroke={c} /></>,
+  smile: c => <><Circle cx="12" cy="12" r="8.5" stroke={c} /><Path d="M8.5 14c1.8 2.4 5.2 2.4 7 0M9 9.5v.5M15 9.5v.5" stroke={c} /></>,
+  book: c => <Path d="M4.5 5.5c3-1 5.5-.8 7.5 1 2-1.8 4.5-2 7.5-1v13c-3-1-5.5-.8-7.5 1-2-1.8-4.5-2-7.5-1zM12 6.5v13" stroke={c} />,
+  image: c => <><Rect x="3.5" y="4.5" width="17" height="15" rx="3.5" stroke={c} /><Circle cx="9" cy="9.5" r="1.8" stroke={c} /><Path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5" stroke={c} /></>,
+  music: c => <><Path d="M9.5 17.5V5.5l10-2v12" stroke={c} /><Circle cx="7" cy="17.5" r="2.5" stroke={c} /><Circle cx="17" cy="15.5" r="2.5" stroke={c} /></>,
+  camera: c => <><Path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.5l1.5-2.5h5L16 7h2.5A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" stroke={c} /><Circle cx="12" cy="13" r="3.3" stroke={c} /></>,
+  palette: c => <><Path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.4 0 1.8-1 1.3-2-.6-1.2.2-2.5 1.5-2.5h2.2a3.5 3.5 0 0 0 3.5-3.5c0-5-3.8-9-8.5-9z" stroke={c} /><Circle cx="8" cy="11" r="1.2" stroke={c} /><Circle cx="11" cy="7.5" r="1.2" stroke={c} /><Circle cx="15.5" cy="8.5" r="1.2" stroke={c} /></>,
+  hash: c => <Path d="M9.5 4 8 20M16 4l-1.5 16M4.5 9h15M4 15h15" stroke={c} />,
+  gift: c => <><Rect x="4" y="9" width="16" height="11" rx="2" stroke={c} /><Path d="M3.5 9h17M12 9v11M12 9c-1-3-4.5-4-5-2s3 2 5 2c1-3 4.5-4 5-2s-3 2-5 2" stroke={c} /></>,
+  bolt: c => <Path d="M13 3.5 5.5 13.5H12l-1 7 7.5-10H12z" stroke={c} />,
+  more: c => <><Circle cx="6" cy="12" r="1.3" stroke={c} /><Circle cx="12" cy="12" r="1.3" stroke={c} /><Circle cx="18" cy="12" r="1.3" stroke={c} /></>,
 };
 
 export function Icon({ name, size = 22, color = C.ink, stroke = 2 }: { name: IconName; size?: number; color?: string; stroke?: number }) {

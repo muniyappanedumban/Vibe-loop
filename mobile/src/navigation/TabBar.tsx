@@ -7,8 +7,8 @@ import { Icon, IconName } from '../components/Icon';
 import { C, PRISM } from '../theme/tokens';
 
 const ICONS: Record<string, { icon: IconName; label: string }> = {
-  Home: { icon: 'home', label: 'Home' }, Loops: { icon: 'loops', label: 'Loops' }, Create: { icon: 'plus', label: 'Create' },
-  Library: { icon: 'library', label: 'Library' }, Profile: { icon: 'user', label: 'Me' },
+  Home: { icon: 'home', label: 'Home' }, Explore: { icon: 'compass', label: 'Explore' }, Create: { icon: 'plus', label: 'Create' },
+  Motion: { icon: 'motion', label: 'Motion' }, Profile: { icon: 'user', label: 'Profile' },
 };
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
