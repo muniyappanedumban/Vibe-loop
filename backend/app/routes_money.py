@@ -1,6 +1,7 @@
 """v3 money: admin-switchable subscriptions, tips, platform fees. Everything is OFF unless the admin turns it on.
 No fake payments: orders get a real provider payment link, and only a signature-verified webhook marks them paid."""
-import json, logging
+import hashlib, json, logging, time
+from sqlalchemy.exc import IntegrityError
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Body, Request, Header
 from pydantic import BaseModel, Field
@@ -127,13 +128,30 @@ def _secret(db, name, *keys):
     cfg = get_config(db, name) or {}
     return next((cfg[k] for k in keys if cfg.get(k)), None)
 
+WEBHOOK_TOLERANCE_SEC = 300  # Cashfree signs the timestamp; reject anything older/newer than 5 min (replay window)
+
+def first_time(db: Session, provider: str, event_id: str) -> bool:
+    """Replay protection: record the event id; False if this exact event was already processed."""
+    if db.get(M.WebhookEvent, (provider, event_id)): return False
+    db.add(M.WebhookEvent(provider=provider, event_id=event_id[:100]))
+    try: db.flush(); return True
+    except IntegrityError: db.rollback(); return False  # concurrent delivery of the same event
+
+def fresh_timestamp(ts: str | None) -> bool:
+    try: t = float(ts or "")
+    except ValueError: return False
+    if t > 1e12: t /= 1000  # milliseconds
+    return abs(time.time() - t) <= WEBHOOK_TOLERANCE_SEC
+
 @router.post("/webhooks/razorpay")
-async def wh_razorpay(req: Request, x_razorpay_signature: str | None = Header(default=None), db: Session = Depends(get_db)):
+async def wh_razorpay(req: Request, x_razorpay_signature: str | None = Header(default=None), x_razorpay_event_id: str | None = Header(default=None), db: Session = Depends(get_db)):
     body = await req.body()
     if not razorpay.verify_webhook(_secret(db, "razorpay", "webhookSecret") or "", body, x_razorpay_signature):
         log.warning("razorpay webhook rejected: bad signature"); raise HTTPException(401, "Invalid signature")
     try: ev = json.loads(body)
     except ValueError: raise HTTPException(400, "Bad JSON")
+    eid = (x_razorpay_event_id or "")[:100] or "sha256:" + hashlib.sha256(body).hexdigest()
+    if not first_time(db, "razorpay", eid): return {"ok": True, "duplicate": True}
     o = mark_paid(db, razorpay.paid_reference(ev), "razorpay"); db.commit()
     return {"ok": True, "order": o.id if o else None, "status": o.status if o else None}
 
@@ -142,8 +160,12 @@ async def wh_cashfree(req: Request, x_webhook_signature: str | None = Header(def
     body = await req.body()
     if not cashfree.verify_webhook(_secret(db, "cashfree", "webhookSecret", "secretKey") or "", x_webhook_timestamp, body, x_webhook_signature):
         log.warning("cashfree webhook rejected: bad signature"); raise HTTPException(401, "Invalid signature")
+    if not fresh_timestamp(x_webhook_timestamp):
+        log.warning("cashfree webhook rejected: timestamp outside tolerance"); raise HTTPException(401, "Stale webhook timestamp")
     try: ev = json.loads(body)
     except ValueError: raise HTTPException(400, "Bad JSON")
+    eid = (req.headers.get("x-idempotency-key") or "")[:100] or "sha256:" + hashlib.sha256((x_webhook_timestamp or "").encode() + body).hexdigest()
+    if not first_time(db, "cashfree", eid): return {"ok": True, "duplicate": True}
     o = mark_paid(db, cashfree.paid_reference(ev), "cashfree"); db.commit()
     return {"ok": True, "order": o.id if o else None, "status": o.status if o else None}
 
@@ -221,7 +243,7 @@ def put_countries(b: dict = Body(...), a: M.User = Depends(STAFF), db: Session =
 @router.get("/admin/money/income")
 def income(a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
     """Real paid orders only (verified webhooks). Demo data is never counted."""
-    paid = db.scalars(select(M.Order).where(M.Order.status == "paid").order_by(M.Order.paid_at)).all()
+    paid = db.scalars(select(M.Order).where(M.Order.status == "paid", ~M.Order.note.startswith("demo")).order_by(M.Order.paid_at)).all()  # v5: labelled demo orders never count
     by_day: dict[str, dict] = {}
     import datetime as dt
     for o in paid:

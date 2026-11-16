@@ -11,6 +11,7 @@ import { VideoClip, VideoEdit, Caption } from '../components/VideoClip';
 import { useSocial } from '../store/useSocial';
 import { call, online, useSession } from '../lib/api';
 import { uid } from '../lib/util';
+import { enqueue, isNetworkError } from '../lib/outbox';
 
 const SOUNDS = ['Chai Lofi', 'Monsoon Drums', 'Kovai Nights', 'Sunrise Sitar Loop', 'Desi Beat 92', 'No sound'];
 const MOODS = ['Happy', 'Funny', 'Inspiring', 'Relaxing', 'Emotional'];
@@ -33,7 +34,7 @@ export function NewPost({ navigation, route }: any) {
   const [vEdit, setVEdit] = useState<VideoEdit>({ trimStart: 0, trimEnd: 0, speed: 1, captions: [] }); const [capText, setCapText] = useState(''); const [capAlign, setCapAlign] = useState<Caption['align']>('center'); const [capStyle, setCapStyle] = useState<Caption['style']>('pop'); const [capAt, setCapAt] = useState(0); const [mood, setMood] = useState('Happy');
   const [place, setPlace] = useState(''); const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null); const [locBusy, setLocBusy] = useState(false);
   const [collab, setCollab] = useState(''); const [sound, setSound] = useState<string | null>(null); const [audience, setAudience] = useState<'public' | 'circle' | 'quiet'>('public');
-  const [hours, setHours] = useState(24); const [toChat, setToChat] = useState(false); const [busy, setBusy] = useState(false);
+  const [hours, setHours] = useState(24); const [pollQ, setPollQ] = useState(''); const [pollO, setPollO] = useState(''); const [toChat, setToChat] = useState(false); const [busy, setBusy] = useState(false);
   const { toast, show } = useToast();
   const tags = useMemo(() => Array.from(new Set((text.match(/[#@][\w.]{2,30}/g) ?? []).map(t => t.toLowerCase()))), [text]);
 
@@ -57,22 +58,34 @@ export function NewPost({ navigation, route }: any) {
   };
   const publish = async () => {
     if (!text.trim()) return show(mode === 'story' ? 'Add a line of text to your Blink' : 'Write a caption first', 'err');
+    if (local?.kind === 'video' && (local.duration ?? 0) > 60.5 && (vEdit.trimEnd - vEdit.trimStart) > 60.5) return show('Videos can be up to 1 minute — use Auto Cut or trim', 'err');
     setBusy(true);
+    const fileOf = () => (local ? { uri: local.uri, name: local.kind === 'video' ? 'clip.mp4' : 'photo.jpg', mime: local.mime ?? (local.kind === 'video' ? 'video/mp4' : 'image/jpeg'), size: 0 } : undefined);
     try {
       let mediaUrl: string | null = null;
-      if (local && isOnline) mediaUrl = await upload(local.uri, local.mime ?? 'image/jpeg');
+      try { if (local && isOnline) mediaUrl = await upload(local.uri, local.mime ?? 'image/jpeg'); }
+      catch (e: any) { if (!/Failed to fetch|Network|offline/i.test(e.message ?? '')) throw e; mediaUrl = null; (e as any).offline = true; throw Object.assign(new Error('offline'), { offline: true }); }
       if (mode === 'story') {
-        if (isOnline) { const sp = await call<any>('POST', '/sparks', { text: text.trim(), hue, lens: lens === 'none' ? null : lens, mediaUrl, place: place || null, hours, close: audience === 'circle' }); useSocial.setState(s => ({ sparks: [sp, ...s.sparks] })); }
+        const spBody = { id: uid('s'), text: text.trim(), hue, lens: lens === 'none' ? null : lens, mediaUrl, place: place || null, hours, close: audience === 'circle' };
+        if (isOnline) { try { const sp = await call<any>('POST', '/sparks', spBody); useSocial.setState(s => ({ sparks: [sp, ...s.sparks] })); } catch (e: any) { if (!isNetworkError(e)) throw e; enqueue({ id: spBody.id, kind: 'spark', path: '/sparks', body: spBody, file: fileOf(), fileField: local ? 'mediaUrl' : undefined, label: `Blink · ${spBody.text.slice(0, 30)}` }); show('Saved offline — your Blink goes live when you reconnect'); setTimeout(() => navigation.goBack(), 900); return; } }
         else useSocial.setState(s => ({ sparks: [{ id: uid('s'), by: 'me', hue, text: text.trim(), at: Date.now(), lens, mediaUrl: local?.uri ?? null, place, close: audience === 'circle', expiresAt: Date.now() + hours * 3600_000 }, ...s.sparks] }));
         show(`Blink live for ${hours}h`); setTimeout(() => navigation.goBack(), 700); return;
       }
       const body: any = { id: uid('p'), kind: mode === 'thought' ? 'thought' : 'photo', text: text.trim(), hue, mood, interest: 'Life', place: place || undefined, bg: mode === 'thought' ? bg : undefined,
-        mediaUrl: mediaUrl ?? undefined, lens: lens === 'none' ? undefined : lens, lat: coords?.lat, lng: coords?.lng, tags, collab: collab.trim() || undefined, sound: sound && sound !== 'No sound' ? sound : undefined, audience, mediaKind: local?.kind, edit: local?.kind === 'video' ? vEdit : undefined };
-      if (isOnline) { const p = await call<any>('POST', '/posts', body); useSocial.setState(s => ({ posts: [p, ...s.posts] })); }
+        mediaUrl: mediaUrl ?? undefined, lens: lens === 'none' ? undefined : lens, lat: coords?.lat, lng: coords?.lng, tags, collab: collab.trim() || undefined, sound: sound && sound !== 'No sound' ? sound : undefined, audience, mediaKind: local?.kind, edit: local?.kind === 'video' ? vEdit : undefined, poll: pollQ.trim() && pollO.split(',').filter(x => x.trim()).length >= 2 ? { q: pollQ.trim(), options: pollO.split(',').map(x => x.trim()).filter(Boolean).slice(0, 4) } : undefined };
+      if (isOnline) { try { const p = await call<any>('POST', '/posts', body); useSocial.setState(s => ({ posts: [p, ...s.posts] })); } catch (e: any) { if (!isNetworkError(e)) throw e; enqueue({ id: body.id, kind: 'post', path: '/posts', body, file: fileOf(), fileField: local ? 'mediaUrl' : undefined, label: `Drop · ${body.text.slice(0, 30)}` }); show('Saved offline — your Drop posts when you reconnect'); setTimeout(() => navigation.goBack(), 900); return; } }
       else useSocial.setState(s => ({ posts: [{ ...body, mediaUrl: local?.uri ?? null, by: 'me', at: Date.now(), reactions: { heart: 0, fire: 0, laugh: 0, touch: 0, clap: 0, boom: 0 }, comments: [], shares: 0, views: 0, mine: true }, ...s.posts] }));
       show(audience === 'quiet' ? 'Saved as a Quiet Share' : 'Posted');
-      setTimeout(() => (toChat && isOnline ? navigation.replace('ShareToChat', { type: 'post', id: body.id, title: body.text }) : navigation.navigate('Main', { screen: 'Explore' })), 700);
-    } catch (e: any) { show(e.message, 'err'); } finally { setBusy(false); }
+      setTimeout(() => (toChat && isOnline ? navigation.replace('ShareToChat', { type: 'post', id: body.id, title: body.text }) : navigation.navigate('Main', { screen: 'Home' })), 700);
+    } catch (e: any) {
+      if (e?.offline) {   // couldn't upload the photo/video: queue the whole Drop/Blink with its file
+        const id = uid(mode === 'story' ? 's' : 'p'); const isStory = mode === 'story';
+        const body: any = isStory ? { id, text: text.trim(), hue, lens: lens === 'none' ? null : lens, place: place || null, hours, close: audience === 'circle' }
+          : { id, kind: 'photo', text: text.trim(), hue, mood, interest: 'Life', place: place || undefined, lens: lens === 'none' ? undefined : lens, lat: coords?.lat, lng: coords?.lng, tags, collab: collab.trim() || undefined, sound: sound && sound !== 'No sound' ? sound : undefined, audience, mediaKind: local?.kind, edit: local?.kind === 'video' ? vEdit : undefined };
+        enqueue({ id, kind: isStory ? 'spark' : 'post', path: isStory ? '/sparks' : '/posts', body, file: fileOf(), fileField: 'mediaUrl', label: `${isStory ? 'Blink' : 'Drop'} · ${text.trim().slice(0, 30)}` });
+        show('Saved offline — uploads automatically when you reconnect'); setTimeout(() => navigation.goBack(), 900);
+      } else show(e.message, 'err');
+    } finally { setBusy(false); }
   };
 
   return (
@@ -152,6 +165,9 @@ export function NewPost({ navigation, route }: any) {
           {mode !== 'story' ? (<>
             <Text style={[T.tiny, { marginBottom: 8 }]}>MOOD TAG</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>{MOODS.map(m => <Chip key={m} label={m} active={mood === m} onPress={() => setMood(m)} />)}</View>
+            <Text style={[T.tiny, { marginBottom: 8 }]}>MINI VOTE (OPTIONAL POLL)</Text>
+            <Field placeholder="Question (e.g. Dosa or idli?)" value={pollQ} onChangeText={setPollQ} maxLength={80} />
+            <Field placeholder="Options, comma separated (2–4)" value={pollO} onChangeText={setPollO} />
             <Field label="Collab Drop — co-creator @ID" placeholder="@aanya.eats" value={collab} onChangeText={t => setCollab(t.trim().toLowerCase())} autoCapitalize="none" />
             <Text style={[T.tiny, { marginBottom: 8 }]}>SOUND TAG</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{SOUNDS.map(x => <Chip key={x} icon="music" label={x} active={sound === x} onPress={() => setSound(x)} />)}</View>

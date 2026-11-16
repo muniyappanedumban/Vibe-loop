@@ -23,9 +23,11 @@ ok(!ICONKIT.glow.some(g => ICONKIT.hush.some(h => kitSvg('glow', g.id) === kitSv
 const vNames = new Set(VIBEMOJI.map(m => m.name)); ok(!BUBBLEMOJI.some(b => vNames.has(b.name)), 'No emoji name is reused across modules');
 const app = fs.readFileSync(path.join(root, 'mobile/App.tsx'), 'utf8'); const stackBlock = app.slice(app.indexOf('const STACK'), app.indexOf('export const STACK_SCREENS'));
 const tabBlocks = [...app.matchAll(/const (?:SOCIAL|CHAT)_TABS[^{]*\{([^}]*)\}/g)].map(m => m[1]).join(',');
-const keysOf = b => b.replace(/^[^{]*\{/, '').split(',').map(x => x.split(':')[0].trim()).filter(k => /^\w+$/.test(k) && !/^(Record|string|React|ComponentType|any|const|STACK)$/.test(k));
+const keysOf = b => b.replace(/^[^{]*\{/, '').replace(/\/\/.*/g, '').replace(/\([^)]*\)/g, '').split(',').map(x => x.split(':')[0].trim()).filter(k => /^\w+$/.test(k) && !/^(Record|string|React|ComponentType|any|const|STACK)$/.test(k));
 const registered = new Set([...app.matchAll(/name="(\w+)"/g)].map(m => m[1]).concat(keysOf(stackBlock), keysOf(tabBlocks)));
-const refs = new Set([...PRD, ...ALL_FEATURES].map(f => f.route).filter(r => r && r !== 'Admin'));
+const { GENZ } = load('mobile/src/data/genz.ts');
+ok(new Set(GENZ.map(g => g.name.toLowerCase())).size === GENZ.length, `Gen-Z Drops: ${GENZ.length} unique names (${GENZ.filter(g => g.route).length} live)`);
+const refs = new Set([...PRD, ...ALL_FEATURES, ...GENZ].map(f => f.route).filter(r => r && r !== 'Admin'));
 const missing = [...refs].filter(r => !registered.has(r)); ok(!missing.length, `Every feature route is a registered screen (${refs.size} routes)${missing.length ? ' — missing: ' + missing : ''}`);
 const routes = fs.readFileSync(path.join(root, 'mobile/src/navigation/routes.ts'), 'utf8'); const shots = [...routes.matchAll(/name: '(\w+)', folder: '([\w-]+)'/g)];
 const unshot = [...registered].filter(r => !['Main', 'ChatMain', 'Create', 'Explore', 'Motion', 'Profile', 'Home'].includes(r) && !shots.some(m => m[1] === r)); ok(!unshot.length, `Every registered screen is in the screenshot list${unshot.length ? ' — missing: ' + unshot : ''}`);

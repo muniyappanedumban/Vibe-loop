@@ -9,6 +9,7 @@ import { online, useSession } from '../lib/api';
 import { bg, signOut, refresh } from '../lib/sync';
 import { switchModule } from '../components/ModuleSwitch';
 
+const REMOVED = new Set(['Tribes']);  // only routes that no longer exist; restored screens navigate normally
 const KIND: Record<string, { icon: any; tint: string }> = { friend: { icon: 'users', tint: '#14B88D' }, ping: { icon: 'heart', tint: C.pink }, dm: { icon: 'chat', tint: '#14B88D' }, town: { icon: 'users', tint: C.tangerine }, reaction: { icon: 'chat', tint: C.violet }, approval: { icon: 'fingerprint', tint: C.pink }, earning: { icon: 'cash', tint: '#12A27C' }, system: { icon: 'flag', tint: C.tangerine }, loop: { icon: 'loops', tint: C.violet } };
 export function Notifications({ navigation }: any) {
   const st = useStore();
@@ -16,10 +17,10 @@ export function Notifications({ navigation }: any) {
   const list = st.notices.filter(n => f === 'all' || (f === 'unread' ? !n.read : n.kind === f));
   return (
     <Screen>
-      <Header title="Notifications" sub={`${st.notices.filter(n => !n.read).length} unread`} right={<Pressable onPress={st.readAll}><Text style={{ color: C.violet, fontWeight: '800' }}>Mark all read</Text></Pressable>} />
+      <Header title="Pings" sub={`${st.notices.filter(n => !n.read).length} unread`} right={<Pressable onPress={st.readAll}><Text style={{ color: C.violet, fontWeight: '800' }}>Mark all read</Text></Pressable>} />
       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: S.lg }}>{['all', 'unread', 'reaction', 'approval', 'earning', 'system'].map(k => <Chip key={k} label={k[0].toUpperCase() + k.slice(1)} active={f === k} onPress={() => setF(k)} />)}</View>
       {list.map(n => (
-        <Card key={n.id} style={{ marginBottom: 10, padding: 6, paddingHorizontal: 12, borderColor: n.read ? C.line : C.violet }} onPress={() => { st.readNotice(n.id); const m = (n as any).module; if (m === 'chat') switchModule(navigation, 'chat', n.route ? { screen: n.route, params: n.params } : undefined); else if (n.route) navigation.navigate(n.route, n.params); }}>
+        <Card key={n.id} style={{ marginBottom: 10, padding: 6, paddingHorizontal: 12, borderColor: n.read ? C.line : C.violet }} onPress={() => { st.readNotice(n.id); const m = (n as any).module; if (m === 'chat') switchModule(navigation, 'chat', n.route ? { screen: n.route, params: n.params } : undefined); else if (n.route && !REMOVED.has(n.route)) navigation.navigate(n.route, n.params); }}>
           <Row icon={(KIND[n.kind] ?? KIND.system).icon} tint={(KIND[n.kind] ?? KIND.system).tint} title={n.title} sub={`${(n as any).module === 'chat' ? 'Chat · ' : ''}${n.body} · ${ago(n.at)}`} right={!n.read ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.pink }} /> : <Icon name="chevron" size={16} color={C.inkSoft} />} />
         </Card>
       ))}
@@ -39,7 +40,7 @@ export function Settings({ route }: any) {
   return (
     <View style={{ flex: 1 }}>
       <Screen>
-        <Header title={sec ? ({ account: "Account & security", privacy: "Privacy & data", notifications: "Notifications", creation: "Creation & costs", monetisation: "Monetisation", audit: "Audit trail" } as any)[sec] : "Settings"} sub={sec ? "Settings" : undefined} />
+        <Header title={sec ? ({ account: "Account & security", privacy: "Privacy & data", notifications: "Notifications", creation: "Creation & costs", monetisation: "Monetisation", audit: "Audit trail" } as any)[sec] : "Control Room"} sub={sec ? "Control Room" : undefined} />
         {show_('account') ? <Section title="Account & security">
           <Card>
             <Row icon="user" title={st.user.name} sub={st.user.handle} />
@@ -65,7 +66,7 @@ export function Settings({ route }: any) {
             <Row icon="trash" title="Request account deletion" tint={C.danger} onPress={() => { st.log('privacy.deletion_request', st.user.handle); bg('POST', '/privacy/deletion'); show(online() ? 'Deletion request sent to the VibeLoop team' : 'Offline demo: request logged on this device only'); }} />
           </Card>
         </Section> : null}
-        {show_('notifications') ? <Section title="Notifications">
+        {show_('notifications') ? <Section title="Pings">
           <Card>
             {([['pushLoops', 'Loops'], ['pushReactions', 'Reactions'], ['pushEarnings', 'Earnings'], ['pushSystem', 'System'], ['quietHours', 'Quiet hours (22:00–07:00)']] as const).map(([k, t]) => <Row key={k} icon="bell" title={t} right={<Toggle value={s[k]} onChange={v => set(k, v)} label={t} />} />)}
             <Row icon="send" title="Email digest" sub="Weekly" />

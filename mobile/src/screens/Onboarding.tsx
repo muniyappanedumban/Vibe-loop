@@ -16,7 +16,7 @@ export default function Onboarding({ navigation }: any) {
   const [handle, setHandle] = useState('');
   return (
     <View style={{ flex: 1, backgroundColor: C.ink }}>
-      <LinearGradient colors={['#3A1B9C', '#120F24']} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['#24242E', '#120F24']} style={StyleSheet.absoluteFill} />
       <View style={[s.blob, { backgroundColor: C.pink, top: 60, right: -60 }]} />
       <View style={[s.blob, { backgroundColor: C.violet, top: 220, left: -80 }]} />
       <ScrollView contentContainerStyle={{ paddingTop: ins.top + 16, paddingHorizontal: 22, paddingBottom: 40 }}>

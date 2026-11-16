@@ -17,15 +17,20 @@ BASE = {
     "modules": {"social": True, "chat": True},
     "nav": {"social": NAV([("Home", "Hub", "home"), ("Explore", "Drift", "compass"), ("Create", "Make", "plus"), ("Motion", "Flicks", "play"), ("Profile", "Me", "user")]),
             "chat": NAV([("Chats", "Hush", "message"), ("Friends", "Squad", "users"), ("Vibes", "Moods", "sparkle"), ("Towns", "Hoods", "town"), ("ChatMe", "Me", "user")])},
-    "screens": {k: True for k in ["Live", "Payout", "Copilot", "Earnings", "ReleaseGate", "LoopDetail", "Towns", "Vibes", "ChatThread", "Friends", "Security", "Settings"]},
+    "screens": {k: True for k in ["Live", "Payout", "Copilot", "Earnings", "ReleaseGate", "LoopDetail", "Towns", "Vibes", "ChatThread", "Friends", "Security", "Settings",
+                                    "CreatorHub", "CreateHub", "Vault", "Loops", "NewLoop", "FanReact", "Archive", "Editor", "Audio", "Library", "Memory", "Features", "Learn", "IconKit"]},
     "features": {k: True for k in ["dswitch", "swipeWorlds", "chatBubble", "post2chat", "draftBridge", "focusSwitch", "statuses", "towns", "viewOnce", "sendLater",
-                                   "polls", "fadeChat", "chatLock", "payouts", "paidLoops", "live"]} | {k: False for k in MONEY_FLAGS},
+                                   "polls", "fadeChat", "chatLock", "payouts", "paidLoops", "live", "promos",
+                                   "blog", "news", "appLinks", "reviews", "productReviews", "vouches", "speakUp",
+                                   "realtime", "readReceipts", "typing", "voiceNotes", "calls", "push", "e2ee", "snaps", "storyViewers", "followRequests", "liveCamera", "demoMode"]} | {k: False for k in MONEY_FLAGS},
     # v3 money: everything off until the admin turns it on (Money settings mirrors into the base layer)
 
     "limits": {"maxAccounts": 5, "maxGroupSize": 50, "statusHours": 24, "editWindowMin": 15, "undoWindowMin": 60},
     "fees": {"platformFee": 0.08},
     "languages": {"default": "en", "available": ["en", "hi", "ta", "te", "kn", "ml", "mr", "bn"], "strings": EN_STRINGS},
     "banner": None,
+    "moduleNames": {"social": "Glow", "chat": "Hush"},
+    "rtc": {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},  # v6: public STUN only; TURN creds via GET /rtc/ice
 }
 def _p(primary, secondary, accent, bg, ink, nav, tertiary=None, surface="#FFFFFF", radius=None, density="comfy", mod="social"):
     d = {"primary": primary, "secondary": secondary, "accent": accent, "bg": bg, "surface": surface, "ink": ink, "navStyle": nav,
@@ -33,14 +38,16 @@ def _p(primary, secondary, accent, bg, ink, nav, tertiary=None, surface="#FFFFFF
     if tertiary: d["tertiary"] = tertiary
     return d
 THEME_PRESETS = {
-    "social": {"prism": _p("#6C3BFF", "#FF3D9A", "#C8F45A", "#F4F2FA", "#120F24", "pill", tertiary="#FF8A3D"),
+    "social": {"studio": _p("#5B4CF5", "#7C6CFF", "#D4FF3F", "#F5F5F7", "#0A0A0F", "pill", tertiary="#A99BFF", radius="soft"),
+               "prism": _p("#6C3BFF", "#FF3D9A", "#C8F45A", "#F4F2FA", "#120F24", "pill", tertiary="#FF8A3D"),
                "sunset": _p("#FF5A5F", "#FF9A3D", "#2EC4B6", "#FFF6F0", "#2B1B17", "dock", tertiary="#FFD23F"),
                "ocean": _p("#2563EB", "#06B6D4", "#A3E635", "#F1F6FD", "#0B1B33", "pill", tertiary="#22D3EE")},
-    "chat": {"aqua": _p("#00C2A8", "#14A8E6", "#FFC93C", "#EEF7F5", "#0B1F24", "dock", mod="chat"),
+    "chat": {"mono": _p("#0D9488", "#0EA5A0", "#FF6B4A", "#F3F6F6", "#0B1416", "dock", mod="chat"),
+             "aqua": _p("#00C2A8", "#14A8E6", "#FFC93C", "#EEF7F5", "#0B1F24", "dock", mod="chat"),
              "midnight": _p("#7C3AED", "#22D3EE", "#F472B6", "#F3F1FF", "#160F2E", "pill", mod="chat"),
              "coral": _p("#FF6B5A", "#FF9F1C", "#2EC4B6", "#FFF4F1", "#2A1410", "dock", mod="chat")},
 }
-THEME_DEFAULT = {"social": "prism", "chat": "aqua"}
+THEME_DEFAULT = {"social": "studio", "chat": "mono"}
 BASE["theme"] = {m: {"preset": THEME_DEFAULT[m], **THEME_PRESETS[m][THEME_DEFAULT[m]]} for m in ("social", "chat")}
 NAV_STYLES = {"social": {"pill", "dock"}, "chat": {"dock", "pill"}}
 THEME_ENUMS = {"radius": {"sharp", "soft", "round"}, "density": {"compact", "comfy"}}
@@ -95,7 +102,7 @@ DEFAULT_SLABS = [{"key": "starter", "name": "Starter", "minFollowers": 0, "maxFo
                  {"key": "pro", "name": "Pro", "minFollowers": 10000}]
 DEFAULT_LANGS = {"available": ["en", "hi", "ta", "te", "kn", "ml", "mr", "bn"], "default": "en"}
 LAYER_RE = re.compile(r"^(base|country:[A-Z]{2}|zone:[A-Z0-9_-]{1,30}|slab:[a-z0-9_-]{1,30}|lang:[a-z]{2,3})$")
-TOP_KEYS = {"modules": dict, "nav": dict, "screens": dict, "features": dict, "limits": dict, "fees": dict, "languages": dict, "banner": (dict, type(None)), "theme": dict}
+TOP_KEYS = {"modules": dict, "nav": dict, "screens": dict, "features": dict, "limits": dict, "fees": dict, "languages": dict, "banner": (dict, type(None)), "theme": dict, "moduleNames": dict, "rtc": dict}
 
 def deep_merge(a, b):
     """b over a. dicts merge recursively; nav lists merge by item key; other values replace."""
@@ -136,7 +143,11 @@ def resolve_with(ls: dict, country: str, zone: str, slab: str, lang: str, ver: i
         if key in ls and not (key.startswith("lang:") and "theme" in ls[key]): cfg = deep_merge(cfg, _expand(ls[key]))
     cfg["theme"]["hash"] = theme_hash(cfg["theme"])
     if langs: cfg["languages"] = {**cfg["languages"], "available": langs.get("available", cfg["languages"]["available"]), "default": langs.get("default", "en")}
-    strings = cfg["languages"].get("strings", {})
+    strings = cfg["languages"].setdefault("strings", {})
+    lang_strings = ((ls.get(f"lang:{lang}") or {}).get("languages") or {}).get("strings") or {}
+    for m, name in (cfg.get("moduleNames") or {}).items():  # admin-renamed modules, unless the lang layer overrides
+        for k in (f"module.{m}", f"module.{m.capitalize()}"):
+            if k not in lang_strings and f"module.{m}" not in lang_strings: strings[k] = name
     for mod in cfg["nav"].values():
         for it in mod: it["label"] = strings.get(f"nav.{it['key']}", it["label"])
     return {"version": ver, "resolvedFor": {"country": country, "zone": zone, "slab": slab, "lang": lang}, **cfg}
@@ -160,9 +171,21 @@ def validate_layer(key: str, override, existing: dict) -> str | None:
         if not isinstance(v, TOP_KEYS[k]): return f"{k} has the wrong type"
     if key.startswith("lang:"):
         if "theme" in override: return "A language layer may not change the theme"
+        if "moduleNames" in override: return "A language layer renames modules via languages.strings module.social / module.chat"
         if set(override) - {"languages", "nav"} or set(override.get("languages", {})) - {"strings"}: return "A language layer may only change languages.strings and labels"
         for mod in override.get("nav", {}).values():
             if not isinstance(mod, list) or any(set(i) - {"key", "label"} for i in mod): return "A language layer may only change nav labels"
+    if "rtc" in override:
+        ice = override["rtc"].get("iceServers")
+        if set(override["rtc"]) - {"iceServers"} or not isinstance(ice, list) or len(ice) > 5: return "rtc has iceServers (≤5) only"
+        for s in ice:
+            if not isinstance(s, dict) or set(s) != {"urls"} or not isinstance(s["urls"], list) or not all(isinstance(x, str) and x.startswith("stun:") and len(x) < 200 for x in s["urls"]):
+                return "rtc.iceServers in config are public STUN only: [{urls: [\"stun:host:port\"]}] — put TURN in Plugs → turn"
+    mn = override.get("moduleNames", {})
+    if set(mn) - {"social", "chat"}: return "moduleNames has social and chat only"
+    for v in mn.values():
+        if not isinstance(v, str) or not 1 <= len(v.strip()) <= 16 or v != v.strip(): return "Module names are 1–16 characters (trimmed)"
+        if not any(ch.isalnum() for ch in v): return "Module names need at least one letter or number"
     for k in ("modules", "screens", "features"):
         if any(not isinstance(v, bool) for v in override.get(k, {}).values()): return f"{k} values must be true/false"
     for mod, items in override.get("nav", {}).items():
@@ -172,6 +195,8 @@ def validate_layer(key: str, override, existing: dict) -> str | None:
             if "label" in i and (not isinstance(i["label"], str) or not 1 <= len(i["label"]) <= 30): return "Nav labels are 1–30 characters"
     strings = override.get("languages", {}).get("strings", {})
     if not isinstance(strings, dict) or any(not isinstance(v, str) or len(v) > 200 or len(k) > 80 for k, v in strings.items()): return "strings must map keys to text (≤200 chars)"
+    for k in ("module.social", "module.chat"):
+        if k in strings and (not 1 <= len(strings[k].strip()) <= 16 or not any(ch.isalnum() for ch in strings[k])): return "Module names are 1–16 characters with a letter or number"
     # Every combination this layer can take part in must keep ≥1 nav item per enabled module. Check it over base (+ the layer).
     ls = {**existing, key: override}
     combos = [("base",)] + [("base", k) for k in ls if k != "base"]

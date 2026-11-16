@@ -9,6 +9,7 @@ import { BubbleMoji } from '../chat/BubbleMojiView';
 import { useSession, call, MAX_ACCOUNTS } from '../lib/api';
 import { requestOtp, register, verifyOtp, OtpTicket } from '../lib/sync';
 import { useStore } from '../store/useStore';
+import { useConfig } from '../lib/config';
 
 const HANDLE_RE = /^[a-z0-9._]{3,20}$/;
 export const handleProblem = (h: string) => {
@@ -49,7 +50,7 @@ export default function SignIn({ navigation, route }: any) {
     <View style={{ flex: 1 }}>
       <Screen>
         {adding ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}><IconBtn name="back" label="Back" onPress={() => navigation.goBack()} /><Text style={T.h3}>Add account ({sess.accounts.length}/{MAX_ACCOUNTS})</Text></View> : null}
-        <LinearGradient colors={['#2A1D63', '#0B1F24']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
+        <LinearGradient colors={['#1E1E27', '#0B1F24']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
           <View style={{ flexDirection: 'row', gap: 4 }}><VibeMoji id={7} size={42} /><BubbleMoji id={17} size={42} /><VibeMoji id={311} size={42} /><BubbleMoji id={88} size={42} /></View>
           <Text style={s.h}>{step === 'code' ? 'Check your code' : tab === 'in' ? 'Sign in with your @ID' : 'Claim your @ID'}</Text>
           <Text style={s.p}>One ID. Every connection. No phone number needed.</Text>
@@ -90,7 +91,7 @@ export default function SignIn({ navigation, route }: any) {
             <Field label="API server URL" value={url} onChangeText={setUrl} autoCapitalize="none" />
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Btn small kind="ghost" title="Test connection" onPress={test} />{ping ? <Tag label={ping.toUpperCase()} color={ping === 'Connected' ? '#12A27C' : C.danger} bg={ping === 'Connected' ? C.mintSoft : C.dangerSoft} /> : null}</View>
           </Card>) : null}
-        {!adding ? <Btn kind="ghost" title="Explore offline with demo data" icon="eye" style={{ marginTop: 20 }} onPress={() => { sess.setMode('demo'); sess.setModule('social'); useStore.getState().finishOnboarding('', ''); navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); }} /> : null}
+      {!adding && useConfig.getState().cfg.features.demoMode !== false ? <Btn kind="ghost" title="Peek offline with demo data" icon="eye" style={{ marginTop: 20 }} onPress={() => { sess.setMode('demo'); sess.setModule('social'); useStore.getState().finishOnboarding('', ''); navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); }} /> : null}
       </Screen>
       {toast}
     </View>

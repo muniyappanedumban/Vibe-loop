@@ -15,9 +15,12 @@ STAFF = require("owner")
 SPEC = {"razorpay": (["mode", "keyId"], ["keySecret", "webhookSecret"], ["keyId", "keySecret"]),
         "cashfree": (["mode", "appId"], ["secretKey", "webhookSecret"], ["appId", "secretKey"]),
         "msg91": (["mode", "templateId", "sender", "enabled"], ["authKey"], ["authKey", "templateId", "sender"]),
-        "maps": (["mode", "provider"], ["key"], ["key"])}
+        "maps": (["mode", "provider"], ["key"], ["key"]),
+        "turn": (["urls", "username"], ["credential", "sharedSecret"], ["urls"]),  # + credential or sharedSecret (checked in get_config)
+        "expo": ([], ["accessToken"], [])}  # Expo push works without a token; the access token is optional
 DEFAULTS = {"razorpay": {"mode": "test", "keyId": ""}, "cashfree": {"mode": "test", "appId": ""},
-            "msg91": {"mode": "test", "templateId": "", "sender": "", "enabled": False}, "maps": {"mode": "test", "provider": "google"}}
+            "msg91": {"mode": "test", "templateId": "", "sender": "", "enabled": False}, "maps": {"mode": "test", "provider": "google"},
+            "turn": {"urls": "", "username": ""}, "expo": {}}
 
 def _raw(db: Session, name: str) -> dict:
     r = db.get(M.KV, ("integrations", name)); return dict(r.value) if r else dict(DEFAULTS[name])
@@ -27,6 +30,7 @@ def get_config(db: Session, name: str) -> dict | None:
     plain, secret, req = SPEC[name]; raw = _raw(db, name)
     cfg = {k: raw.get(k, DEFAULTS[name].get(k)) for k in plain}
     for k in secret: cfg[k] = C.decrypt(raw.get(k))
+    if name == "turn" and not (cfg.get("credential") or cfg.get("sharedSecret")): return None
     return cfg if all(cfg.get(k) for k in req) else None
 
 def public_view(db: Session, name: str) -> dict:
@@ -79,11 +83,33 @@ def test_maps(cfg: dict) -> dict:
     except httpx.HTTPError as e: return {"ok": False, "message": f"Maps provider unreachable ({type(e).__name__})"}
     return {"ok": ok, "message": "Maps key works" if ok else f"Maps provider rejected the key — {err_text(r)}"}
 
+def test_turn(cfg: dict) -> dict:
+    """Config validation only — no TURN allocation is attempted from the API server."""
+    urls = [x.strip() for x in (cfg.get("urls") or "").split(",") if x.strip()]
+    bad = [x for x in urls if not x.startswith(("turn:", "turns:", "stun:"))]
+    if not urls or bad: return {"ok": False, "message": f"URLs must start with turn:, turns: or stun: ({', '.join(bad) or 'none given'})"}
+    if not any(x.startswith(("turn:", "turns:")) for x in urls): return {"ok": False, "message": "Add at least one turn: or turns: URL"}
+    if cfg.get("credential") and not cfg.get("sharedSecret") and not cfg.get("username"): return {"ok": False, "message": "Static credential needs a username"}
+    how = "short-lived HMAC credentials (use-auth-secret)" if cfg.get("sharedSecret") else "the static username/credential"
+    return {"ok": True, "message": f"Config looks valid: {len(urls)} URL(s), clients get {how}. This checks the config only — test a real call to confirm the server relays."}
+
+def test_expo(cfg: dict) -> dict:
+    """Reachability: send to a deliberately invalid token and expect Expo to reject that token (not us)."""
+    from .push import EXPO_URL
+    hdr = {"Accept": "application/json", "Content-Type": "application/json"}
+    if cfg.get("accessToken"): hdr["Authorization"] = f"Bearer {cfg['accessToken']}"
+    try: r = httpx.post(EXPO_URL, json=[{"to": "ExponentPushToken[vibeloop-reachability-check]", "title": "test"}], headers=hdr, timeout=TIMEOUT)
+    except httpx.HTTPError as e: return {"ok": False, "message": f"Expo unreachable ({type(e).__name__})"}
+    if r.status_code == 401 or r.status_code == 403: return {"ok": False, "message": "Expo rejected the access token"}
+    if r.status_code >= 500 or r.status_code == 429: return {"ok": False, "message": f"Expo answered {r.status_code} — try again later"}
+    tok = "with your access token" if cfg.get("accessToken") else "without an access token"
+    return {"ok": True, "message": f"Expo is reachable {tok} (HTTP {r.status_code}); the test token was rejected as expected — no notification was sent."}
+
 @router.post("/admin/integrations/{name}/test")
 def test_integration(name: str, a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
     if name not in SPEC: raise HTTPException(404, "Unknown integration")
     cfg = get_config(db, name)
     if not cfg: return {"ok": False, "configured": False, "message": "Not configured — add the keys and save first"}
-    res = {"razorpay": razorpay.test, "cashfree": cashfree.test, "msg91": msg91.test, "maps": test_maps}[name](cfg)
+    res = {"razorpay": razorpay.test, "cashfree": cashfree.test, "msg91": msg91.test, "maps": test_maps, "turn": test_turn, "expo": test_expo}[name](cfg)
     audit(db, a.handle, "integrations.test", f"{name} ok={res['ok']}"); db.commit()
     return {**res, "configured": True, "mode": cfg.get("mode")}

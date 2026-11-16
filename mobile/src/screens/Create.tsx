@@ -12,14 +12,14 @@ import { uid } from '../lib/util';
 export function CreateHub({ navigation }: any) {
   const st = useStore();
   const tools: { icon: IconName; t: string; d: string; route: string; c: [string, string] }[] = [
-    { icon: 'wand', t: 'Brief → Package', d: 'Hooks, captions & formats from your own wins', route: 'Copilot', c: ['#7B4DFF', '#FF3D9A'] },
-    { icon: 'film', t: 'Video editor', d: 'Multi-track, non-destructive', route: 'Editor', c: ['#FF8A3D', '#FF3D9A'] },
-    { icon: 'mic', t: 'Audio & subtitles', d: 'Cleanup, silence, dual-language', route: 'Audio', c: ['#14B88D', '#6C3BFF'] },
-    { icon: 'loops', t: 'Test in a Loop', d: 'Get real reactions first', route: 'NewLoop', c: ['#120F24', '#3A1B9C'] },
+    { icon: 'wand', t: 'Idea Engine', d: 'Hooks, captions & formats from your own wins', route: 'Copilot', c: ['#5B4CF5', '#7C6CFF'] },
+    { icon: 'film', t: 'Cut Room', d: 'Multi-track, non-destructive', route: 'Editor', c: ['#1E1E27', '#0A0A0F'] },
+    { icon: 'mic', t: 'Sound Booth', d: 'Cleanup, silence, dual-language', route: 'Audio', c: ['#1E1E27', '#0A0A0F'] },
+    { icon: 'loops', t: 'Loop Lab', d: 'Get real reactions first', route: 'NewLoop', c: ['#120F24', '#24242E'] },
   ];
   return (
     <Screen>
-      <Header title="Create" sub="Make in private. Prove it. Then release." back={false} />
+      <Header title="Creator Tools" sub="Make in private. Prove it. Then go live." />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {tools.map((x, i) => (
           <Pressable key={x.t} onPress={() => navigation.navigate(x.route)} style={{ width: '48%' }}>
@@ -74,7 +74,7 @@ export function Copilot() {
   return (
     <View style={{ flex: 1 }}>
       <Screen>
-        <Header title="Brief Copilot" sub="One brief → a multi-format package" right={<Tag label="ON-DEVICE" color="#12A27C" bg={C.mintSoft} />} />
+        <Header title="Idea Engine" sub="One brief → a multi-format package" right={<Tag label="ON-DEVICE" color="#12A27C" bg={C.mintSoft} />} />
         <View style={s.bubbleL}><LinearGradient colors={PRISM as any} style={s.botAv}><Icon name="spark" size={16} color="#fff" /></LinearGradient>
           <Text style={{ flex: 1, lineHeight: 20, fontWeight: '500' }}>Tell me what you want to make. I'll build hooks, captions and formats from <Text style={{ fontWeight: '800' }}>your own winning Loops</Text> — and I'll flag any price or claim so you can confirm it.</Text></View>
         {out ? <View style={s.bubbleR}><Text style={{ color: '#fff', fontWeight: '600', lineHeight: 20 }}>{brief}</Text></View> : null}
@@ -120,7 +120,7 @@ export function Editor() {
   const pw = fmt === '16:9' ? 320 : fmt === '1:1' ? 240 : 190;
   return (
     <Screen>
-      <Header title="Editor" sub="Non-destructive · originals never change" right={<View style={{ flexDirection: 'row', gap: 6 }}><IconBtn name="undo" label="Undo" onPress={st.undo} /><IconBtn name="redo" label="Redo" onPress={st.redo} /></View>} />
+      <Header title="Cut Room" sub="Non-destructive · originals never change" right={<View style={{ flexDirection: 'row', gap: 6 }}><IconBtn name="undo" label="Undo" onPress={st.undo} /><IconBtn name="redo" label="Redo" onPress={st.redo} /></View>} />
       <View style={{ alignItems: 'center' }}>
         <View style={{ width: pw, height: pw / FORMATS[fmt], borderRadius: 22, overflow: 'hidden' }}>
           <Thumb hue={cur?.hue ?? 260} w="100%" h={pw / FORMATS[fmt]} radius={22} label={cur?.label}>
@@ -181,8 +181,8 @@ export function Audio() {
   return (
     <View style={{ flex: 1 }}>
       <Screen>
-        <Header title="Audio studio" sub="Voiceover · cleanup · subtitles" />
-        <LinearGradient colors={['#1B1538', '#120F24']} style={{ borderRadius: 28, padding: 18 }}>
+        <Header title="Sound Booth" sub="Voiceover · cleanup · subtitles" />
+        <LinearGradient colors={['#17171F', '#120F24']} style={{ borderRadius: 28, padding: 18 }}>
           <Text style={{ color: '#fff', fontWeight: '800' }}>Voiceover — travel · v2</Text>
           <Svg width="100%" height={110} viewBox="0 0 270 110" preserveAspectRatio="none" style={{ marginTop: 12 }}>
             {WAVE.map((v, i) => { const h = Math.max(3, v * (clean ? 80 : 96)); return <Rect key={i} x={i * 3} y={55 - h / 2} width={2} height={h} rx={1} fill={v < gate ? '#FF4D5E' : i < 40 ? '#C8F45A' : 'rgba(255,255,255,0.55)'} />; })}

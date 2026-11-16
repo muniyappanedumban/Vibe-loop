@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, ViewStyle, TextInput, TextInputProps } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, ViewStyle, TextInput, TextInputProps, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -44,10 +44,11 @@ export function CIconBtn({ name, onPress, label, badge, tint = CC.ink, size = 42
     </Pressable>
   );
 }
-export function CAvatar({ name, h = 180, size = 44, ring, online: on }: { name: string; h?: number; size?: number; ring?: boolean; online?: boolean }) {
+export function CAvatar({ name, h = 180, size = 44, ring, online: on, uri }: { name: string; h?: number; size?: number; ring?: boolean; online?: boolean; uri?: string | null }) {
+  if (uri) return <View style={{ width: size, height: size }}><Image source={{ uri: uri.startsWith('/') ? require('../lib/api').useSession.getState().apiUrl + uri : uri }} style={{ flex: 1, borderRadius: size * 0.36, borderWidth: ring ? 2.5 : 0, borderColor: CC.teal }} accessibilityLabel={`${name} photo`} />{on ? <View style={s.dot} /> : null}</View>;
   return (
     <View style={{ width: size, height: size }}>
-      <LinearGradient colors={[hue(h, 75, 62), hue(h + 40, 75, 45)]} style={{ flex: 1, borderRadius: size * 0.36, alignItems: 'center', justifyContent: 'center', borderWidth: ring ? 2.5 : 0, borderColor: CC.teal }}>
+      <LinearGradient colors={[hue(h, 40, 58), hue(h + 30, 36, 42)]} style={{ flex: 1, borderRadius: size * 0.36, alignItems: 'center', justifyContent: 'center', borderWidth: ring ? 2.5 : 0, borderColor: CC.teal }}>
         <Text style={{ color: '#fff', fontWeight: '900', fontSize: size * 0.4 }}>{(name || '?').replace('@', '').slice(0, 1).toUpperCase()}</Text>
       </LinearGradient>
       {on ? <View style={s.dot} /> : null}

@@ -85,6 +85,11 @@ def run(reset=False):
     for k in ["publishing", "payouts", "ai_generation", "signups", "chat", "social", "otp"]: db.add(M.KV(ns="kill", key=k, value={"on": False}))
     seed_v2(db, t)
     seed_v3(db, t)
+    seed_v4(db, t)
+    db.flush()
+    from .seed_v5 import seed_v5
+    seed_v5(db, t)
+    seed_v6(db, t)
     db.add(M.Audit(actor="system", action="seed", detail="demo data loaded"))
     db.commit(); print("seeded. demo logins: riya@vibeloop.app / admin@vibeloop.app, password", DEMO_PASSWORD)
 
@@ -163,10 +168,45 @@ def seed_v3(db, t):
                        perks=["Demo plan — set real perks in admin", "Members-only Drops", "Early Flicks"]),
                 M.Plan(id="plan_creator_pro", name="Creator Pro", period="month", prices={"IN": 29900, "US": 499}, demo=True, sort=2,
                        perks=["Demo plan — set real perks in admin", "Lower platform fee", "Stash analytics"])])
-    db.add_all([M.Product(id="prd_presets", creator_id="u1", title="Street-food preset pack (demo)", desc="Demo listing · 12 warm photo presets", price=14900, demo=True, at=t - 3 * D),
+    db.add_all([M.Product(id="prod_u1_presets", creator_id="u1", title="Street-food preset pack (demo)", desc="Demo listing · 12 warm photo presets", price=14900, demo=True, at=t - 3 * D),
                 M.Product(id="prd_zine", creator_id="u4", title="Color Day sticker zine (demo)", desc="Demo listing · printable sticker zine", price=49900, demo=True, at=t - 2 * D),
                 M.Product(id="prd_guide", creator_id="u4", title="Free sketching guide (demo)", desc="Demo listing · free PDF guide", price=0, demo=True, at=t - D)])
     db.add_all([M.Ad(id="ad_demo_chai", title="Chai Co. — demo ad", body="Demo Boost · shown labelled Sponsored", cta="Learn more", url="https://example.com/demo-chai", sponsor="Demo Sponsor", places=["feed", "explore"], demo=True),
                 M.Ad(id="ad_demo_bus", title="City Bus Pass — demo ad", body="Demo Boost · shown labelled Sponsored", cta="See more", url="https://example.com/demo-bus", sponsor="Demo Sponsor", places=["feed", "chat_list"], demo=True)])
+
+def seed_v4(db, t):
+    """v4: profiles (avatars stay null → app shows initials), promos, post poll, Pin 3, Friend Flame, Mood Drop."""
+    riya = db.get(M.User, "usr_riya"); riya.state = "TN"; riya.profile = {**(riya.profile or {}), "country": "IN"}; riya.pronouns = "she/her"
+    riya.last_seen_at = t - 5 * 60_000
+    for i, uid in enumerate(["u1", "u3", "u4", "u6"]): db.get(M.User, uid).last_seen_at = t - (i + 1) * 17 * 60_000
+    u1 = db.get(M.User, "u1"); u1.profile = {**(u1.profile or {}), "moodDrop": {"moji": 7, "text": "Dosa hunt mode", "at": t - 2 * H}}
+    p3 = db.get(M.Post, "p3"); p3.poll = {"q": "Which habit should I explain next?", "options": [{"text": "SIPs", "votes": 41}, {"text": "Emergency fund", "votes": 27}, {"text": "Credit score", "votes": 18}], "voters": {}}
+    db.add(M.Post(id="p9", author_id="usr_riya", kind="thought", text="Ep 5 drops Friday — chai-break comedy is back.", hue=280, mood="Funny", interest="Comedy", at=t - 20 * H,
+                  shares=3, views=640, seed_reactions={"heart": 52, "fire": 14, "laugh": 33, "touch": 2, "clap": 6, "boom": 1}, pinned_at=t - 19 * H))
+    day = t // D
+    for fid, n in (("u1", 12), ("u3", 4)):
+        for a, b in (("usr_riya", fid), (fid, "usr_riya")):
+            f = db.get(M.Friend, (a, b)); f.flame, f.flame_day, f.last_msg_day = n, day, day
+    db.add_all([
+        M.Promo(id="promo_welcome", title="Welcome to VibeLoop — Glow & Hush", body="Share your world in Glow, talk freely in Hush.", kind="banner", url="https://vibeloop.app", cta="Explore",
+                placement=["home_banner"], target={"global": True, "countries": [], "zones": [], "states": []}, priority=10, by="@vibeloop.staff", at=t - 2 * D),
+        M.Promo(id="promo_in_week", title="Made in India creators week", body="Seven days of homegrown creators on your feed.", kind="card", url="https://vibeloop.app/made-in-india", cta="See creators",
+                placement=["feed"], target={"global": False, "countries": ["IN"], "zones": [], "states": []}, priority=5, by="@vibeloop.staff", at=t - D),
+        M.Promo(id="promo_kovai", title="Kovai creators meetup", body="Coimbatore creators — meet up this Sunday at Race Course.", kind="card", url="https://vibeloop.app/kovai", cta="I'm in",
+                placement=["chat_list"], target={"global": False, "countries": ["IN"], "zones": [], "states": ["TN"]}, priority=5, by="@vibeloop.staff", at=t - 12 * H)])
+
+
+def seed_v6(db, t):
+    """v6 demo rows: a small call log, published E2EE keys, Blink views, old push attempts (so admin pages aren't empty)."""
+    import base64
+    H, D = 3_600_000, 86_400_000
+    db.flush()
+    db.add_all([M.Call(id="call_demo1", caller_id="u2", callee_id="u4", media="video", status="ended", started_at=t - 5 * H, answered_at=t - 5 * H + 8000, ended_at=t - 5 * H + 610_000),
+                M.Call(id="call_demo2", caller_id="u4", callee_id="u6", media="audio", status="missed", started_at=t - 3 * H, ended_at=t - 3 * H + 30_000),
+                M.Call(id="call_demo3", caller_id="u6", callee_id="u2", media="audio", status="rejected", started_at=t - 2 * H, ended_at=t - 2 * H + 5000)])
+    db.add_all([M.DeviceKey(user_id=x, device_id="demo-phone", public_key=base64.b64encode(bytes([i + 7]) * 32).decode(), at=t - D) for i, x in enumerate(["u2", "u4"])])
+    db.add_all([M.SparkView(spark_id="s1", viewer_id="usr_riya", at=t - H), M.SparkView(spark_id="s3", viewer_id="usr_riya", at=t - 2 * H)])
+    db.add_all([M.PushSend(user_id="u2", kind="message", provider="expo", status="sent", at=t - 2 * D),
+                M.PushSend(user_id="u4", kind="call", provider="expo", status="failed", error="DeviceNotRegistered", at=t - 2 * D)])
 
 if __name__ == "__main__": run(reset="--reset" in sys.argv)

@@ -14,6 +14,7 @@ const out = path.join(root, 'screenshots', 'admin');
 const { chromium } = createRequire(path.join(root, 'admin', 'package.json'))('playwright');
 
 const SLUGS = ['dashboard', 'users', 'moderation', 'payouts', 'health', 'costs', 'flags', 'audit', 'privacy', 'abuse', 'revenue', 'announcements', 'roles'];
+const NAMES = { dashboard: 'mission-control', users: 'members', moderation: 'mod-queue', payouts: 'cashouts', health: 'vitals', costs: 'burn-rate', flags: 'switchboard', audit: 'paper-trail', privacy: 'privacy-desk', abuse: 'spam-shield', revenue: 'revenue-pulse', announcements: 'megaphone', roles: 'role-matrix' };
 const SETTINGS = ['general', 'security', 'moderation', 'monetisation', 'notifications', 'content', 'privacy', 'integrations', 'branding', 'admins'];
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
 const PORT = 4174;
@@ -67,10 +68,21 @@ await snap('login');
 await page.click('.login-form button.btn');
 await page.waitForSelector('.app', { timeout: 10000 });
 
-for (const slug of SLUGS) await shot(slug, slug);
+for (const slug of SLUGS) {
+  await shot(slug, NAMES[slug] ?? slug);
+  if (slug === 'users') { // member detail drawer (avatar/initials, last seen, profile fields)
+    await go('users?open=usr_riya'); await page.waitForSelector('.drawer .mhead'); await page.waitForTimeout(200); await snap('members-drawer');
+  }
+}
 // ---- App control (sidebar order) ----
-await shot('navigation', 'navigation-base');
-await shot('navigation?layer=country:US', 'navigation-country-US');
+await shot('navigation', 'nav-builder-base');
+// Module names card: rename Chat in the draft (not saved) so the D-Switch preview shows it
+await go('navigation');
+await page.fill('[aria-label="Chat module name"]', 'Whisper');
+await page.waitForTimeout(150);
+await page.locator('.modnames').screenshot({ path: file('nav-builder-module-names') });
+console.log('saved nav-builder-module-names');
+await shot('navigation?layer=country:US', 'nav-builder-country-US');
 // server-side validation: switch every Social tab off, save, capture the rejection (nothing is stored)
 await go('navigation');
 for (const k of ['Home', 'Explore', 'Create', 'Motion', 'Profile']) await page.click(`[data-nav="social-${k}"] .tg`);
@@ -78,10 +90,10 @@ expect400 = true;
 await page.click('.layerbar .btn.prism');
 await page.waitForSelector('.layerbar .errbox');
 await page.waitForTimeout(200);
-await snap('navigation-validation-error');
+await snap('nav-builder-validation-error');
 expect400 = false;
-await shot('themes', 'themes-base');
-await shot('themes?layer=country:US', 'themes-country-US');
+await shot('themes', 'theme-studio-base');
+await shot('themes?layer=country:US', 'theme-studio-country-US');
 // low-contrast ink on the Chat theme, save, capture the 422 (nothing is stored)
 await go('themes');
 await page.fill('[data-hex="chat-ink"]', '#D8E4E2');
@@ -89,21 +101,26 @@ expect400 = true;
 await page.click('.layerbar .btn.prism');
 await page.waitForSelector('.layerbar .errbox');
 await page.waitForTimeout(200);
-await snap('themes-validation-error');
+await snap('theme-studio-validation-error');
 expect400 = false;
-await shot('screens', 'screens-base');
-await shot('screens?layer=country:US', 'screens-country-US');
-await shot('limits', 'features-limits-base');
-await shot('limits?layer=slab:pro', 'features-limits-slab-pro');
+await shot('screens', 'screen-switches-base');
+await shot('screens?layer=country:US', 'screen-switches-country-US');
+await shot('limits', 'feature-dials-base');
+await shot('limits?layer=slab:pro', 'feature-dials-slab-pro');
 await shot('zones', 'zones');
-await shot('slabs', 'slabs');
-await shot('languages?lang=ta', 'languages-strings-ta');
-await shot('preview?country=IN&lang=ta', 'preview-IN-ta');
-await shot('preview?country=US&lang=en', 'preview-US-en');
+await shot('slabs', 'tiers');
+await shot('languages?lang=ta', 'lingo-strings-ta');
+await shot('preview?country=IN&lang=ta', 'preview-room-IN-ta');
+await shot('preview?country=US&lang=en', 'preview-room-US-en');
 // ---- Identity & chat ----
-await shot('otp', 'otp-login');
-await shot('identity', 'identity');
-await shot('chat', 'chat-towns');
+await shot('otp', 'login-watch');
+await shot('identity', 'id-desk');
+await shot('chat', 'hush-hoods');
+// ---- Live & reach ----
+await shot('realtime', 'realtime-monitor');
+await shot('calls', 'call-log');
+await shot('push', 'push-center');
+await shot('e2ee', 'e2ee-keys');
 // ---- Money & growth (seed: every money switch OFF, no Plugs connected) ----
 await shot('cashflow', 'cashflow-empty');
 await shot('money', 'money-switches-off');
@@ -122,6 +139,8 @@ await page.click('.card:has-text("Razorpay") button:has-text("Test connection")'
 await page.waitForSelector('[data-test-result]');
 await page.waitForTimeout(200);
 await snap('plugs-test-not-configured');
+await page.locator('.card:has-text("TURN (calls)")').first().scrollIntoViewIfNeeded(); await page.waitForTimeout(200);
+await snap('plugs-turn-expo');
 // switch money back OFF through the UI
 await go('money');
 await page.click('[aria-label="Money master switch"]');
@@ -129,23 +148,66 @@ await page.click('.savebar .btn.prism');
 await page.waitForSelector('.savebar:not(.dirty)');
 await settle();
 await snap('money-master-off-again');
+// ---- Brand & community ----
+async function shotAt(hash, name, sel) { await go(hash); await page.locator(sel).first().scrollIntoViewIfNeeded(); await page.waitForTimeout(250); await snap(name); }
+await shot('promos', 'promos-list');
+await shotAt('promos?edit=promo_kovai', 'promo-editor-targeting', '.peditor');
+await go('promos?edit=promo_kovai'); await page.locator('.peditor .ptarget').scrollIntoViewIfNeeded(); await page.waitForTimeout(250); await page.screenshot({ path: file('promo-editor-full'), fullPage: true }); console.log('saved full-page promo editor');
+await shotAt('promos?pc=IN&ps=TN', 'promo-preview-IN-TN', '.card:has-text("Preview as")');
+await shotAt('promos?pc=US&ps=', 'promo-preview-US', '.card:has-text("Preview as")');
+await shot('uploads', 'uploads');
+// ---- Content & trust ----
+await shot('pages', 'page-studio-list');
+await shotAt('pages?edit=help-hub', 'page-studio-editor-faq-help-hub', '.pgeditor');
+await shotAt('pages?edit=get-the-apps', 'page-studio-editor-links-get-the-apps', '.pgeditor');
+await shotAt('pages?edit=house-rules', 'page-studio-editor-house-rules', '.pgeditor');
+// edit House Rules through the UI → a new version appears in the history
+await page.fill('[aria-label="summary"]', 'Terms of use (draft) — the deal for using VibeLoop.');
+await page.fill('[aria-label="change note"]', 'Tightened the summary');
+await page.click('.pgeditor .btn.prism');
+await page.waitForSelector('.vhist td:has-text("Tightened the summary")');
+await page.locator('.vhist').scrollIntoViewIfNeeded(); await page.waitForTimeout(250);
+await snap('page-studio-version-history');
+await shot('blog', 'loopdown-fresh-wire-list');
+await shotAt('blog?edit=loopdown-loops-101', 'loopdown-editor-preview', '.pgeditor');
+await shot('reviews', 'reviews-desk');
+await page.click('tr:has-text("Super responsive") button:has-text("Hide")');
+await page.waitForSelector('tr.dim:has-text("Super responsive")');
+await page.waitForTimeout(200);
+await snap('reviews-desk-hidden-vouch');
+await shot('speakup', 'speak-up-desk-queue');
+await shot('speakup?open=su_demo_urgent', 'speak-up-desk-urgent-ticket-detail');
+await page.click('.sudetail button:has-text("Reviewing")');
+await page.waitForSelector('.sudetail .suhist li:has-text("real human")');
+await page.waitForTimeout(250);
+await snap('speak-up-desk-urgent-reviewing');
 // ---- Platform ----
-for (const sec of SETTINGS) await shot(`settings/${sec}`, `settings-${sec}`);
-await shot('emoji', 'emoji');
+for (const sec of SETTINGS) await shot(`settings/${sec}`, `control-room-${sec}`);
+await shot('emoji', 'vibemoji-vault');
 await page.click('.mcell:nth-child(12)');
 await page.waitForSelector('.mdetail');
 await page.waitForTimeout(200);
-await snap('emoji-detail');
-await shot('features', 'features-prd');
-await shot('features?tab=social', 'features-social');
-await shot('search?q=riya', 'search-riya');
-await shot('search?q=ta', 'search-ta');
-await shot('search?q=payout', 'search-config-key');
-await shot('search?q=ocean', 'search-theme-preset');
-await shot('search?q=backstage', 'search-plans');
-await shot('search?q=demo', 'search-stash-boosts');
-await shot('search?q=razorpay', 'search-plugs');
-await shot('learn', 'learn');
+await snap('vibemoji-vault-detail');
+await shot('features', 'whats-in-prd');
+await shot('features?tab=social', 'whats-in-social');
+await shot('search?q=riya', 'seek-riya');
+await shot('search?q=ta', 'seek-ta');
+await shot('search?q=payout', 'seek-config-key');
+await shot('search?q=ocean', 'seek-theme-preset');
+await shot('search?q=backstage', 'seek-plans');
+await shot('search?q=demo', 'seek-stash-boosts');
+await shot('search?q=razorpay', 'seek-plugs');
+await shot('search?q=push', 'seek-live-reach');
+await shot('search?q=kovai', 'seek-promos');
+await shot('search?q=sos', 'seek-pages');
+await shot('search?q=harassment', 'seek-speakup-reviews');
+await shot('learn', 'level-up');
+await page.locator('.card:has-text("Run a brand promo for one state")').scrollIntoViewIfNeeded(); await page.waitForTimeout(200);
+await snap('level-up-brand-promo');
+await page.locator('.card:has-text("Handle an urgent report")').scrollIntoViewIfNeeded(); await page.waitForTimeout(200);
+await snap('level-up-content-trust');
+await page.locator('.card:has-text("Turn on calls with your TURN server")').scrollIntoViewIfNeeded(); await page.waitForTimeout(200);
+await snap('level-up-calls-push');
 await browser.close();
 server.close();
 if (errors.length) { console.error('Console errors:\n' + errors.join('\n')); process.exitCode = 1; } else console.log('No console errors.');

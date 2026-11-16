@@ -38,8 +38,8 @@ export function Friends({ navigation }: any) {
       {st.friends.map(f => (
         <CCard key={f.id} style={{ marginBottom: 8, padding: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <CAvatar name={f.name} h={f.hue} size={46} />
-            <View style={{ flex: 1 }}><Text style={ct.h3}>{f.name} {f.close ? '· Inner Circle' : ''}</Text><Text style={ct.small} numberOfLines={1}>{f.handle}{f.bio ? ` · ${f.bio}` : ''}</Text></View>
+            <CAvatar name={f.name} h={f.hue} size={46} uri={f.avatar} online={!!f.lastSeen && Date.now() - f.lastSeen < 120_000} />
+            <View style={{ flex: 1 }}><Text style={ct.h3}>{f.name}{f.flame ? ` · streak ${f.flame}d` : ''} {f.close ? '· Inner Circle' : ''}</Text><Text style={ct.small} numberOfLines={1}>{f.moodDrop?.text ? `Mood: ${f.moodDrop.text} · ` : ''}{f.handle}{f.bio ? ` · ${f.bio}` : ''}</Text></View>
             <Pressable onPress={() => run(chat.ping(f.id, 64, 'wave'), `Waved at ${f.name.split(' ')[0]}`)} accessibilityLabel={`Wave at ${f.name}`} style={s.mini}><ChatIcon name="wave" size={18} color={CC.teal} /></Pressable>
             <Pressable onPress={() => run(chat.ping(f.id, 17, 'heart'), 'Heart Ping sent')} accessibilityLabel={`Heart ping ${f.name}`} style={s.mini}><ChatIcon name="heart" size={18} color={CC.coral} /></Pressable>
             <Pressable onPress={() => chat.newConv([f.id]).then(c => navigation.navigate('ChatRoom', { id: c.id })).catch(e => show(e.message, true))} accessibilityLabel={`Message ${f.name}`} style={s.mini}><ChatIcon name="chats" size={18} color={CC.ink} /></Pressable>
@@ -47,6 +47,8 @@ export function Friends({ navigation }: any) {
           <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
             <CChip label="Inner Circle" icon="shield" active={!!f.close} onPress={() => run(chat.friendFlag(f.id, { close: !f.close }), f.close ? 'Removed from Inner Circle' : 'Added to Inner Circle')} />
             <CChip label="Bestie" icon="star" active={!!f.bestie} onPress={() => run(chat.friendFlag(f.id, { bestie: !f.bestie }), 'Updated')} />
+            <CChip label="Thanks" icon="heart" onPress={() => run(chat.ping(f.id, 233, 'thanks' as any), 'Thank You Tap sent')} />
+            <CChip label="Celebrate" icon="spark" onPress={() => run(chat.ping(f.id, 42, 'celebrate' as any), 'Celebrate Tap sent')} />
           </View>
         </CCard>))}
       {!st.friends.length ? <Text style={ct.small}>No friends yet — add someone by @ID.</Text> : null}
@@ -58,7 +60,7 @@ export function MyCode() {
   const sess = useSession(); const me = sess.accounts.find(a => a.id === sess.activeId); const handle = me?.handle ?? '@you'; const link = `https://vibeloop.app/${handle}`;
   return (
     <CScreen>
-      <CHeader title="My @ID" sub="Share this instead of a phone number" />
+      <CHeader title="ID Card" sub="Share this instead of a phone number" />
       <LinearGradient colors={AQUA as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.card}>
         <CAvatar name={me?.name ?? 'You'} h={me?.hue ?? 180} size={64} />
         <Text style={{ color: '#fff', fontWeight: '900', fontSize: 22, marginTop: 10 }}>{me?.name}</Text>

@@ -44,9 +44,30 @@ def mask_ip(ip: str) -> str:
 
 def prof(u: M.User) -> dict: return {**PROFILE_DEFAULTS, **(u.profile or {})}
 
+# v4: per-request viewer context (set by RequestContextMiddleware) → module-appropriate avatar + reciprocal last-seen
+from contextvars import ContextVar
+VIEWER: ContextVar[dict | None] = ContextVar("vl_viewer", default=None)  # {"id", "lsv"} of the signed-in caller
+MODULE: ContextVar[str] = ContextVar("vl_module", default="social")
+
+def avatar_for(u: M.User, module: str | None = None) -> str | None:
+    m = module or MODULE.get()
+    return (u.avatar_chat or u.avatar_social) if m == "chat" else (u.avatar_social or u.avatar_chat)
+
+def last_seen_for(u: M.User) -> int | None:
+    """Null when that user hides it — and if the viewer hides theirs, they can't see anyone's (reciprocal)."""
+    v = VIEWER.get()
+    if not v: return None
+    if v["id"] == u.id: return u.last_seen_at
+    return u.last_seen_at if (u.last_seen_visible is not False and v.get("lsv", True)) else None
+
+def mood_drop(u: M.User) -> dict | None:
+    md = (u.profile or {}).get("moodDrop")
+    return md if md and md.get("at", 0) > M.now_ms() - DAY else None
+
 def user_json(u: M.User) -> dict:
     p = prof(u)
-    return {"id": u.id, "handle": u.handle, "name": u.name, "hue": u.hue, "bio": p["chat_bio"], "verified": bool(u.verified), "mood": p["mood"]}
+    return {"id": u.id, "handle": u.handle, "name": u.name, "hue": u.hue, "bio": p["chat_bio"], "verified": bool(u.verified), "mood": p["mood"],
+            "avatar": avatar_for(u), "lastSeen": last_seen_for(u), "moodDrop": mood_drop(u)}
 
 def are_friends(db: Session, a: str, b: str) -> bool: return db.get(M.Friend, (a, b)) is not None
 
@@ -64,3 +85,5 @@ def chat_notice(db: Session, user_id: str, kind: str, title: str, body: str = ""
 
 def kill_on(db: Session, key: str) -> bool:
     f = db.get(M.KV, ("kill", key)); return bool(f and (f.value or {}).get("on"))
+
+LENS_KEYS = set("none,warm,cool,noir,neon,vintage,festival,city,mood,sparkle,chai,mint,dusk,blush,arctic,matcha,velvet,sunburst,citrus,ocean,lilac,ember,slate,peach,volt,cocoa,aurora,rosegold,midnight,polaroid,film,cinema,grid,vignette,glitch,heartframe".split(","))

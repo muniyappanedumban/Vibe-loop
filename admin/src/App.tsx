@@ -8,7 +8,7 @@ import { Icon, Logo } from './icons';
 import { VIBEMOJI, VIBEMOJI_CATEGORIES, REACTIONS, vibemojiSvg } from './vibemoji';
 import { SECTIONS, ALL_FEATURES } from './features';
 import { PRD, PRD_GROUPS } from './prd';
-import { api, useApi, login, getToken, getUser, setSession, API_URL } from './api';
+import { api, useApi, login, getToken, getUser, setSession, API_URL, uploadFile } from './api';
 import type { ApiUser, Overview, Report, ApiPayout, AuditRow, PrivacyReq, ApiAnnouncement, SearchResult, KV } from './api';
 
 /* Demo-only state (abuse rules / flagged accounts) — everything else comes from the API. */
@@ -16,15 +16,18 @@ const Ctx = createContext<{ s: State; dispatch: Dispatch<Action> }>(null!);
 const useStore = () => useContext(Ctx);
 
 export const PAGES = [
-  ['dashboard', 'Dashboard'], ['users', 'Users'], ['moderation', 'Moderation'], ['payouts', 'Payouts'],
-  ['health', 'System health'], ['costs', 'AI & render costs'], ['flags', 'Flags & kill switches'], ['audit', 'Audit log'],
-  ['privacy', 'Privacy'], ['abuse', 'Abuse & spam'], ['revenue', 'Revenue'], ['announcements', 'Announcements'], ['roles', 'Roles & permissions'],
-  ['navigation', 'Navigation'], ['themes', 'Themes & design'], ['screens', 'Screens'], ['limits', 'Features & limits'], ['zones', 'Countries & zones'], ['slabs', 'Slabs'], ['languages', 'Languages'], ['preview', 'Config preview'],
-  ['otp', 'OTP & login'], ['identity', 'Identity'], ['chat', 'Chat & Towns'],
+  ['dashboard', 'Mission Control'], ['users', 'Members'], ['moderation', 'Mod Queue'], ['payouts', 'Cashouts'],
+  ['health', 'Vitals'], ['costs', 'Burn Rate'], ['flags', 'Switchboard'], ['audit', 'Paper Trail'],
+  ['privacy', 'Privacy Desk'], ['abuse', 'Spam Shield'], ['revenue', 'Revenue Pulse'], ['announcements', 'Megaphone'], ['roles', 'Role Matrix'],
+  ['navigation', 'Nav Builder'], ['themes', 'Theme Studio'], ['screens', 'Screen Switches'], ['limits', 'Feature Dials'], ['zones', 'Zones'], ['slabs', 'Tiers'], ['languages', 'Lingo'], ['preview', 'Preview Room'],
+  ['otp', 'Login Watch'], ['identity', 'ID Desk'], ['chat', 'Hush & Hoods'],
+  ['realtime', 'Realtime Monitor'], ['calls', 'Call Log'], ['push', 'Push Center'], ['e2ee', 'E2EE & Keys'],
   ['cashflow', 'Cash Flow'], ['money', 'Money switches'], ['plans', 'Backstage Pass'], ['countries', 'Country pricing'], ['boosts', 'Boosts'], ['stash', 'Stash'], ['plugs', 'Plugs'],
-  ['settings', 'Platform settings'], ['emoji', 'VibeMoji library'], ['features', 'Feature catalog'], ['search', 'Search'], ['learn', 'Learn / Help'],
+  ['promos', 'Promos'], ['uploads', 'Uploads'],
+  ['pages', 'Page Studio'], ['blog', 'The Loopdown / Fresh Wire'], ['reviews', 'Reviews Desk'], ['speakup', 'Speak Up Desk'],
+  ['settings', 'Control Room'], ['emoji', 'VibeMoji Vault'], ['features', "What's In"], ['search', 'Seek'], ['learn', 'Level Up'],
 ] as const;
-const NAV_HEADINGS: Partial<Record<string, string>> = { navigation: 'App control', otp: 'Identity & chat', cashflow: 'Money & growth', settings: 'Platform' };
+const NAV_HEADINGS: Partial<Record<string, string>> = { navigation: 'App control', otp: 'Identity & chat', realtime: 'Live & reach', cashflow: 'Money & growth', promos: 'Brand & community', pages: 'Content & trust', settings: 'Platform' };
 type Slug = typeof PAGES[number][0];
 
 const money = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -103,13 +106,13 @@ function LineChart({ data, labels }: { data: number[]; labels: string[] }) {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img" aria-label="Loops opened per day, demo data">
       <defs>
-        <linearGradient id="cg" x1="0" x2="1"><stop offset="0" stopColor="#6C3BFF" /><stop offset=".6" stopColor="#FF3D9A" /><stop offset="1" stopColor="#FF8A3D" /></linearGradient>
-        <linearGradient id="cf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FF3D9A" stopOpacity=".18" /><stop offset="1" stopColor="#FF3D9A" stopOpacity="0" /></linearGradient>
+        <linearGradient id="cg" x1="0" x2="1"><stop offset="0" stopColor="#5B4CF5" /><stop offset=".6" stopColor="#5B4CF5" /><stop offset="1" stopColor="#5B4CF5" /></linearGradient>
+        <linearGradient id="cf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#5B4CF5" stopOpacity=".18" /><stop offset="1" stopColor="#5B4CF5" stopOpacity="0" /></linearGradient>
       </defs>
       {[0, 1, 2, 3].map(i => <line key={i} x1={pad} x2={W - pad} y1={pad + i * (H - pad * 2) / 3} y2={pad + i * (H - pad * 2) / 3} stroke="#E7E3F3" />)}
       <path d={`${line} L${pts.at(-1)![0]} ${H - pad} L${pad} ${H - pad}Z`} fill="url(#cf)" />
       <path d={line} fill="none" stroke="url(#cg)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      {pts.map((p, i) => <g key={i}><circle cx={p[0]} cy={p[1]} r="3.5" fill="#fff" stroke="#FF3D9A" strokeWidth="2" /><text x={p[0]} y={H - 8} textAnchor="middle" className="ax">{labels[i]}</text></g>)}
+      {pts.map((p, i) => <g key={i}><circle cx={p[0]} cy={p[1]} r="3.5" fill="#fff" stroke="#5B4CF5" strokeWidth="2" /><text x={p[0]} y={H - 8} textAnchor="middle" className="ax">{labels[i]}</text></g>)}
     </svg>
   );
 }
@@ -149,7 +152,7 @@ function Dashboard() {
     return <>
       <div className="hero">
         <div><span className="eyebrow">Staff console</span><h2>Good morning — here’s the state of the Loop.</h2><p>Counts and queues below are live from the VibeLoop API ({health.data ? <>API v{health.data.version} · db {health.data.db}</> : health.error ? 'health check failed' : 'checking…'}). The trend chart is demo data.</p></div>
-        <div className="hero-ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" stroke="#2a2545" strokeWidth="12" fill="none" /><circle cx="60" cy="60" r="50" stroke="url(#lg2)" strokeWidth="12" fill="none" strokeDasharray="314" strokeDashoffset={314 * (1 - Math.min(1, o.creators / Math.max(1, o.users)))} strokeLinecap="round" transform="rotate(-90 60 60)" /><defs><linearGradient id="lg2"><stop offset="0" stopColor="#6C3BFF" /><stop offset=".6" stopColor="#FF3D9A" /><stop offset="1" stopColor="#FF8A3D" /></linearGradient></defs></svg><div><strong>{o.creators}</strong><span>Creators of {o.users}</span></div></div>
+        <div className="hero-ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" stroke="#EFEFF2" strokeWidth="12" fill="none" /><circle cx="60" cy="60" r="50" stroke="url(#lg2)" strokeWidth="12" fill="none" strokeDasharray="314" strokeDashoffset={314 * (1 - Math.min(1, o.creators / Math.max(1, o.users)))} strokeLinecap="round" transform="rotate(-90 60 60)" /><defs><linearGradient id="lg2"><stop offset="0" stopColor="#5B4CF5" /><stop offset=".6" stopColor="#5B4CF5" /><stop offset="1" stopColor="#5B4CF5" /></linearGradient></defs></svg><div><strong>{o.creators}</strong><span>Creators of {o.users}</span></div></div>
       </div>
       <div className="kpis">
         <Kpi label="Accounts" value={o.users.toLocaleString()} sub={`${o.creators} creators`} />
@@ -180,20 +183,22 @@ function Users() {
   const { run, busy } = useAct();
   const patch = (u: ApiUser, body: Partial<ApiUser>, msg: string) => run(() => api(`/admin/users/${u.id}`, { method: 'PATCH', body }), msg, r.reload);
   const me = getUser();
-  return <Card title={r.data ? `${r.data.length} accounts` : 'Accounts'} extra={<div className="row"><LivePill /><Search v={q} set={setQ} ph="Search name, handle, email" /></div>}>
+  const openId = hp('open');
+  return <>{openId && <MemberDrawer id={openId} close={() => setHp('open', null)} />}<Card title={r.data ? `${r.data.length} accounts` : 'Accounts'} extra={<div className="row"><LivePill /><Search v={q} set={setQ} ph="Search name, handle, email" /></div>}>
     {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !r.data ? <p className="loading">Loading from API…</p> :
-    <table><thead><tr><th>User</th><th>Role</th><th>MFA</th><th>Status</th><th>Joined</th><th /></tr></thead><tbody>
+    <table><thead><tr><th>User</th><th>Role</th><th>MFA</th><th>Status</th><th>Last seen</th><th>Joined</th><th /></tr></thead><tbody>
       {r.data.map(u => <tr key={u.id} className={u.suspended ? 'dim' : ''}>
-        <td><div className="who"><span className="av">{u.name[0]}</span><div><b>{u.name}</b><small>{u.handle} · {u.email}</small></div></div></td>
+        <td><button className="who linkrow" data-member={u.id} onClick={() => setHp('open', u.id)}><MemberAvatar src={u.avatar ?? null} name={u.name} size={32} /><div><b>{u.name}</b><small>{u.handle} · {u.email}</small></div></button></td>
         <td><select value={u.role} disabled={busy || u.id === me?.id} onChange={e => patch(u, { role: e.target.value }, `${u.handle} → ${cap(e.target.value)}`)}>{ROLES.map(x => <option key={x} value={x.toLowerCase()}>{x}</option>)}</select></td>
         <td>{u.mfaRequired ? <Pill tone="mint">enforced</Pill> : <button className="btn sm ghost" disabled={busy} onClick={() => patch(u, { mfaRequired: true }, `MFA enforced for ${u.handle}`)}>Enforce MFA</button>}</td>
         <td>{u.suspended ? <Pill tone="red">suspended</Pill> : <Pill tone="mint">active</Pill>}</td>
+        <td className="muted small">{ago(u.lastSeenAt ?? null)}</td>
         <td className="muted">{new Date(u.createdAt).toISOString().slice(0, 10)}</td>
         <td className="r">{u.id !== me?.id && <button disabled={busy} className={'btn sm ' + (u.suspended ? 'ghost' : 'danger')} onClick={() => patch(u, { suspended: !u.suspended }, `${u.handle} ${u.suspended ? 'unsuspended' : 'suspended'}`)}>{u.suspended ? 'Unsuspend' : 'Suspend'}</button>}</td>
       </tr>)}
-      {!r.data.length && <tr><td colSpan={6} className="empty">No accounts match “{q}”.</td></tr>}
+      {!r.data.length && <tr><td colSpan={7} className="empty">No accounts match “{q}”.</td></tr>}
     </tbody></table>}
-  </Card>;
+  </Card></>;
 }
 
 function Moderation() {
@@ -707,9 +712,11 @@ function GlobalSearch() {
   const has = (...xs: (string | number)[]) => xs.join(' ').toLowerCase().includes(t);
   const d = r.data;
   const groups: [string, string, { k: string; title: ReactNode; sub: ReactNode; tag?: ReactNode; href: string }[]][] = !t || !d ? [] : [
-    ['Users', 'users', d.users.map(u => ({ k: u.id, title: u.name, sub: `${u.handle} · ${u.email} · ${cap(u.role)}`, tag: u.suspended ? <Pill tone="red">suspended</Pill> : <Pill tone="mint">active</Pill>, href: '#/users' }))],
+    ['Users', 'users', d.users.map(u => ({ k: u.id, title: u.name, sub: `${u.handle} · ${u.email} · ${cap(u.role)}`, tag: u.suspended ? <Pill tone="red">suspended</Pill> : <Pill tone="mint">active</Pill>, href: '#/users?open=' + u.id }))],
     ['Posts', 'moderation', d.posts.map(p => ({ k: p.id, title: p.text.slice(0, 80), sub: p.id, href: '#/moderation' }))],
     ['Loops', 'features', d.loops.map(l => ({ k: l.id, title: l.title, sub: l.id, href: '#/dashboard' }))],
+    ['Promos', 'promos', (d.promos ?? []).map(p => ({ k: p.id, title: p.title, sub: `${p.id} · ${p.placement.join(', ')}`, tag: p.active ? <Pill tone="mint">active</Pill> : <Pill tone="gray">paused</Pill>, href: '#/promos?edit=' + p.id }))],
+    ['Uploads', 'uploads', (d.uploads ?? []).map(m => ({ k: m.id, title: m.name ?? m.id, sub: `${m.kind} · ${m.mime} · ${bytes(m.size)}`, href: '#/uploads' }))],
     ['Audit entries', 'audit', d.audit.slice(0, 8).map(a => ({ k: 'a' + a.id, title: <code>{a.action}</code>, sub: `#${a.id} · ${a.detail}`, href: '#/audit' }))],
     ['PRD features (catalog)', 'features', PRD.filter(f => has(f.name, f.group)).slice(0, 8).map(f => ({ k: 'p' + f.n, title: `#${f.n} ${f.name}`, sub: f.group, tag: <Pill tone={prdTone(f.route)}>{prdLabel(f.route)}</Pill>, href: '#/features' }))],
     ['Features (catalog)', 'features', ALL_FEATURES.filter(f => !f.same && has(f.name, f.desc)).slice(0, 8).map(f => ({ k: 'f' + f.n, title: f.name, sub: f.desc, tag: <Pill tone={f.route ? 'violet' : 'gray'}>{f.route ? 'Preview' : 'Planned'}</Pill>, href: '#/features?tab=social' }))],
@@ -717,11 +724,12 @@ function GlobalSearch() {
   ];
   const extra = useCfgSearch(t);
   const mextra = useMoneySearch(t);
-  if (d) groups.splice(1, 0, ...extra, ...mextra);
+  const cextra = useContentSearch(t);
+  if (d) groups.splice(1, 0, ...extra, ...mextra, ...cextra);
   const total = groups.reduce((a, g) => a + g[2].length, 0);
   return <>
-    <Card><form className="bigsearch" onSubmit={e => { e.preventDefault(); location.hash = '#/search?q=' + encodeURIComponent(q); }}><Icon name="search" size={20} /><input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search users, content, plans, Stash, Boosts, Plugs, config, emoji…" /><button className="btn sm prism">Search</button></form>
-      <p className="note">{!t ? 'Users (name, email, @handle), posts, Loops and audit entries are searched on the server; config layers, screens, features, zones, slabs, language strings, towns, Backstage Pass plans, Stash products, Boosts, Plugs and the masked OTP log come from their admin APIs; features and VibeMoji from the bundled catalog.' : r.loading ? 'Searching…' : `${total} result${total === 1 ? '' : 's'} for “${rq.trim()}” across ${groups.filter(g => g[2].length).length} groups.`}</p></Card>
+    <Card><form className="bigsearch" onSubmit={e => { e.preventDefault(); location.hash = '#/search?q=' + encodeURIComponent(q); }}><Icon name="search" size={20} /><input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search users, content, pages, tickets, reviews, promos, plans, config, emoji…" /><button className="btn sm prism">Search</button></form>
+      <p className="note">{!t ? 'Users (name, email, @handle), posts, Loops, promos, uploads and audit entries are searched on the server; config layers, screens, features, zones, slabs, language strings, towns, Backstage Pass plans, Stash products, Boosts, Plugs, CMS pages, reviews, Speak Up tickets and the masked OTP log come from their admin APIs; features and VibeMoji from the bundled catalog.' : r.loading ? 'Searching…' : `${total} result${total === 1 ? '' : 's'} for “${rq.trim()}” across ${groups.filter(g => g[2].length).length} groups.`}</p></Card>
     <div className="grid g2">{groups.filter(g => g[2].length).map(([label, icon, rows]) => <Card key={label} title={label} extra={<Pill tone="violet">{rows.length}</Pill>}>
       <div className="mlist">{rows.map(r => <a key={r.k} href={r.href} className="sres"><Icon name={icon} size={16} /><div className="grow"><b>{r.title}</b><small>{r.sub}</small></div>{r.tag}</a>)}</div></Card>)}</div>
     {r.error && <ApiErr msg={r.error} retry={r.reload} />}
@@ -735,17 +743,24 @@ function GlobalSearch() {
 type J = any;
 const MODS = ['social', 'chat'] as const;
 const FEATURE_KEYS = ['dswitch', 'swipeWorlds', 'chatBubble', 'post2chat', 'draftBridge', 'focusSwitch', 'statuses', 'towns', 'viewOnce', 'sendLater', 'polls', 'fadeChat', 'chatLock', 'payouts', 'paidLoops', 'live',
-  'money', 'subscriptions', 'store', 'tips', 'ads', 'platformFees'];
+  'money', 'subscriptions', 'store', 'tips', 'ads', 'platformFees', 'blog', 'news', 'appLinks', 'reviews', 'productReviews', 'vouches', 'speakUp', 'promos',
+  'chatCopy', 'quickPolish', 'phrasebook', 'smartChips', 'slashCommands', 'mysteryDrop', 'togetherTimer', 'placeDrop', 'partyChat', 'readAloud', 'chatExport', 'hopBack', 'hopShare', 'outbox', 'fileDrop', 'lenses', 'autoEdit', 'miniVote', 'pin3', 'saveStack', 'loveTrail', 'moodDrop', 'emojiSuggest',
+  'realtime', 'readReceipts', 'typing', 'voiceNotes', 'calls', 'push', 'e2ee', 'snaps', 'storyViewers', 'followRequests', 'liveCamera', 'demoMode'];
 const FEATURE_DESC: Record<string, string> = {
   dswitch: 'Social ⇄ Chat module switch', swipeWorlds: 'Swipe between Social and Chat', chatBubble: 'Floating chat bubble over Social', post2chat: 'Share a post into a chat',
   draftBridge: 'Carry drafts between modules', focusSwitch: 'Focus mode mutes the other module', statuses: 'Vibes (24h statuses)', towns: 'Towns (communities)', viewOnce: 'View-once messages',
   sendLater: 'Scheduled messages', polls: 'Polls in chats', fadeChat: 'Disappearing messages', chatLock: 'Lock a chat behind device auth', payouts: 'Creator payouts', paidLoops: 'Paid Loops', live: 'Live sessions',
   money: 'Money master switch (set from Money switches)', subscriptions: 'Backstage Pass plans', store: 'Stash creator store', tips: 'Props (tips)', ads: 'Boosts (sponsored cards)', platformFees: 'Platform fee on paid orders',
+  blog: 'The Loopdown / Hush Notes (blog)', news: 'Fresh Wire (news)', appLinks: 'Get the Apps page', reviews: 'Reviews master switch', productReviews: 'Real Talk product reviews (needs Stash)', vouches: 'Vouches (creator reviews)', speakUp: 'Speak Up reports & tickets', promos: 'VibeLoop brand promos',
+  chatCopy: 'Hush · Copy & Paste', quickPolish: 'Hush · Quick Polish (on-device grammar)', phrasebook: 'Hush · Phrasebook (common phrases)', smartChips: 'Hush · Smart reply chips', slashCommands: 'Hush · Slash commands', mysteryDrop: 'Hush · Mystery Drop', togetherTimer: 'Hush · Together Timer', placeDrop: 'Hush · Place Drop (location card)', partyChat: 'Hush · Party Chat (24h group)', readAloud: 'Hush · Read Aloud', chatExport: 'Hush · Chat export', hopBack: 'Hop Back between modules', hopShare: 'Hop Share to latest chat', outbox: 'Offline Outbox', fileDrop: 'Hush · File Drop (1 GB)', lenses: 'Glow · Vibe Lenses', autoEdit: 'Glow · Auto Edit for video', miniVote: 'Glow · Mini Vote polls', pin3: 'Glow · Pin 3', saveStack: 'Glow · Save Stack', loveTrail: 'Glow · Love Trail', moodDrop: 'Mood Drop', emojiSuggest: 'Emoji suggestions while typing',
+  realtime: 'Realtime gateway (live messages over WebSocket)', readReceipts: 'Read receipts (seen ticks)', typing: 'Typing indicators', voiceNotes: 'Voice notes in chats', calls: 'Voice & video calls (WebRTC)', push: 'Push notifications (Expo)',
+  e2ee: 'End-to-end encrypted chats', snaps: 'Snaps (view-once photo drops)', storyViewers: 'Story viewers list', followRequests: 'Follow requests for private accounts', liveCamera: 'Live camera with lens overlays', demoMode: 'Offline demo button on sign-in',
 };
 const SCREEN_KEYS = ['Home', 'Explore', 'Create', 'Motion', 'Profile', 'Chats', 'Friends', 'Vibes', 'Towns', 'ChatMe', 'NewLoop', 'LoopDetail', 'FanReact', 'Archive', 'Copilot', 'Editor', 'Audio', 'Memory',
   'ReleaseGate', 'Earnings', 'Payout', 'Notifications', 'Settings', 'Loops', 'Library', 'Sparks', 'NewPost', 'Vault', 'ChatThread', 'Search', 'Live', 'Emoji', 'Features', 'Growth', 'Trust', 'Learn',
   'SettingsHub', 'ChatRoom', 'NewChat', 'ShareToChat', 'ChatSearch', 'Starred', 'MyCode', 'StatusCompose', 'StatusView', 'CreateTown', 'TownRoom', 'ChangeHandle', 'ChatSecurity', 'LanguageRegion',
-  'BubbleMojiGallery', 'Accounts'];
+  'BubbleMojiGallery', 'Accounts', 'CreatorHub', 'CreateHub'];
+const SCREEN_DESC: Record<string, string> = { CreatorHub: 'Creator Studio dashboard', CreateHub: 'Creator Tools', Vault: 'Keepers' };
 const navDef = (xs: [string, string, string][]) => xs.map(([key, label, icon], i) => ({ key, label, icon, enabled: true, order: i + 1 }));
 /** Mirrors the server's built-in BASE (backend/app/config_resolver.py) so the editor can show inherited values. */
 const CFG_DEFAULTS: J = {
@@ -753,15 +768,15 @@ const CFG_DEFAULTS: J = {
   nav: { social: navDef([['Home', 'Home', 'home'], ['Explore', 'Explore', 'compass'], ['Create', 'Create', 'plus'], ['Motion', 'Motion', 'play'], ['Profile', 'Profile', 'user']]),
     chat: navDef([['Chats', 'Chats', 'message'], ['Friends', 'Friends', 'users'], ['Vibes', 'Vibes', 'sparkle'], ['Towns', 'Towns', 'town'], ['ChatMe', 'Me', 'user']]) },
   screens: {}, features: Object.fromEntries(FEATURE_KEYS.map(k => [k, true])),
-  limits: { maxAccounts: 5, maxGroupSize: 50, statusHours: 24, editWindowMin: 15, undoWindowMin: 60 }, fees: { platformFee: 0.08 }, languages: { strings: {} },
+  limits: { maxAccounts: 5, maxGroupSize: 50, statusHours: 24, editWindowMin: 15, undoWindowMin: 60 }, fees: { platformFee: 0.08 }, languages: { strings: {} }, moduleNames: { social: 'Glow', chat: 'Hush' },
 };
 type ThemeMod = Record<string, string>;
 type Preset = ThemeMod & { key: string; default: boolean };
 const THEME_COLORS: Record<string, string[]> = { social: ['primary', 'secondary', 'tertiary', 'accent', 'bg', 'surface', 'ink'], chat: ['primary', 'secondary', 'accent', 'bg', 'surface', 'ink'] };
 /** Mirrors THEME_PRESETS defaults in backend/app/config_resolver.py (base theme). */
 CFG_DEFAULTS.theme = {
-  social: { preset: 'prism', primary: '#6C3BFF', secondary: '#FF3D9A', tertiary: '#FF8A3D', accent: '#C8F45A', bg: '#F4F2FA', surface: '#FFFFFF', ink: '#120F24', navStyle: 'pill', radius: 'round', density: 'comfy' },
-  chat: { preset: 'aqua', primary: '#00C2A8', secondary: '#14A8E6', accent: '#FFC93C', bg: '#EEF7F5', surface: '#FFFFFF', ink: '#0B1F24', navStyle: 'dock', radius: 'soft', density: 'comfy' },
+  social: { preset: 'studio', primary: '#5B4CF5', secondary: '#7C6CFF', tertiary: '#A99BFF', accent: '#D4FF3F', bg: '#F5F5F7', surface: '#FFFFFF', ink: '#0A0A0F', navStyle: 'pill', radius: 'soft', density: 'comfy' },
+  chat: { preset: 'mono', primary: '#0D9488', secondary: '#0EA5A0', accent: '#FF6B4A', bg: '#F3F6F6', surface: '#FFFFFF', ink: '#0B1416', navStyle: 'dock', radius: 'soft', density: 'comfy' },
 };
 const lum = (h: string) => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(x => x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
 const contrastRatio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
@@ -851,7 +866,7 @@ function LayerBar({ e, note }: { e: LE; note: ReactNode }) {
       <span>{e.dirty ? `Unsaved changes to ${e.layer}.` : 'Saves go to the API, bump the config version and are written to the audit log.'}</span>
       <div className="row">{e.layer !== 'base' && e.exists && <button className="btn sm danger" disabled={e.busy} onClick={e.remove}>Delete layer</button>}
         <button className="btn sm ghost" disabled={!e.dirty || e.busy} onClick={e.discard}>Discard</button>
-        <button className="btn sm prism" disabled={!e.dirty || e.busy} onClick={e.save}>Save to {e.layer}</button></div>
+        <button className="btn sm prism" disabled={!e.dirty || e.busy || MODS.some(m => { const v = e.isLang ? e.draft.languages?.strings?.['module.' + m] : e.draft.moduleNames?.[m]; return v !== undefined && !!modNameErr(v); })} onClick={e.save}>Save to {e.layer}</button></div>
     </div>
   </Card>;
 }
@@ -862,8 +877,46 @@ function NavigationPage() {
   const e = useLayerEditor();
   return <Gate rs={e.rs}>{() => <>
     <LayerBar e={e} note={e.isLang ? 'A language layer can only rename items; renames are saved as nav.<Key> strings.' : 'Item order, on/off and labels are saved as the full nav list for this layer.'} />
+    <ModuleNames e={e} />
     <div className="grid g2">{MODS.map(m => <NavModule key={m} e={e} mod={m} />)}</div>
   </>}</Gate>;
+}
+/** Module names shown in the app's D-Switch and titles (moduleNames, or module.* strings on a language layer). */
+function modNameErr(v: string) {
+  const t = v.trim();
+  if (!t) return 'Required';
+  if (t !== v) return 'Remove leading/trailing spaces';
+  if (t.length > 16) return 'Max 16 characters';
+  if (!/[\p{L}\p{N}]/u.test(t)) return 'Needs a letter or number';
+  return null;
+}
+function ModuleNames({ e }: { e: LE }) {
+  const inh = (m: string) => e.inherited.moduleNames?.[m] ?? CFG_DEFAULTS.moduleNames[m];
+  const own = (m: string): string | undefined => e.isLang ? e.draft.languages?.strings?.['module.' + m] : e.draft.moduleNames?.[m];
+  const val = (m: string) => own(m) ?? inh(m);
+  const set = (m: string, v: string) => e.upd(d => {
+    if (e.isLang) { d.languages ??= {}; d.languages.strings ??= {}; d.languages.strings['module.' + m] = v; }
+    else { d.moduleNames = { ...(d.moduleNames ?? {}), [m]: v }; }
+  });
+  const clear = (m: string) => e.upd(d => {
+    if (e.isLang) { delete d.languages?.strings?.['module.' + m]; }
+    else if (d.moduleNames) { delete d.moduleNames[m]; if (!Object.keys(d.moduleNames).length) delete d.moduleNames; }
+  });
+  const label: Record<string, string> = { social: 'Social module name', chat: 'Chat module name' };
+  return <Card title="Module names" className="modnames" extra={<Src set={MODS.some(m => own(m) !== undefined)} />}>
+    <p className="note">Shown in the app’s D-Switch and screen titles. {e.isLang ? 'Saved as module.social / module.chat strings for this language.' : 'Saved as moduleNames on this layer; language layers can translate them.'}</p>
+    <div className="row modnames-body">
+      <div className="grow">{MODS.map(m => { const v = val(m); const er = modNameErr(v); return <label key={m} className="field" data-modname={m}>
+        <span className="small muted">{label[m]}</span>
+        <div className="row"><input aria-label={label[m]} value={v} maxLength={16} onChange={ev => set(m, ev.target.value)} />
+          {own(m) !== undefined && <button className="linkbtn small" onClick={() => clear(m)}>clear</button>}</div>
+        <small className={er ? 'bad' : 'muted'}>{er ?? `${v.trim().length}/16 · ${own(m) !== undefined ? 'this layer' : 'inherited'}`}</small></label>; })}</div>
+      <div className="dswitch-pv" aria-label="D-Switch preview">
+        <span className="small muted">D-Switch preview</span>
+        <div className="dswitch">{MODS.map((m, i) => <span key={m} className={i === 0 ? 'on' : ''}>{val(m).trim() || '—'}</span>)}</div>
+      </div>
+    </div>
+  </Card>;
 }
 function NavModule({ e, mod }: { e: LE; mod: typeof MODS[number] }) {
   const items: J[] = e.eff.nav[mod];
@@ -958,10 +1011,10 @@ function ScreensPage() {
     <LayerBar e={e} note="A screen that is off is hidden in the app and its API routes return 403 where enforced (Payout, Towns, Vibes)." />
     <Card title={`Screens · ${SCREEN_KEYS.length}`} extra={<div className="row"><Pill tone="red">{SCREEN_KEYS.filter(k => e.eff.screens[k] === false).length} off</Pill><Search v={q} set={setQ} ph="Filter screens…" /></div>}>
       {e.isLang && <div className="notready"><Icon name="key" size={16} /><span>Language layers can’t switch screens. Pick base, a country, zone or slab.</span></div>}
-      <div className="sgrid">{SCREEN_KEYS.filter(k => k.toLowerCase().includes(q.toLowerCase())).map(k => {
+      <div className="sgrid">{SCREEN_KEYS.filter(k => (k + ' ' + (SCREEN_DESC[k] ?? '')).toLowerCase().includes(q.toLowerCase())).map(k => {
         const on = e.eff.screens[k] !== false; const set = e.draft.screens && k in e.draft.screens;
         return <div key={k} className={'stile' + (on ? '' : ' off') + (set ? ' set' : '')} data-screen={k}>
-          <div className="grow"><b>{k}</b><small>{set ? <button className="linkbtn" onClick={() => e.upd(d => { delete d.screens[k]; })}>this layer · clear</button> : 'inherited'}</small></div>
+          <div className="grow"><b>{k}</b>{SCREEN_DESC[k] && <small>{SCREEN_DESC[k]}</small>}<small>{set ? <button className="linkbtn" onClick={() => e.upd(d => { delete d.screens[k]; })}>this layer · clear</button> : 'inherited'}</small></div>
           <Toggle label={k} on={on} disabled={e.isLang} onClick={() => e.upd(d => { d.screens = { ...(d.screens ?? {}), [k]: !on }; })} /></div>;
       })}</div>
     </Card>
@@ -1471,16 +1524,20 @@ const PLUGS: { k: string; name: string; desc: string; fields: [string, string, b
   { k: 'cashfree', name: 'Cashfree', desc: 'Payment Links via Cashfree PG. Test mode uses sandbox.cashfree.com.', fields: [['appId', 'App ID', false], ['secretKey', 'Secret key', true], ['webhookSecret', 'Webhook secret (optional — falls back to secret key)', true]] },
   { k: 'msg91', name: 'MSG91', desc: 'Emails login codes (no phone number needed). Needs an email template with an {{otp}} variable.', fields: [['authKey', 'Auth key', true], ['templateId', 'Email template ID', false], ['sender', 'From email (verified domain)', false]] },
   { k: 'maps', name: 'Maps', desc: 'Place search & location tags. Google Geocoding or Mapbox.', fields: [['key', 'API key / access token', true]] },
+  { k: 'turn', name: 'TURN (calls)', desc: 'Relay for voice & video calls behind strict NATs. Use a shared secret (coturn use-auth-secret) for short-lived credentials, or a static username + credential.', fields: [['urls', 'URLs (comma-separated turn:, turns:, stun:)', false], ['username', 'Static username', false], ['credential', 'Static credential', true], ['sharedSecret', 'Shared secret (coturn static-auth-secret)', true]] },
+  { k: 'expo', name: 'Expo push', desc: 'Push notifications via the Expo Push API. Works without a token; add an access token if Enhanced Push Security is on.', fields: [['accessToken', 'Access token (optional)', true]] },
 ];
-function PlugCard({ p, v, reload }: { p: typeof PLUGS[number]; v: Plug; reload: () => void }) {
+function PlugCard({ p, v: v0, reload }: { p: typeof PLUGS[number]; v?: Plug; reload: () => void }) {
+  const v: Plug = v0 ?? { configured: false, mode: '' };
   const { run, busy } = useAct();
   const [d, setD] = useState<Record<string, string | boolean>>({});
   const [res, setRes] = useState<{ ok: boolean; message: string } | null>(null);
   const val = (k: string) => (k in d ? d[k] : v[k]) as string | boolean | undefined;
   const dirty = Object.keys(d).length > 0;
-  return <Card title={p.name} extra={<div className="row">{v.configured ? <Pill tone="mint">connected</Pill> : <Pill tone="gray">not set</Pill>}<Pill tone={val('mode') === 'live' ? 'red' : 'amber'}>{String(val('mode'))}</Pill></div>}>
+  return <Card title={p.name} extra={<div className="row">{v.configured ? <Pill tone="mint">connected</Pill> : <Pill tone="gray">not set</Pill>}{!!val('mode') && <Pill tone={val('mode') === 'live' ? 'red' : 'amber'}>{String(val('mode'))}</Pill>}</div>}>
     <p className="note">{p.desc}</p>
-    <Field label="Mode" hint="Test uses sandbox / test keys — no real money moves."><Tabs v={String(val('mode'))} set={m => setD({ ...d, mode: m })} opts={[['test', 'Test'], ['live', 'Live']]} /></Field>
+    {!!v0?.mode && <Field label="Mode" hint="Test uses sandbox / test keys — no real money moves."><Tabs v={String(val('mode'))} set={m => setD({ ...d, mode: m })} opts={[['test', 'Test'], ['live', 'Live']]} /></Field>}
+    {!v0 && <p className="note">This Plug isn’t on the server yet — update the backend to save it.</p>}
     {p.k === 'maps' && <Field label="Provider"><select value={String(val('provider'))} onChange={e => setD({ ...d, provider: e.target.value })}><option value="google">Google</option><option value="mapbox">Mapbox</option></select></Field>}
     {p.k === 'msg91' && <Field label="Send login codes via MSG91" hint="Off = demo codes only."><Toggle label="MSG91 enabled" on={!!val('enabled')} onClick={() => setD({ ...d, enabled: !val('enabled') })} /></Field>}
     {p.fields.map(([k, l, secret]) => <Field key={k} label={l} hint={secret ? (v[k] ? `Saved: ${v[k]}` : 'Not saved') : undefined}>
@@ -1518,6 +1575,304 @@ function useMoneySearch(t: string) {
     ['Plugs', 'plugs', PLUGS.filter(p => has(p.k, p.name, p.desc, 'plug integration keys')).map(p => ({ k: p.k, title: p.name, sub: p.desc, tag: ig.data?.[p.k]?.configured ? <Pill tone="mint">connected</Pill> : <Pill tone="gray">not set</Pill>, href: '#/plugs' }))],
   ];
   return g;
+}
+
+
+/* ===================== Brand & community — Promos, Uploads, Members ===================== */
+type PromoTarget = { global: boolean; countries: string[]; zones: string[]; states: string[] };
+type PromoRow = { id?: string; title: string; body: string; kind: string; mediaUrl: string | null; url: string | null; cta: string | null; placement: string[];
+  target: PromoTarget; startAt: number | null; endAt: number | null; active: boolean; priority: number; by?: string; at?: number; label?: string };
+type PromoPreview = { country: string; state: string; zones: string[]; enabled: boolean; items: PromoRow[] };
+const PROMO_PLACES: [string, string][] = [['home_banner', 'Home banner'], ['feed', 'Feed card'], ['chat_list', 'Chat list'], ['splash', 'Splash'], ['explore', 'Explore']];
+const PROMO_KINDS = ['banner', 'card', 'video', 'image', 'link', 'post'];
+const NEW_PROMO: PromoRow = { title: '', body: '', kind: 'card', mediaUrl: null, url: 'https://vibeloop.app', cta: 'Learn more', placement: ['feed'],
+  target: { global: true, countries: [], zones: [], states: [] }, startAt: null, endAt: null, active: true, priority: 0 };
+const mediaSrc = (u: string | null) => !u ? null : u.startsWith('/media/') ? API_URL + u : u;
+const toLocal = (t: number | null) => t ? new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+const fromLocal = (s: string) => s ? new Date(s).getTime() : null;
+const targetText = (t: PromoTarget) => t.global ? 'Global' : [t.countries.length && t.countries.join(', '), t.zones.length && 'zone ' + t.zones.join(', '), t.states.length && 'state ' + t.states.join(', ')].filter(Boolean).join(' · ') || '—';
+const windowText = (p: PromoRow) => {
+  const now = Date.now();
+  if (p.startAt && p.startAt > now) return <Pill tone="amber">starts {when(p.startAt)}</Pill>;
+  if (p.endAt && p.endAt < now) return <Pill tone="gray">ended</Pill>;
+  return p.endAt ? <span className="muted small">until {when(p.endAt)}</span> : <span className="muted small">always on</span>;
+};
+
+function PromoCard({ p, place }: { p: PromoRow; place: string }) {
+  const img = mediaSrc(p.mediaUrl);
+  const media = img ? (p.kind === 'video' ? <video src={img} muted /> : <img src={img} alt="" />) : <div className="pc-ph"><Icon name="promos" size={22} /></div>;
+  return <div className={'pcard pc-' + place}>
+    {place !== 'chat_list' && <div className="pc-media">{media}</div>}
+    {place === 'chat_list' && <span className="pc-dot"><Icon name="promos" size={16} /></span>}
+    <div className="pc-body"><span className="pc-label">{p.label ?? 'From VibeLoop'}</span><b>{p.title || 'Promo title'}</b>{p.body && <small>{p.body}</small>}</div>
+    {p.cta && <span className="pc-cta">{p.cta}</span>}
+  </div>;
+}
+
+function PromosPage() {
+  const list = useApi<PromoRow[]>('/admin/promos');
+  const zones = useApi<Record<string, Zone>>('/admin/zones');
+  const layers = useApi<LayersRes>('/admin/config/layers');
+  const { run, busy } = useAct();
+  const editId = hp('edit');
+  const [d, setD] = useState<PromoRow | null>(null);
+  const [pct, setPct] = useState<number | null>(null);
+  useEffect(() => {
+    if (!list.data) return;
+    if (editId === 'new') setD(clone2(NEW_PROMO)); else if (editId) { const x = list.data.find(p => p.id === editId); setD(x ? clone2(x) : null); } else setD(null);
+  }, [editId, list.data]);
+  const [pc, setPc] = useState(hp('pc') ?? 'IN'); const [ps, setPs] = useState(hp('ps') ?? 'TN'); const [pp, setPp] = useState(hp('pp') ?? '');
+  const prev = useApi<PromoPreview>(`/admin/promos/preview?country=${encodeURIComponent(pc)}&state=${encodeURIComponent(ps)}${pp ? '&placement=' + pp : ''}`);
+  const open = (id: string | null) => setHp('edit', id);
+  return <Gate rs={[list, zones, layers]}>{() => {
+    const base = layers.data!.layers.base ?? {};
+    const enabled = base.features?.promos !== false;
+    const flip = () => run(() => api('/admin/config/base', { method: 'PUT', body: { ...base, features: { ...(base.features ?? {}), promos: !enabled } } }), `Promos ${enabled ? 'switched off' : 'switched on'} for everyone`, layers.reload);
+    const set = (p: Partial<PromoRow>) => setD(x => x && { ...x, ...p });
+    const setT = (p: Partial<PromoTarget>) => setD(x => x && { ...x, target: { ...x.target, ...p } });
+    const save = () => d && run(() => d.id ? api(`/admin/promos/${d.id}`, { method: 'PATCH', body: d }) : api<PromoRow>('/admin/promos', { method: 'POST', body: d }), d.id ? 'Promo saved' : 'Promo created', () => { list.reload(); prev.reload(); open(null); });
+    const upload = async (f: File | undefined) => {
+      if (!f) return; setPct(0);
+      await run(() => uploadFile(f, setPct), 'Media uploaded', r => set({ mediaUrl: r.url, kind: r.kind === 'video' ? 'video' : d?.kind === 'video' ? 'image' : d?.kind ?? 'image' }));
+      setPct(null);
+    };
+    return <>
+      <Card title="Promos" extra={<div className="row"><LivePill /><span className="small muted">Feature <code>promos</code></span><Toggle label="Promos switch" on={enabled} onClick={flip} disabled={busy} /><button className="btn sm prism" onClick={() => open('new')}><Icon name="t-plus" size={14} />New promo</button></div>}>
+        <p className="note">Our own brand promotions — shown to everyone the targeting matches, labelled “From VibeLoop”. Not ads: no sponsor, no money switch. {enabled ? '' : <b className="red">Promos are switched off for every country.</b>}</p>
+        <table><thead><tr><th>Promo</th><th>Placements</th><th>Targeting</th><th>Schedule</th><th className="c">Priority</th><th>Status</th><th /></tr></thead><tbody>
+          {list.data!.map(p => <tr key={p.id} className={p.active ? '' : 'dim'}>
+            <td><div className="who"><span className="pthumb">{p.mediaUrl ? <img src={mediaSrc(p.mediaUrl)!} alt="" /> : <Icon name="promos" size={16} />}</span><div><b>{p.title}</b><small>{p.kind} · {p.cta ?? 'no CTA'} → {p.url ?? '—'}</small></div></div></td>
+            <td><div className="chips">{p.placement.map(x => <span key={x} className="tag">{x}</span>)}</div></td>
+            <td className="small">{targetText(p.target)}</td>
+            <td>{windowText(p)}</td>
+            <td className="c num">{p.priority}</td>
+            <td>{p.active ? <Pill tone="mint">active</Pill> : <Pill tone="gray">paused</Pill>}</td>
+            <td className="r"><button className="btn sm ghost" onClick={() => open(p.id!)}>Edit</button></td></tr>)}
+          {!list.data!.length && <tr><td colSpan={7} className="empty">No promos yet.</td></tr>}
+        </tbody></table>
+      </Card>
+      {d && <div className="grid g1-2">
+        <Card title={d.id ? `Edit · ${d.title}` : 'New promo'} className="peditor" extra={d.id ? <code>{d.id}</code> : undefined}>
+          <span className="lbl">Title</span><input className="wide" aria-label="title" maxLength={120} value={d.title} onChange={e => set({ title: e.target.value })} placeholder="Kovai creators meetup" />
+          <span className="lbl">Body</span><textarea rows={2} aria-label="body" maxLength={500} value={d.body} onChange={e => set({ body: e.target.value })} />
+          <div className="fgrid">
+            <label><span className="lbl">Kind</span><select value={d.kind} onChange={e => set({ kind: e.target.value })}>{PROMO_KINDS.map(k => <option key={k}>{k}</option>)}</select></label>
+            <label><span className="lbl">Priority</span><input type="number" min={-100} max={1000} value={d.priority} onChange={e => set({ priority: Math.trunc(+e.target.value) })} /></label>
+            <label><span className="lbl">CTA label</span><input maxLength={30} value={d.cta ?? ''} onChange={e => set({ cta: e.target.value || null })} /></label>
+            <label><span className="lbl">CTA link</span><input className="mono" value={d.url ?? ''} onChange={e => set({ url: e.target.value || null })} placeholder="https://" /></label>
+          </div>
+          <span className="lbl">Media</span>
+          <div className="row"><label className="btn sm ghost"><Icon name="uploads" size={14} />{pct !== null ? `Uploading ${pct}%` : 'Upload image / video'}<input type="file" hidden accept="image/*,video/mp4,video/quicktime,video/webm" onChange={e => upload(e.target.files?.[0])} /></label>
+            <input className="mono grow" aria-label="media url" value={d.mediaUrl ?? ''} onChange={e => set({ mediaUrl: e.target.value || null })} placeholder="/media/… or https://…" /></div>
+          <span className="lbl">Placements</span>
+          <div className="chips">{PROMO_PLACES.map(([k, l]) => { const on = d.placement.includes(k); return <button key={k} className={'btn sm ' + (on ? 'prism' : 'ghost')} onClick={() => set({ placement: on ? d.placement.filter(x => x !== k) : [...d.placement, k] })}>{l}</button>; })}</div>
+          <span className="lbl">Targeting</span>
+          <div className="ptarget">
+            <Field label="Global" hint="Everyone, every country. Turn off to target places."><Toggle label="Global" on={d.target.global} onClick={() => setT({ global: !d.target.global })} /></Field>
+            {!d.target.global && <>
+              <div className="trow"><b>Countries</b><Chips items={d.target.countries} set={v => setT({ countries: v.map(x => x.toUpperCase().slice(0, 2)) })} ph="ISO2, e.g. IN" mono /></div>
+              <div className="trow"><b>Zones</b><div className="chips">{Object.entries(zones.data!).map(([k, z]) => { const on = d.target.zones.includes(k); return <button key={k} title={z.name} className={'btn sm ' + (on ? 'prism' : 'ghost')} onClick={() => setT({ zones: on ? d.target.zones.filter(x => x !== k) : [...d.target.zones, k] })}>{k}</button>; })}</div></div>
+              <div className="trow"><b>States</b><Chips items={d.target.states} set={v => setT({ states: v.map(x => x.toUpperCase().slice(0, 3)) })} ph="e.g. TN" mono /></div>
+              <p className="note">Filled lists combine with AND — countries IN + states TN reaches Tamil Nadu only.</p></>}
+          </div>
+          <span className="lbl">Schedule</span>
+          <div className="fgrid"><label><small>Starts</small><input type="datetime-local" value={toLocal(d.startAt)} onChange={e => set({ startAt: fromLocal(e.target.value) })} /></label>
+            <label><small>Ends</small><input type="datetime-local" value={toLocal(d.endAt)} onChange={e => set({ endAt: fromLocal(e.target.value) })} /></label></div>
+          <Field label="Active" hint="Paused promos are never served."><Toggle label="Active" on={d.active} onClick={() => set({ active: !d.active })} /></Field>
+          <div className="row end mt">{d.id && <button className="btn sm danger" disabled={busy} onClick={() => confirm(`Delete “${d.title}”?`) && run(() => api(`/admin/promos/${d.id}`, { method: 'DELETE' }), 'Promo deleted', () => { list.reload(); prev.reload(); open(null); })}>Delete</button>}
+            <button className="btn sm ghost" onClick={() => open(null)}>Cancel</button><button className="btn sm prism" disabled={busy || !d.title.trim() || !d.placement.length} onClick={save}>{d.id ? 'Save promo' : 'Create promo'}</button></div>
+        </Card>
+        <Card title="Live preview" extra={<span className="muted small">{d.placement.length} placement{d.placement.length === 1 ? '' : 's'}</span>}>
+          <div className="pprev">{d.placement.map(pl => <div key={pl}><span className="lbl">{PROMO_PLACES.find(x => x[0] === pl)?.[1]}</span><PromoCard p={d} place={pl} /></div>)}
+            {!d.placement.length && <p className="empty">Pick at least one placement.</p>}</div>
+        </Card>
+      </div>}
+      <Card title="Preview as" extra={<div className="row"><input className="cc" aria-label="preview country" value={pc} maxLength={2} onChange={e => setPc(e.target.value.toUpperCase())} />
+        <input className="cc" aria-label="preview state" value={ps} maxLength={3} placeholder="state" onChange={e => setPs(e.target.value.toUpperCase())} />
+        <select aria-label="preview placement" value={pp} onChange={e => setPp(e.target.value)}><option value="">All placements</option>{PROMO_PLACES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>}>
+        {prev.error ? <ApiErr msg={prev.error} retry={prev.reload} /> : !prev.data ? <p className="loading">Loading from API…</p> : <>
+          <p className="note">A viewer in <b>{prev.data.country || '—'}{prev.data.state ? ' / ' + prev.data.state : ''}</b> (zones {prev.data.zones.join(', ') || '—'}) sees {prev.data.items.length} promo{prev.data.items.length === 1 ? '' : 's'}, highest priority first.{!prev.data.enabled && <b className="red"> Promos are switched off for this viewer.</b>}</p>
+          <div className="pgrid">{prev.data.items.map(p => <div key={p.id}><span className="lbl">{p.placement.join(' · ')} · priority {p.priority}</span><PromoCard p={p} place={p.placement[0]} /></div>)}
+            {!prev.data.items.length && <p className="empty">Nothing matches this viewer.</p>}</div></>}
+      </Card>
+    </>;
+  }}</Gate>;
+}
+
+type UploadRow = { id: string; name: string | null; kind: string; mime: string; size: number; owner: string | null; at: number; url: string; durationSec: number | null };
+const bytes = (n: number) => n >= 1 << 30 ? (n / (1 << 30)).toFixed(2) + ' GB' : n >= 1 << 20 ? (n / (1 << 20)).toFixed(1) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B';
+function UploadsPage() {
+  const [q, setQ] = useState('');
+  const r = useApi<UploadRow[]>('/admin/uploads' + (q.trim() ? '?q=' + encodeURIComponent(q.trim()) : ''));
+  const { run, busy } = useAct(); const [pct, setPct] = useState<number | null>(null);
+  const up = async (f?: File) => { if (!f) return; setPct(0); await run(() => uploadFile(f, setPct), 'Uploaded ' + f.name, r.reload); setPct(null); };
+  return <Card title={r.data ? `${r.data.length} files` : 'Uploads'} extra={<div className="row"><LivePill /><Search v={q} set={setQ} ph="Search file name or id" />
+    <label className="btn sm prism"><Icon name="uploads" size={14} />{pct !== null ? `Uploading ${pct}%` : 'Upload file'}<input type="file" hidden disabled={busy} onChange={e => up(e.target.files?.[0])} /></label></div>}>
+    <p className="note">Resumable uploads up to 1 GB (5 MB chunks). Type is checked by extension <i>and</i> file contents; executables and scripts are refused. Videos for posts and Blinks must be 60 s or shorter.</p>
+    {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !r.data ? <p className="loading">Loading from API…</p> :
+      <table><thead><tr><th>File</th><th>Kind</th><th>Size</th><th>Owner</th><th>Uploaded</th></tr></thead><tbody>
+        {r.data.map(m => <tr key={m.id}><td><a className="link" href={API_URL + m.url} target="_blank" rel="noreferrer"><b>{m.name ?? m.id}</b></a><small className="mono">{m.mime}</small></td>
+          <td><span className="tag">{m.kind}</span>{m.durationSec ? <small>{m.durationSec.toFixed(0)} s</small> : null}</td><td className="num">{bytes(m.size)}</td><td>{m.owner}</td><td className="muted">{when(m.at)}</td></tr>)}
+        {!r.data.length && <tr><td colSpan={5} className="empty">No uploads yet.</td></tr>}
+      </tbody></table>}
+  </Card>;
+}
+
+type Member = ApiUser & { hue: number; verified: boolean; avatarSocial: string | null; avatarChat: string | null; cover: string | null; lastSeenAt: number | null; lastSeenVisible: boolean;
+  city: string; state: string; country: string | null; lang: string | null; pronouns: string; links: string[]; bio: string; chatBio: string;
+  moodDrop: { moji: number; text: string; at: number } | null; counts: Record<string, number> };
+const ago = (t: number | null) => { if (!t) return 'never'; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+function MemberAvatar({ src, name, hue, size = 64 }: { src: string | null; name: string; hue?: number; size?: number }) {
+  return src ? <img className="mav" style={{ width: size, height: size }} src={mediaSrc(src)!} alt="" /> :
+    <span className="mav" style={{ width: size, height: size, fontSize: size * .38, background: `hsl(${hue ?? 250} 30% 92%)`, color: `hsl(${hue ?? 250} 35% 32%)` }}>{name.split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase()}</span>;
+}
+function MemberDrawer({ id, close }: { id: string; close: () => void }) {
+  const r = useApi<Member>('/admin/users/' + encodeURIComponent(id));
+  useEffect(() => { const f = (e: KeyboardEvent) => e.key === 'Escape' && close(); addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [close]);
+  const m = r.data;
+  return <div className="drawer-wrap" onClick={close}><aside className="drawer" role="dialog" aria-label="Member details" onClick={e => e.stopPropagation()}>
+    <header className="drawer-h"><b>Member</b><button className="iconbtn sm" aria-label="Close" onClick={close}><Icon name="x" size={14} /></button></header>
+    {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !m ? <p className="loading">Loading from API…</p> : <>
+      <div className="mhead"><MemberAvatar src={m.avatarSocial ?? m.avatarChat} name={m.name} hue={m.hue} /><div><h3>{m.name}</h3><small>{m.handle} · {m.email}</small>
+        <div className="row mt">{m.suspended ? <Pill tone="red">suspended</Pill> : <Pill tone="mint">active</Pill>}<Pill tone="gray">{m.role}</Pill>{m.verified && <Pill tone="violet">verified</Pill>}</div></div></div>
+      <div className="mstats">{Object.entries(m.counts).map(([k, v]) => <div key={k}><strong>{v}</strong><span>{k}</span></div>)}</div>
+      <h6 className="dsec">Presence</h6>
+      <div className="kv"><span>Last seen</span><b>{m.lastSeenAt ? <>{ago(m.lastSeenAt)} <small className="muted">{when(m.lastSeenAt)}</small></> : 'never'}</b>
+        <span>Visibility</span><span>{m.lastSeenVisible ? 'Shown to friends' : <><Pill tone="amber">hidden from members</Pill> <small>Staff always see it.</small></>}</span></div>
+      <h6 className="dsec">Avatars</h6>
+      <div className="avs"><div><MemberAvatar src={m.avatarSocial} name={m.name} hue={m.hue} size={48} /><small>Glow (social)</small></div><div><MemberAvatar src={m.avatarChat} name={m.name} hue={m.hue} size={48} /><small>Hush (chat)</small></div>
+        <p className="note">{!m.avatarSocial && !m.avatarChat ? 'No avatar uploaded — the app shows initials.' : 'Each module falls back to the other avatar.'}</p></div>
+      <h6 className="dsec">Profile</h6>
+      <div className="kv"><span>Pronouns</span><span>{m.pronouns || '—'}</span><span>Place</span><span>{[m.city, m.state, m.country].filter(Boolean).join(' · ') || '—'}</span>
+        <span>Language</span><span>{m.lang ?? '—'}</span><span>Glow bio</span><span>{m.bio || '—'}</span><span>Hush bio</span><span>{m.chatBio || '—'}</span>
+        <span>Mood Drop</span><span>{m.moodDrop ? <>{m.moodDrop.text || 'mood'} <small className="muted">#{m.moodDrop.moji} · {ago(m.moodDrop.at)}</small></> : '—'}</span>
+        <span>Links</span><span>{m.links.length ? m.links.map(l => <a key={l} className="link" href={l} target="_blank" rel="noreferrer">{l}</a>) : '—'}</span>
+        <span>Joined</span><span>{when(m.createdAt)}</span><span>User id</span><code>{m.id}</code></div>
+    </>}
+  </aside></div>;
+}
+
+/* ===================== Live & reach ===================== */
+const LIVE_PAGES: [string, string, string][] = [
+  ['realtime', 'Realtime Monitor', 'WebSocket connections, online users, events per minute, redis'],
+  ['calls', 'Call Log', 'Voice and video calls: ringing, answered, missed, rejected'],
+  ['push', 'Push Center', 'Push tokens, Expo sends, failures, test push'],
+  ['e2ee', 'E2EE & Keys', 'End-to-end encryption: device keys, encrypted chats'],
+];
+type RealtimeStats = { connections: number; users: number; eventsLastMinute: number; eventsPerMinute: { minute: number | string; count: number }[]; byType: Record<string, number>; redis: boolean; note?: string };
+type CallParty = { id: string; handle: string; name: string } | null;
+type CallRow = { id: string; caller: CallParty; callee: CallParty; media: string; status: string; startedAt: number; answeredAt: number | null; endedAt: number | null };
+type PushStats = { tokens: { total: number; byPlatform: Record<string, number>; byProvider: Record<string, number> }; last24h: { sent: number; failed: number; skipped: number }; recent: { id: string; userId: string; handle: string | null; kind: string; ok: boolean; status: string; error: string | null; at: number }[] };
+type E2eeStats = { usersWithKeys: number; devices: number; e2eeConvs: number; encryptedMessages: number; note?: string };
+const n0 = (x: number | undefined | null) => (x ?? 0).toLocaleString();
+
+function MinuteBars({ pts }: { pts: { minute: number | string; count: number }[] }) {
+  const W = 640, H = 140, pad = 20; const max = Math.max(1, ...pts.map(p => p.count)); const bw = (W - pad * 2) / Math.max(1, pts.length);
+  if (!pts.length) return <p className="empty">No events in the last hour.</p>;
+  return <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img" aria-label="Realtime events per minute, last 60 minutes">
+    <line x1={pad} x2={W - pad} y1={H - pad} y2={H - pad} stroke="#E7E3F3" />
+    {pts.map((p, i) => { const h = (p.count / max) * (H - pad * 2); return <rect key={i} x={pad + i * bw + 1} y={H - pad - h} width={Math.max(1, bw - 2)} height={h} rx="2" fill="#5B4CF5"><title>{`${typeof p.minute === 'number' ? new Date(p.minute).toISOString().slice(11, 16) + ' UTC' : p.minute}: ${p.count}`}</title></rect>; })}
+    <text x={pad} y={H - 4} className="ax">−60 min</text><text x={W - pad} y={H - 4} textAnchor="end" className="ax">now</text>
+  </svg>;
+}
+
+function RealtimePage() {
+  const r = useApi<RealtimeStats>('/admin/realtime');
+  useEffect(() => { const t = setInterval(r.reload, 10000); return () => clearInterval(t); }, [r.reload]);
+  return <Gate rs={[r]}>{() => { const d = r.data!; const types = Object.entries(d.byType ?? {}).sort((a, b) => b[1] - a[1]); const tmax = Math.max(1, ...types.map(t => t[1]));
+    return <>
+      <div className="kpis">
+        <Kpi label="Open sockets" value={n0(d.connections)} sub="WebSocket /ws" />
+        <Kpi label="Online users" value={n0(d.users)} sub="with ≥1 socket" />
+        <Kpi label="Events · last minute" value={n0(d.eventsLastMinute)} />
+        <Kpi label="Fan-out" value={d.redis ? 'Redis' : 'Single node'} sub={d.redis ? 'pub/sub across workers' : 'in-process only'} tone={d.redis ? 'good' : ''} />
+      </div>
+      <div className="grid g2-1">
+        <Card title="Events per minute" extra={<div className="row"><LivePill /><button className="btn sm ghost" onClick={r.reload}>Refresh</button></div>}><MinuteBars pts={d.eventsPerMinute ?? []} /><p className="note">Auto-refreshes every 10 s.</p></Card>
+        <Card title="By event type">{types.length ? types.map(([k, v]) => <div key={k} className="frow"><code className="grow">{k}</code><div style={{ width: 120 }}><Bar v={v} max={tmax} /></div><b>{n0(v)}</b></div>) : <p className="empty">No events yet.</p>}</Card>
+      </div>
+      {d.note && <p className="note">{d.note}</p>}
+    </>; }}</Gate>;
+}
+
+const party = (p: CallParty) => p ? <div><b>{p.name}</b><small className="muted"> {p.handle}</small></div> : <span className="muted">—</span>;
+const dur = (a: number | null, b: number | null) => { if (!a || !b) return '—'; const s = Math.round((b - a) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+function CallsPage() {
+  const [status, setStatus] = useState(''); const [media, setMedia] = useState(''); const [q, setQ] = useState('');
+  const qs = new URLSearchParams(); if (status) qs.set('status', status); if (media) qs.set('media', media); if (q.trim()) qs.set('q', q.trim());
+  const r = useApi<CallRow[]>('/admin/calls' + (qs.toString() ? '?' + qs : ''));
+  return <Card title={r.data ? `${r.data.length} calls` : 'Calls'} extra={<div className="row"><LivePill />
+    <select aria-label="Status" value={status} onChange={e => setStatus(e.target.value)}><option value="">All statuses</option>{['ringing', 'answered', 'ended', 'missed', 'rejected'].map(x => <option key={x} value={x}>{x}</option>)}</select>
+    <select aria-label="Media" value={media} onChange={e => setMedia(e.target.value)}><option value="">Voice + video</option><option value="audio">Voice</option><option value="video">Video</option></select>
+    <Search v={q} set={setQ} ph="Search handle or name" /></div>}>
+    {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !r.data ? <p className="loading">Loading from API…</p> :
+    <table><thead><tr><th>Caller</th><th>Callee</th><th>Media</th><th>Status</th><th>Started</th><th>Talk time</th></tr></thead><tbody>
+      {r.data.map(c => <tr key={c.id}><td>{party(c.caller)}</td><td>{party(c.callee)}</td><td>{c.media === 'video' ? 'Video' : 'Voice'}</td>
+        <td><Pill tone={{ answered: 'mint', ended: 'gray', ringing: 'amber', missed: 'red', rejected: 'red' }[c.status] ?? 'gray'}>{c.status}</Pill></td>
+        <td className="muted">{when(c.startedAt)}</td><td className="mono">{dur(c.answeredAt, c.endedAt)}</td></tr>)}
+      {!r.data.length && <tr><td colSpan={6} className="empty">{status || media || q ? 'No calls match these filters.' : 'No calls yet. Calls appear here once members ring each other (needs the calls switch on).'}</td></tr>}
+    </tbody></table>}
+    <p className="note">Call metadata only — audio and video go peer-to-peer (or through TURN) and are never recorded.</p>
+  </Card>;
+}
+
+function PushPage() {
+  const r = useApi<PushStats>('/admin/push/stats');
+  const { run, busy } = useAct();
+  const [uid, setUid] = useState(''); const [res, setRes] = useState<{ queued: boolean; tokens: number; message: string } | null>(null);
+  return <>
+    <Gate rs={[r]}>{() => { const d = r.data!; const t = d.tokens ?? { total: 0, byPlatform: {}, byProvider: {} }; const l = d.last24h ?? { sent: 0, failed: 0, skipped: 0 };
+      return <>
+        <div className="kpis">
+          <Kpi label="Push tokens" value={n0(t.total)} sub={`iOS ${n0(t.byPlatform?.ios)} · Android ${n0(t.byPlatform?.android)} · Web ${n0(t.byPlatform?.web)}`} />
+          <Kpi label="Sent · 24h" value={n0(l.sent)} tone="good" />
+          <Kpi label="Failed · 24h" value={n0(l.failed)} tone={l.failed ? 'bad' : ''} />
+          <Kpi label="Skipped · 24h" value={n0(l.skipped)} sub={`Expo ${n0(t.byProvider?.expo)} · FCM ${n0(t.byProvider?.fcm)} tokens (FCM not sent yet)`} />
+        </div>
+        <Card title="Recent sends" extra={<div className="row"><LivePill /><button className="btn sm ghost" onClick={r.reload}>Refresh</button></div>}>
+          <table><thead><tr><th>Member</th><th>Kind</th><th>Result</th><th>Error</th><th>When</th></tr></thead><tbody>
+            {(d.recent ?? []).map(x => <tr key={x.id}><td>{x.handle ?? <code>{x.userId}</code>}</td><td><code>{x.kind}</code></td><td>{x.ok ? <Pill tone="mint">{x.status || 'ok'}</Pill> : <Pill tone={x.status === 'skipped' ? 'gray' : 'red'}>{x.status || 'failed'}</Pill>}</td><td className="small muted">{x.error ?? '—'}</td><td className="muted">{when(x.at)}</td></tr>)}
+            {!(d.recent ?? []).length && <tr><td colSpan={5} className="empty">No pushes sent yet. Members register Expo tokens from the app; then sends show here.</td></tr>}
+          </tbody></table></Card>
+      </>; }}</Gate>
+    <Card title="Send a test push">
+      <p className="note">Queues a “Test from VibeLoop” push to every token of one member. Sends run in the background.</p>
+      <form className="row" onSubmit={e => { e.preventDefault(); run(() => api<{ queued: boolean; tokens: number; message: string }>('/admin/push/test', { method: 'POST', body: { userId: uid.trim() } }), undefined, x => { setRes(x); r.reload(); }); }}>
+        <input className="mono" aria-label="User id" value={uid} onChange={e => setUid(e.target.value)} placeholder="User id, e.g. usr_riya" />
+        <button className="btn sm prism" disabled={busy || !uid.trim()}>Send test</button>
+        {res && <span className={'small ' + (res.queued ? '' : 'red')} data-test-result>{res.queued ? '✓ ' : '✕ '}{res.message} ({res.tokens} token{res.tokens === 1 ? '' : 's'})</span>}
+      </form></Card>
+  </>;
+}
+
+function E2eePage() {
+  const r = useApi<E2eeStats>('/admin/e2ee');
+  return <Gate rs={[r]}>{() => { const d = r.data!;
+    return <>
+      <div className="kpis">
+        <Kpi label="Members with keys" value={n0(d.usersWithKeys)} />
+        <Kpi label="Devices" value={n0(d.devices)} sub="public keys registered" />
+        <Kpi label="Encrypted chats" value={n0(d.e2eeConvs)} />
+        <Kpi label="Encrypted messages" value={n0(d.encryptedMessages)} />
+      </div>
+      <div className="grid g2">
+        <Card title="What staff can’t see">
+          <ul className="steps">
+            <li><b>Message contents of encrypted chats.</b> The server stores ciphertext only; text shows as “[encrypted]” everywhere in admin.</li>
+            <li>Encrypted messages can’t be searched, edited, forwarded or moderated by staff. Reports on them only include what the reporter chooses to share.</li>
+            <li>Push previews for encrypted chats always say “New message”.</li>
+            <li>We can still see metadata: who is in a chat, when messages were sent, and sizes.</li>
+          </ul></Card>
+        <Card title="Honest scope">
+          <ul className="steps">
+            <li>Each message is sealed with <b>NaCl box</b> (X25519 + XSalsa20-Poly1305) to the recipient’s device public key.</li>
+            <li><b>No forward secrecy yet</b> — a leaked device private key could decrypt that device’s past messages. A ratchet (Signal-style) is not built.</li>
+            <li>Keys live on devices; a new device without the old key can’t read old encrypted history.</li>
+            <li>Turn the whole thing off with <code>features.e2ee</code> in <a className="link" href="#/limits">Feature Dials</a>.</li>
+          </ul></Card>
+      </div>
+      {d.note && <p className="note">{d.note}</p>}
+    </>; }}</Gate>;
 }
 
 /* ===================== Learn / Help ===================== */
@@ -1560,10 +1915,28 @@ GUIDES.push(
     <>In the Cashfree Merchant Dashboard switch to <b>Sandbox</b> → Developers → API Keys and copy the App ID and Secret key.</>,
     <>In Plugs → Cashfree keep mode <b>Test</b> (uses <code>sandbox.cashfree.com</code>), paste both, Save and Test connection.</>,
     <>Add a webhook to <code>{API_URL}/webhooks/cashfree</code> for payment-link events. Signatures are verified with <code>timestamp + body</code> HMAC-SHA256.</>] },
+  { t: 'Run a brand promo for one state', icon: 'promos', href: '#/promos?edit=new', link: 'Open Promos', steps: [
+    <>Promos are our own brand messages (not ads): they show to everyone the targeting matches, labelled “From VibeLoop”.</>,
+    <>In Promos press <b>New promo</b>. Add a title, body, CTA label and https link; upload an image or video (resumable, checked by contents) or paste a media URL.</>,
+    <>Pick placements (Home banner, Feed, Chat list, Splash, Explore). Turn <b>Global</b> off, add country <code>IN</code> and state <code>TN</code> — filled lists combine with AND, so only Tamil Nadu sees it.</>,
+    <>Optionally set start/end times and a priority (higher shows first). Check the live preview, then use <b>Preview as</b> IN/TN vs US to confirm who sees it.</>,
+    <>The <code>promos</code> switch on the Promos page (config feature) turns every promo off at once.</>] },
   { t: 'Send login codes with MSG91', icon: 'otp', href: '#/plugs', link: 'Open Plugs', steps: [
     <>In MSG91 → Email, verify a sending domain and create a template that uses the variable <code>{'{{otp}}'}</code>.</>,
     <>In Plugs → MSG91 paste the Auth key, template ID and the From email on that domain; turn on “Send login codes via MSG91”, Save, Test connection.</>,
     <>Codes are then emailed — phone numbers are never required. If MSG91 fails, the failure is logged (masked email only) and demo codes still work in dev.</>] },
+);
+GUIDES.push(
+  { t: 'Turn on calls with your TURN server', icon: 'calls', href: '#/plugs', link: 'Open Plugs', steps: [
+    <>Calls work on STUN alone for most networks; strict NATs (offices, some mobile carriers) need a TURN relay.</>,
+    <>Install <b>coturn</b> on a server with a public IP. In <code>turnserver.conf</code> set <code>use-auth-secret</code>, <code>static-auth-secret=&lt;long random string&gt;</code>, <code>realm=yourdomain</code>, and open UDP/TCP 3478 (+ 5349 for TLS) and the relay port range.</>,
+    <>In Plugs → TURN paste URLs like <code>turn:turn.yourdomain:3478, turns:turn.yourdomain:5349</code> and the same value as <b>Shared secret</b>. Save, then Test connection.</>,
+    <>Apps get short-lived credentials (1 h) from <code>/rtc/ice</code>; the secret never leaves the server. Make sure <code>features.calls</code> is on in Feature Dials, then watch Call Log.</>] },
+  { t: 'Set up push notifications', icon: 'push', href: '#/push', link: 'Open Push Center', steps: [
+    <>The app registers an <b>Expo push token</b> after the member allows notifications; tokens show in Push Center by platform.</>,
+    <>No key is needed for Expo by default. If you turned on Enhanced Push Security in your Expo project, create an access token and paste it in Plugs → Expo push.</>,
+    <>Keep <code>features.push</code> on in Feature Dials. FCM tokens are stored but not sent to yet — use Expo tokens.</>,
+    <>In Push Center enter a member’s user id and press <b>Send test</b>; the result and any Expo error appear in Recent sends.</>] },
 );
 function LearnPage() {
   return <>
@@ -1591,7 +1964,9 @@ function useCfgSearch(t: string) {
     ['Themes', 'themes', [...(has('theme', 'design', 'colour', 'color') ? [{ k: 'themes', title: 'Themes & design', sub: 'Social and Chat colours, presets, nav style, radius, density', href: '#/themes' }] : []),
       ...Object.entries(tp.data ?? {}).flatMap(([m, ps]) => ps.filter(p => has(p.key, m + ' theme', p.primary)).map(p => ({ k: m + p.key, title: <span className="row"><span className="sw">{[p.primary, p.secondary, p.accent].map(x => <i key={x} style={{ background: x }} />)}</span>{cap(p.key)}</span>, sub: `${cap(m)} preset · ${p.navStyle} · ${p.primary}`, href: '#/themes' }))),
       ...Object.entries(lr.data?.layers ?? {}).filter(([, l]) => l.theme && has('theme')).map(([k, l]) => ({ k: 'tl' + k, title: <code>{k}</code>, sub: 'theme: ' + Object.entries(l.theme as Record<string, ThemeMod>).map(([m, v]) => `${m} ${v.preset ?? 'custom'}`).join(', '), href: '#/themes' + (k === 'base' ? '' : '?layer=' + k) }))]],
-    ['Screens', 'screens', SCREEN_KEYS.filter(k => has(k)).slice(0, 10).map(k => ({ k, title: k, sub: `screens.${k}`, href: '#/screens' }))],
+    ['Module names', 'navigation', has('module name', 'module names', 'rename module', 'd-switch', 'dswitch', 'glow', 'hush') ? [{ k: 'modnames', title: 'Module names', sub: 'Rename Glow / Hush per layer — moduleNames, module.social, module.chat', href: '#/navigation' }] : []],
+    ['Screens', 'screens', SCREEN_KEYS.filter(k => has(k, SCREEN_DESC[k] ?? '')).slice(0, 10).map(k => ({ k, title: k, sub: `screens.${k}${SCREEN_DESC[k] ? ' · ' + SCREEN_DESC[k] : ''}`, href: '#/screens' }))],
+    ['Live & reach', 'realtime', LIVE_PAGES.filter(x => has(...x)).map(([slug, title, sub]) => ({ k: slug, title, sub, href: '#/' + slug }))],
     ['Feature switches', 'limits', FEATURE_KEYS.filter(k => has(k, FEATURE_DESC[k])).map(k => ({ k, title: <code>features.{k}</code>, sub: FEATURE_DESC[k], href: '#/limits' }))],
     ['Zones', 'zones', Object.entries(zs.data ?? {}).filter(([k, z]) => has(k, z.name, z.countries.join(' '))).map(([k, z]) => ({ k, title: `${k} · ${z.name}`, sub: z.countries.join(', ') || 'no countries', href: '#/zones' }))],
     ['Slabs', 'slabs', (sl.data ?? []).filter(s => has(s.key, s.name)).map(s => ({ k: s.key, title: s.name, sub: `slab:${s.key} · ${s.minFollowers}+ followers`, href: '#/slabs' }))],
@@ -1611,8 +1986,9 @@ function Tabs<T extends string>({ v, set, opts }: { v: T; set: (t: T) => void; o
 }
 
 const VIEWS: Record<Slug, () => ReactNode> = { dashboard: Dashboard, users: Users, moderation: Moderation, payouts: Payouts, health: Health, costs: Costs, flags: Flags, audit: Audit, privacy: Privacy, abuse: Abuse, revenue: Revenue, announcements: Announcements, roles: Roles, settings: SettingsPage, emoji: Emoji, features: Features, search: GlobalSearch,
-  navigation: NavigationPage, themes: ThemesPage, screens: ScreensPage, limits: LimitsPage, zones: ZonesPage, slabs: SlabsPage, languages: LanguagesPage, preview: PreviewPage, otp: OtpPage, identity: IdentityPage, chat: ChatPage, learn: LearnPage,
-  cashflow: CashFlowPage, money: MoneyPage, plans: PlansPage, countries: CountriesPage, boosts: BoostsPage, stash: StashPage, plugs: PlugsPage };
+  navigation: NavigationPage, themes: ThemesPage, screens: ScreensPage, limits: LimitsPage, zones: ZonesPage, slabs: SlabsPage, languages: LanguagesPage, preview: PreviewPage, otp: OtpPage, identity: IdentityPage, chat: ChatPage, learn: LearnPage, realtime: RealtimePage, calls: CallsPage, push: PushPage, e2ee: E2eePage,
+  cashflow: CashFlowPage, money: MoneyPage, plans: PlansPage, countries: CountriesPage, boosts: BoostsPage, stash: StashPage, plugs: PlugsPage, promos: PromosPage, uploads: UploadsPage,
+  pages: PagesPage, blog: BlogPage, reviews: ReviewsPage, speakup: SpeakUpPage };
 
 function useAuth() {
   const [tok, setTok] = useState(getToken);
@@ -1658,3 +2034,311 @@ function Console() {
     </div>
   </ToastCtx.Provider></RouteCtx.Provider></Ctx.Provider>;
 }
+
+/* ===================== Content & trust (v5): CMS pages, blog/news, reviews, Speak Up ===================== */
+type PageItem = Record<string, string>;
+type PageRow = { slug: string; module: 'glow' | 'hush' | 'both'; kind: string; title: string; summary: string; body: string; coverUrl: string | null;
+  itemsKind: 'faq' | 'links' | 'contacts' | null; items: PageItem[]; published: boolean; order: number; updatedAt?: number; version?: number; updatedBy?: string };
+type PageVersionRow = { version: number; at: number; by: string; note: string; snapshot: Omit<PageRow, 'slug'> };
+const NEW_PAGE = (kind: string): PageRow => ({ slug: '', module: 'both', kind, title: '', summary: '', body: '# Title\nWrite something people actually want to read.', coverUrl: null,
+  itemsKind: kind === 'faq' ? 'faq' : kind === 'links' ? 'links' : null, items: [], published: false, order: 0 });
+const MODULE_LABEL: Record<string, string> = { glow: 'Glow', hush: 'Hush', both: 'Both' };
+const ITEM_FIELDS: Record<string, [string, string][]> = { faq: [['q', 'Question'], ['a', 'Answer']], links: [['label', 'Label'], ['url', 'https://…'], ['platform', 'android | ios | web | other'], ['note', 'Note']],
+  contacts: [['label', 'Label'], ['value', 'Value'], ['type', 'email | phone | url | ticket']] };
+const ITEM_BLANK: Record<string, PageItem> = { faq: { q: '', a: '' }, links: { label: '', url: '', platform: 'web', note: '' }, contacts: { label: '', value: '', type: 'email' } };
+
+/** The same tiny markdown the apps render: # h1, ## h2, - bullets, **bold**, [text](url). Built as elements — never innerHTML. */
+function mdInline(s: string, k: string): ReactNode[] {
+  const out: ReactNode[] = []; const re = /\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)/g; let last = 0; let m: RegExpExecArray | null; let i = 0;
+  while ((m = re.exec(s))) {
+    if (m.index > last) out.push(s.slice(last, m.index));
+    out.push(m[1] !== undefined ? <b key={k + i++}>{m[1]}</b> : <a key={k + i++} className="link" href={/^(https?:\/\/|\/)/.test(m[3]) ? m[3] : '#'} target="_blank" rel="noreferrer">{m[2]}</a>);
+    last = re.lastIndex;
+  }
+  if (last < s.length) out.push(s.slice(last));
+  return out;
+}
+function Markdown({ text }: { text: string }) {
+  const blocks: ReactNode[] = []; let list: string[] = []; let para: string[] = [];
+  const flush = () => {
+    if (list.length) { const l = list; blocks.push(<ul key={'u' + blocks.length}>{l.map((x, i) => <li key={i}>{mdInline(x, 'l' + i)}</li>)}</ul>); list = []; }
+    if (para.length) { blocks.push(<p key={'p' + blocks.length}>{mdInline(para.join(' '), 'p' + blocks.length)}</p>); para = []; }
+  };
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd();
+    if (!line.trim()) { flush(); continue; }
+    if (line.startsWith('## ')) { flush(); blocks.push(<h3 key={'h' + blocks.length}>{mdInline(line.slice(3), 'h')}</h3>); }
+    else if (line.startsWith('# ')) { flush(); blocks.push(<h2 key={'h' + blocks.length}>{mdInline(line.slice(2), 'h')}</h2>); }
+    else if (/^[-*] /.test(line)) { if (para.length) { const p = para; para = []; blocks.push(<p key={'p' + blocks.length}>{mdInline(p.join(' '), 'q')}</p>); } list.push(line.slice(2)); }
+    else { if (list.length) flush(); para.push(line.trim()); }
+  }
+  flush();
+  return <div className="md">{blocks}</div>;
+}
+function PagePreview({ p }: { p: PageRow }) {
+  return <div className={'pgprev mod-' + p.module}>
+    <div className="pgprev-h"><span className="pc-label">{p.kind === 'blog' ? (p.module === 'hush' ? 'Hush Notes' : 'The Loopdown') : p.kind === 'news' ? 'Fresh Wire' : MODULE_LABEL[p.module]}</span>
+      {!p.published && <Pill tone="amber">draft</Pill>}</div>
+    {p.summary && <p className="muted small">{p.summary}</p>}
+    <Markdown text={p.body} />
+    {p.itemsKind === 'faq' && <div className="faq">{p.items.map((x, i) => <details key={i} open={i === 0}><summary>{x.q || 'Question'}</summary><p>{x.a}</p></details>)}</div>}
+    {p.itemsKind === 'links' && <div className="plinks">{p.items.map((x, i) => <div key={i} className="plink"><Pill tone={x.url ? 'violet' : 'gray'}>{x.platform}</Pill><b>{x.label}</b><small>{x.url || x.note || 'no link'}</small></div>)}</div>}
+    {p.itemsKind === 'contacts' && <div className="plinks">{p.items.map((x, i) => <div key={i} className="plink"><Pill tone="violet">{x.type}</Pill><b>{x.label}</b><small>{x.value}</small></div>)}</div>}
+  </div>;
+}
+function ItemsEditor({ kind, items, set }: { kind: string; items: PageItem[]; set: (v: PageItem[]) => void }) {
+  const fields = ITEM_FIELDS[kind];
+  const upd = (i: number, k: string, v: string) => set(items.map((x, j) => j === i ? { ...x, [k]: v } : x));
+  const move = (i: number, d: number) => { const n = [...items]; const [x] = n.splice(i, 1); n.splice(Math.max(0, Math.min(n.length, i + d)), 0, x); set(n); };
+  return <div className="items">
+    {items.map((x, i) => <div key={i} className={'itemrow ik-' + kind}>
+      <span className="num muted">{i + 1}</span>
+      <div className="itemf">{fields.map(([k, ph]) => k === 'a' ? <textarea key={k} rows={2} aria-label={ph} placeholder={ph} value={x[k] ?? ''} onChange={e => upd(i, k, e.target.value)} />
+        : (k === 'platform' || k === 'type') ? <select key={k} aria-label={k} value={x[k]} onChange={e => upd(i, k, e.target.value)}>{ph.split(' | ').map(o => <option key={o}>{o}</option>)}</select>
+        : <input key={k} aria-label={ph} placeholder={ph} className={k === 'url' ? 'mono' : ''} value={x[k] ?? ''} onChange={e => upd(i, k, e.target.value)} />)}</div>
+      <div className="itemctl"><button className="btn sm ghost" title="Move up" disabled={!i} onClick={() => move(i, -1)}><Icon name="up" size={12} /></button><button className="btn sm ghost" title="Move down" disabled={i === items.length - 1} onClick={() => move(i, 1)}><Icon name="down" size={12} /></button>
+        <button className="btn sm danger" title="Remove" onClick={() => set(items.filter((_, j) => j !== i))}><Icon name="x" size={12} /></button></div>
+    </div>)}
+    <button className="btn sm ghost" onClick={() => set([...items, { ...ITEM_BLANK[kind] }])}><Icon name="t-plus" size={14} />Add {kind === 'faq' ? 'question' : kind === 'links' ? 'link' : 'contact'}</button>
+  </div>;
+}
+
+/** A config-base feature switch (mirrors the Promos page pattern). */
+function useFeatureSwitches() {
+  const layers = useApi<LayersRes>('/admin/config/layers');
+  const { run, busy } = useAct();
+  const base = layers.data?.layers.base ?? {};
+  const on = (k: string) => base.features?.[k] !== false;
+  const flip = (k: string, label: string) => run(() => api('/admin/config/base', { method: 'PUT', body: { ...base, features: { ...(base.features ?? {}), [k]: !on(k) } } }), `${label} ${on(k) ? 'switched off' : 'switched on'} for everyone`, layers.reload);
+  const sw = (k: string, label: string) => <span className="row fsw"><span className="small muted">{label}</span><Toggle label={label} on={on(k)} onClick={() => flip(k, label)} disabled={busy || !layers.data} /></span>;
+  return { layers, on, sw, base };
+}
+
+function PageEditor({ kinds, reload, close, rows }: { kinds: string[]; reload: () => void; close: () => void; rows: PageRow[] }) {
+  const editId = hp('edit')!;
+  const isNew = editId === 'new' || editId.startsWith('new:');
+  const [d, setD] = useState<PageRow | null>(null);
+  const [note, setNote] = useState('');
+  const vs = useApi<PageVersionRow[]>(isNew ? null : `/pages/${editId}/versions`);
+  const { run, busy } = useAct();
+  useEffect(() => { if (isNew) setD(NEW_PAGE(editId.split(':')[1] ?? kinds[0])); else { const x = rows.find(p => p.slug === editId); setD(x ? clone2(x) : null); } setNote(''); }, [editId, rows]);
+  if (!d) return <Card><p className="empty">No page “{editId}”.</p></Card>;
+  const set = (p: Partial<PageRow>) => setD(x => x && { ...x, ...p });
+  const orig = rows.find(p => p.slug === d.slug);
+  const dirty = !orig || JSON.stringify({ ...orig, updatedAt: 0, version: 0, updatedBy: '' }) !== JSON.stringify({ ...d, updatedAt: 0, version: 0, updatedBy: '' });
+  const after = () => { reload(); vs.reload(); };
+  const save = () => run(() => isNew ? api<PageRow>('/admin/pages', { method: 'POST', body: d })
+    : api<PageRow>(`/admin/pages/${d.slug}`, { method: 'PATCH', body: { module: d.module, kind: d.kind, title: d.title, summary: d.summary, body: d.body, coverUrl: d.coverUrl, itemsKind: d.itemsKind, items: d.items, order: d.order, note } }),
+    isNew ? 'Page created' : 'Saved as a new version', r => { after(); setNote(''); if (isNew) setHp('edit', r.slug); });
+  const publish = () => run(() => api(`/admin/pages/${d.slug}/publish`, { method: 'POST', body: { published: !orig!.published } }), orig!.published ? 'Unpublished — hidden from the apps' : 'Published — live in the apps', after);
+  return <>
+    <div className="grid g1-2">
+      <Card title={isNew ? 'New page' : `Edit · ${orig?.title}`} className="peditor pgeditor" extra={!isNew ? <div className="row"><Pill tone="gray">v{orig?.version}</Pill><span className="small muted">Published</span>
+        <Toggle label="Published" on={!!orig?.published} onClick={publish} disabled={busy} /></div> : undefined}>
+        <div className="fgrid">
+          <label><span className="lbl">Slug</span><input className="mono" aria-label="slug" disabled={!isNew} value={d.slug} onChange={e => set({ slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="house-rules" /></label>
+          <label><span className="lbl">Module</span><select aria-label="module" value={d.module} onChange={e => set({ module: e.target.value as PageRow['module'] })}>{(['glow', 'hush', 'both'] as const).map(m => <option key={m} value={m}>{MODULE_LABEL[m]}</option>)}</select></label>
+          <label><span className="lbl">Kind</span><select aria-label="kind" value={d.kind} onChange={e => set({ kind: e.target.value, itemsKind: e.target.value === 'faq' ? 'faq' : e.target.value === 'links' ? 'links' : d.itemsKind })}>{kinds.map(k => <option key={k}>{k}</option>)}</select></label>
+          <label><span className="lbl">Order</span><input type="number" aria-label="order" value={d.order} onChange={e => set({ order: Math.trunc(+e.target.value) })} /></label>
+        </div>
+        <span className="lbl">Title</span><input className="wide" aria-label="title" maxLength={160} value={d.title} onChange={e => set({ title: e.target.value })} />
+        <span className="lbl">Summary</span><input className="wide" aria-label="summary" maxLength={400} value={d.summary} onChange={e => set({ summary: e.target.value })} />
+        <span className="lbl">Body <small className="inl">— # heading · ## subheading · - bullet · **bold** · [text](https://…)</small></span>
+        <textarea className="mdsrc" rows={14} aria-label="body" value={d.body} onChange={e => set({ body: e.target.value })} />
+        {!kinds.includes('blog') && <>
+          <span className="lbl">Items</span>
+          <div className="row"><select aria-label="items kind" value={d.itemsKind ?? ''} onChange={e => set({ itemsKind: (e.target.value || null) as PageRow['itemsKind'], items: e.target.value === d.itemsKind ? d.items : [] })}>
+            <option value="">No items</option><option value="faq">FAQ (question & answer)</option><option value="links">Links (app stores, web)</option><option value="contacts">Contacts (email, phone, ticket)</option></select></div>
+          {d.itemsKind && <ItemsEditor kind={d.itemsKind} items={d.items} set={items => set({ items })} />}</>}
+        {!isNew && <><span className="lbl">Change note (shows in version history)</span><input className="wide" aria-label="change note" maxLength={200} value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Updated helpline numbers" /></>}
+        <div className="row end mt">{!isNew && <button className="btn sm danger" disabled={busy} onClick={() => confirm(`Delete “${d.title}” and its history?`) && run(() => api(`/admin/pages/${d.slug}`, { method: 'DELETE' }), 'Page deleted', () => { reload(); close(); })}>Delete</button>}
+          <button className="btn sm ghost" onClick={close}>Close</button>
+          <button className="btn sm prism" disabled={busy || !dirty || !d.title.trim() || (isNew && d.slug.length < 3)} onClick={save}>{isNew ? 'Create page' : 'Save new version'}</button></div>
+      </Card>
+      <Card title="Live preview" extra={<span className="muted small">as the apps render it</span>}><PagePreview p={d} /></Card>
+    </div>
+    {!isNew && <Card title="Version history" className="vhist" extra={<span className="muted small">Restore creates a new version — history is never rewritten</span>}>
+      {vs.error ? <ApiErr msg={vs.error} retry={vs.reload} /> : !vs.data ? <p className="loading">Loading from API…</p> :
+        <table><thead><tr><th>Version</th><th>When</th><th>By</th><th>Note</th><th>Title</th><th /></tr></thead><tbody>
+          {vs.data.map(v => <tr key={v.version}><td><b className="num">v{v.version}</b> {v.version === orig?.version && <Pill tone="mint">current</Pill>}</td><td className="muted">{when(v.at)}</td><td className="mono">{v.by}</td>
+            <td>{v.note || <span className="muted">—</span>}</td><td className="small">{v.snapshot.title}</td>
+            <td className="r">{v.version !== orig?.version && <button className="btn sm ghost" disabled={busy} onClick={() => run(() => api(`/admin/pages/${d.slug}/restore`, { method: 'POST', body: { version: v.version } }), `Restored v${v.version} as a new version`, after)}>Restore</button>}</td></tr>)}
+        </tbody></table>}
+    </Card>}
+  </>;
+}
+
+function PageList({ kinds, title, intro, extra }: { kinds: string[]; title: string; intro: ReactNode; extra?: ReactNode }) {
+  const list = useApi<PageRow[]>('/admin/pages');
+  const [mod, setMod] = useState<'all' | 'glow' | 'hush' | 'both'>((hp('module') as 'glow') ?? 'all');
+  const [kind, setKind] = useState(hp('kind') ?? '');
+  const edit = hp('edit');
+  const open = (id: string | null) => setHp('edit', id);
+  return <Gate rs={[list]}>{() => {
+    const rows = list.data!.filter(p => kinds.includes(p.kind) && (mod === 'all' || p.module === mod || (mod !== 'both' && p.module === 'both')) && (!kind || p.kind === kind));
+    return <>
+      <Card title={title} extra={<div className="row"><LivePill />{extra}<button className="btn sm prism" onClick={() => open('new:' + (kind || kinds[0]))}><Icon name="t-plus" size={14} />New</button></div>}>
+        <p className="note">{intro}</p>
+        <div className="row mb"><Tabs v={mod} set={setMod} opts={[['all', 'All modules'], ['glow', 'Glow'], ['hush', 'Hush'], ['both', 'Both only']]} />
+          <select aria-label="kind filter" value={kind} onChange={e => setKind(e.target.value)}><option value="">All kinds</option>{kinds.map(k => <option key={k}>{k}</option>)}</select>
+          <span className="muted small">{rows.length} of {list.data!.filter(p => kinds.includes(p.kind)).length}</span></div>
+        <table><thead><tr><th>Page</th><th>Module</th><th>Kind</th><th className="c">Order</th><th>Version</th><th>Updated</th><th>Status</th><th /></tr></thead><tbody>
+          {rows.map(p => <tr key={p.slug} className={(p.published ? '' : 'dim') + (edit === p.slug ? ' sel' : '')}>
+            <td><button className="linkrow" onClick={() => open(p.slug)}><b>{p.title}</b><small className="mono">/{p.slug}</small></button></td>
+            <td><Pill tone={p.module === 'both' ? 'gray' : 'violet'}>{MODULE_LABEL[p.module]}</Pill></td><td><span className="tag">{p.kind}{p.itemsKind && p.itemsKind !== p.kind ? ' + ' + p.itemsKind : ''}</span></td>
+            <td className="c num">{p.order}</td><td className="num">v{p.version}</td><td className="muted small">{when(p.updatedAt!)}<br />{p.updatedBy}</td>
+            <td>{p.published ? <Pill tone="mint">published</Pill> : <Pill tone="amber">draft</Pill>}</td>
+            <td className="r"><button className="btn sm ghost" onClick={() => open(p.slug)}>Edit</button></td></tr>)}
+          {!rows.length && <tr><td colSpan={8} className="empty">Nothing here yet.</td></tr>}
+        </tbody></table>
+      </Card>
+      {edit && <PageEditor kinds={kinds} rows={list.data!} reload={list.reload} close={() => open(null)} />}
+    </>;
+  }}</Gate>;
+}
+function PagesPage() {
+  const f = useFeatureSwitches();
+  return <PageList kinds={['page', 'faq', 'guide', 'links']} title="Pages" extra={f.sw('appLinks', 'Get the Apps')}
+    intro={<>Help Hub, Hit Us Up, House Rules, Privacy Promise, Data Receipt, Our Story, SOS Lane, Glow/Hush Guides and Get the Apps. Only <b>published</b> pages reach the apps (<code>GET /pages?module=</code>); “Both” pages show in Glow and Hush. Every save keeps a version you can restore.</>} />;
+}
+function BlogPage() {
+  const f = useFeatureSwitches();
+  return <PageList kinds={['blog', 'news']} title="The Loopdown · Hush Notes · Fresh Wire" extra={<>{f.sw('blog', 'Blog')}{f.sw('news', 'News')}</>}
+    intro={<>Blog posts are <b>The Loopdown</b> in Glow and <b>Hush Notes</b> in Hush; news is <b>Fresh Wire</b>. Switching <code>blog</code> or <code>news</code> off empties the list in the apps and makes the posts answer 403.</>} />;
+}
+
+type ReviewRow = { id: string; type: 'vouch' | 'product'; targetId: string; targetLabel: string; rating: number; text: string; context: string | null; verifiedPurchase: boolean; at: number; status: 'visible' | 'hidden'; author: { handle: string; name: string } | null };
+const stars = (n: number) => <span className="stars" aria-label={`${n} of 5`}>{[1, 2, 3, 4, 5].map(i => <i key={i} className={i <= n ? 'on' : ''} />)}</span>;
+function ReviewsPage() {
+  const [type, setType] = useState<'' | 'vouch' | 'product'>((hp('type') as 'vouch') ?? '');
+  const [status, setStatus] = useState(hp('status') ?? '');
+  const r = useApi<ReviewRow[]>(`/admin/reviews?${type ? 'type=' + type + '&' : ''}${status ? 'status=' + status : ''}`);
+  const money = useApi<MoneySettings>('/admin/money/settings');
+  const f = useFeatureSwitches();
+  const { run, busy } = useAct();
+  const storeOn = !!(money.data?.money && money.data?.store);
+  return <>
+    <Card title="Feature switches" extra={<LivePill />}>
+      <div className="fswgrid">
+        <div><b>Reviews</b><small>Master switch for all review UI and API.</small>{f.sw('reviews', 'Reviews')}</div>
+        <div><b>Vouches</b><small>Creator / collab reviews. Only people who are friends, collabed on a Drop, or bought from the creator can vouch.</small>{f.sw('vouches', 'Vouches')}</div>
+        <div><b>Real Talk</b><small>Product reviews from verified buyers (paid orders) and free-product claimers. {!storeOn && <b className="red">Stash is off in Money switches, so Real Talk is off too.</b>}</small>{f.sw('productReviews', 'Real Talk')}</div>
+      </div>
+      <p className="note">Any switch off → the apps hide the UI and the API answers 403 “Not enabled”.</p>
+    </Card>
+    <Card title="Moderation queue" extra={<div className="row"><Tabs v={type} set={setType} opts={[['', 'All'], ['vouch', 'Vouches'], ['product', 'Real Talk']]} />
+      <select aria-label="status filter" value={status} onChange={e => setStatus(e.target.value)}><option value="">Any status</option><option value="visible">Visible</option><option value="hidden">Hidden</option></select></div>}>
+      <Gate rs={[r]}>{() => <table><thead><tr><th>Review</th><th>About</th><th>Rating</th><th>By</th><th>When</th><th>Status</th><th /></tr></thead><tbody>
+        {r.data!.map(x => <tr key={x.id} className={x.status === 'hidden' ? 'dim' : ''}>
+          <td className="rvtext"><span className="row"><Pill tone={x.type === 'vouch' ? 'violet' : 'gray'}>{x.type === 'vouch' ? 'Vouch' : 'Real Talk'}</Pill>{x.context && <span className="tag">{x.context}</span>}{x.verifiedPurchase && <Pill tone="mint">verified buyer</Pill>}</span><small>{x.text || <i>no text</i>}</small></td>
+          <td className="small"><b>{x.targetLabel}</b><br /><span className="mono muted">{x.targetId}</span></td><td>{stars(x.rating)}</td>
+          <td className="mono small">{x.author?.handle}</td><td className="muted small">{when(x.at)}</td>
+          <td>{x.status === 'visible' ? <Pill tone="mint">visible</Pill> : <Pill tone="red">hidden</Pill>}</td>
+          <td className="r nowrap"><button className="btn sm ghost" disabled={busy} onClick={() => run(() => api(`/admin/reviews/${x.id}`, { method: 'PATCH', body: { status: x.status === 'visible' ? 'hidden' : 'visible' } }), x.status === 'visible' ? 'Review hidden' : 'Review shown', r.reload)}>{x.status === 'visible' ? 'Hide' : 'Show'}</button>
+            <button className="btn sm danger" disabled={busy} onClick={() => confirm('Delete this review for good?') && run(() => api(`/admin/reviews/${x.id}`, { method: 'DELETE' }), 'Review deleted', r.reload)}>Delete</button></td></tr>)}
+        {!r.data!.length && <tr><td colSpan={7} className="empty">No reviews match.</td></tr>}
+      </tbody></table>}</Gate>
+    </Card>
+  </>;
+}
+
+type TicketRow = { id: string; ticket: string; category: string; targetType: string; targetId: string | null; details: string; evidence: string[]; priority: 'urgent' | 'high' | 'normal'; status: string; at: number; updatedAt: number;
+  reporter: { id: string; handle: string; name: string } | null; target: { label: string; userId: string; [k: string]: unknown } | null;
+  history: { at: number; by: string; status: string | null; note?: string | null; action?: string | null; result?: string | null; public?: string | null }[] };
+type TicketList = { items: TicketRow[]; counts: Record<string, number>; urgentOpen: number };
+const SU_CATS = ['harassment', 'violation', 'complaint', 'collab_dispute', 'scam', 'impersonation', 'self_harm', 'other'];
+const PRI_TONE: Record<string, string> = { urgent: 'red', high: 'amber', normal: 'gray' };
+const SU_STATUS_TONE: Record<string, string> = { open: 'amber', reviewing: 'violet', actioned: 'mint', closed: 'gray' };
+const nice = (s: string) => s.replace('_', ' ');
+function SpeakUpPage() {
+  const [st, setSt] = useState(hp('status') ?? ''); const [cat, setCat] = useState(hp('category') ?? ''); const [pri, setPri] = useState(hp('priority') ?? '');
+  const q = useApi<TicketList>(`/admin/speakup?${st ? 'status=' + st + '&' : ''}${cat ? 'category=' + cat + '&' : ''}${pri ? 'priority=' + pri : ''}`);
+  const f = useFeatureSwitches();
+  const openId = hp('open');
+  return <>
+    <Card title="Speak Up desk" extra={<div className="row"><LivePill />{f.sw('speakUp', 'Speak Up')}</div>}>
+      <p className="note">Reports and tickets from the apps (and the Hit Us Up form). <b>Self-harm</b> or anything marked urgent lands as <b>urgent</b> and the reporter is shown SOS Lane (112 · 1930 · 181) right away. Every status change or action is audited and sends the reporter a notice.</p>
+      {q.data && <div className="kpis k5 su"><Kpi label="Urgent & open" value={String(q.data.urgentOpen)} tone={q.data.urgentOpen ? 'bad' : 'good'} sub={q.data.urgentOpen ? 'Handle these first' : 'All clear'} />
+        {(['open', 'reviewing', 'actioned', 'closed'] as const).map(s => <Kpi key={s} label={cap(s)} value={String(q.data!.counts[s] ?? 0)} />)}</div>}
+      <div className="row mt"><select aria-label="priority filter" value={pri} onChange={e => setPri(e.target.value)}><option value="">Any priority</option>{['urgent', 'high', 'normal'].map(x => <option key={x} value={x}>{cap(x)}</option>)}</select>
+        <select aria-label="category filter" value={cat} onChange={e => setCat(e.target.value)}><option value="">Any category</option>{SU_CATS.map(x => <option key={x} value={x}>{nice(x)}</option>)}</select>
+        <select aria-label="status filter" value={st} onChange={e => setSt(e.target.value)}><option value="">Any status</option>{['open', 'reviewing', 'actioned', 'closed'].map(x => <option key={x} value={x}>{cap(x)}</option>)}</select></div>
+    </Card>
+    <Gate rs={[q]}>{() => <div className="grid sugrid">
+      <Card title={`Queue · ${q.data!.items.length}`} className="suq">
+        <div className="mlist">{q.data!.items.map(t => <button key={t.id} className={'sures' + (openId === t.id ? ' on' : '') + ' p-' + t.priority} onClick={() => setHp('open', t.id)}>
+          <span className="row"><Pill tone={PRI_TONE[t.priority]}>{t.priority}</Pill><b className="mono">{t.ticket}</b><span className="tag">{nice(t.category)}</span><span className="grow" /><Pill tone={SU_STATUS_TONE[t.status]}>{t.status}</Pill></span>
+          <small>{t.details}</small><small className="muted">{t.reporter?.handle} · {when(t.at)}</small></button>)}
+          {!q.data!.items.length && <p className="empty">No tickets match.</p>}</div>
+      </Card>
+      {openId ? <TicketDetail id={openId} reload={q.reload} /> : <Card><p className="empty">Pick a ticket from the queue.</p></Card>}
+    </div>}</Gate>
+  </>;
+}
+function TicketDetail({ id, reload }: { id: string; reload: () => void }) {
+  const t = useApi<TicketRow>(`/admin/speakup/${id}`);
+  const { run, busy } = useAct();
+  const [note, setNote] = useState(''); const [msg, setMsg] = useState('');
+  useEffect(() => { setNote(''); setMsg(''); }, [id]);
+  return <Gate rs={[t]}>{() => {
+    const x = t.data!;
+    const send = (body: Record<string, unknown>, ok: string) => run(() => api(`/admin/speakup/${x.id}`, { method: 'PATCH', body: { ...body, note, message: msg } }), ok, () => { t.reload(); reload(); setNote(''); setMsg(''); });
+    const flags = x.target ? Object.entries(x.target).filter(([k, v]) => !['label', 'userId'].includes(k) && v === true).map(([k]) => k) : [];
+    return <Card title={`Ticket ${x.ticket}`} className="sudetail" extra={<div className="row"><Pill tone={PRI_TONE[x.priority]}>{x.priority}</Pill><Pill tone={SU_STATUS_TONE[x.status]}>{x.status}</Pill></div>}>
+      {x.priority === 'urgent' && <div className="banner bad"><b>Urgent.</b> The reporter was shown SOS Lane (call 112 if in danger · 1930 cyber crime · 181 women helpline). Reply within the hour; if someone is at immediate risk, follow the escalation runbook.</div>}
+      <div className="kv"><span>Category</span><b>{nice(x.category)}</b><span>Reporter</span><b className="mono">{x.reporter?.handle} <small className="muted">{x.reporter?.name}</small></b>
+        <span>Target</span><b>{x.targetType === 'none' ? <span className="muted">none (support ticket)</span> : <>{x.targetType} · <span className="mono">{x.targetId}</span>{x.target && <small className="muted">{x.target.label}</small>}{flags.map(fl => <Pill key={fl} tone="red">{fl}</Pill>)}</>}</b>
+        <span>Filed</span><b>{when(x.at)}</b></div>
+      <span className="lbl">What happened</span><blockquote className="sudetails">{x.details}</blockquote>
+      {!!x.evidence.length && <><span className="lbl">Evidence</span><div className="chips">{x.evidence.map(e => <a key={e} className="tag" href={mediaSrc(e)!} target="_blank" rel="noreferrer">{e}</a>)}</div></>}
+      <span className="lbl">Status</span>
+      <div className="row">{['open', 'reviewing', 'actioned', 'closed'].map(s => <button key={s} className={'btn sm ' + (x.status === s ? 'prism' : 'ghost')} disabled={busy || x.status === s} onClick={() => send({ status: s }, `Status → ${s}`)}>{cap(s)}</button>)}</div>
+      <span className="lbl">Actions on the target {!x.target && <small className="inl">— none available for this ticket</small>}</span>
+      <div className="row"><button className="btn sm ghost" disabled={busy || !x.target} onClick={() => send({ action: 'warn' }, 'Warning sent')}>Warn user</button>
+        <button className="btn sm ghost" disabled={busy || !x.target || x.targetType === 'user'} onClick={() => confirm('Remove the reported content?') && send({ action: 'remove_content' }, 'Content removed')}>Remove content</button>
+        <button className="btn sm danger" disabled={busy || !x.target} onClick={() => confirm('Suspend the user behind this report? They are signed out everywhere.') && send({ action: 'suspend_user' }, 'User suspended')}>Suspend user</button></div>
+      <span className="lbl">Internal note</span><textarea className="wide" rows={2} aria-label="internal note" value={note} onChange={e => setNote(e.target.value)} placeholder="Only staff see this" />
+      <span className="lbl">Message to reporter (optional)</span><input className="wide" aria-label="message to reporter" maxLength={300} value={msg} onChange={e => setMsg(e.target.value)} placeholder="Defaults to a friendly status update" />
+      <div className="row end mt"><button className="btn sm prism" disabled={busy || !note.trim()} onClick={() => send({}, 'Note added')}>Add note</button></div>
+      <span className="lbl">History</span>
+      <ol className="suhist">{[...x.history].reverse().map((h, i) => <li key={i}><small className="muted">{when(h.at)} · <span className="mono">{h.by}</span></small>
+        <span>{h.status && <Pill tone={SU_STATUS_TONE[h.status] ?? 'gray'}>{h.status}</Pill>}{h.action && <Pill tone="red">{nice(h.action)}</Pill>}{h.result && <span className="mono small"> {h.result}</span>}</span>
+        {h.note && <span className="small">Note: {h.note}</span>}{h.public && <span className="small muted">To reporter: “{h.public}”</span>}</li>)}</ol>
+    </Card>;
+  }}</Gate>;
+}
+
+/** Global-search groups for pages, reviews and Speak Up tickets. */
+function useContentSearch(t: string) {
+  const on = !!t;
+  const pg = useApi<PageRow[]>(on ? '/admin/pages' : null);
+  const rv = useApi<ReviewRow[]>(on ? '/admin/reviews' : null);
+  const su = useApi<TicketList>(on ? '/admin/speakup' : null);
+  const has = (...xs: (string | number | null | undefined)[]) => xs.join(' ').toLowerCase().includes(t);
+  if (!on) return [];
+  type Row = { k: string; title: ReactNode; sub: ReactNode; tag?: ReactNode; href: string };
+  const g: [string, string, Row[]][] = [
+    ['Pages & posts', 'pages', (pg.data ?? []).filter(p => has(p.slug, p.title, p.summary, p.body, p.kind, ...p.items.flatMap(i => Object.values(i)))).slice(0, 10).map(p => ({ k: p.slug, title: p.title, sub: `/${p.slug} · ${p.kind} · ${MODULE_LABEL[p.module]} · v${p.version}`,
+      tag: p.published ? <Pill tone="mint">published</Pill> : <Pill tone="amber">draft</Pill>, href: (['blog', 'news'].includes(p.kind) ? '#/blog?edit=' : '#/pages?edit=') + p.slug }))],
+    ['Reviews', 'reviews', (rv.data ?? []).filter(r => has(r.text, r.targetLabel, r.author?.handle, r.type === 'vouch' ? 'vouch' : 'real talk')).slice(0, 8).map(r => ({ k: r.id, title: `${r.type === 'vouch' ? 'Vouch' : 'Real Talk'} · ${r.targetLabel} · ${r.rating}/5`, sub: `${r.author?.handle} · ${r.text.slice(0, 80)}`,
+      tag: r.status === 'hidden' ? <Pill tone="red">hidden</Pill> : undefined, href: '#/reviews' + (r.type ? '?type=' + r.type : '') }))],
+    ['Speak Up tickets', 'speakup', (su.data?.items ?? []).filter(x => has(x.ticket, x.category, x.details, x.reporter?.handle, x.targetId, x.priority)).slice(0, 8).map(x => ({ k: x.id, title: `${x.ticket} · ${nice(x.category)}`, sub: `${x.reporter?.handle} · ${x.details.slice(0, 80)}`,
+      tag: <Pill tone={PRI_TONE[x.priority]}>{x.priority}</Pill>, href: '#/speakup?open=' + x.id }))],
+  ];
+  return g;
+}
+
+GUIDES.push(
+  { t: 'Publish House Rules', icon: 'pages', href: '#/pages?edit=house-rules', link: 'Open House Rules', steps: [
+    <>House Rules and Privacy Promise ship as <b>drafts</b> with the header “Draft — review with your lawyer before launch”. Have counsel review the text first.</>,
+    <>Open Pages → <b>House Rules</b>. Edit the body (simple markdown: <code>#</code>, <code>##</code>, <code>-</code>, <code>**bold**</code>, <code>[text](url)</code>) and check the live preview on the right.</>,
+    <>Remove the draft header once approved, add a change note like “Lawyer-approved v1”, then <b>Save new version</b>.</>,
+    <>Flip <b>Published</b> on (it’s already live in the seed — unpublish while you revise if needed). Apps read it from <code>GET /pages/house-rules</code>.</>,
+    <>Made a mistake? <b>Version history</b> → Restore any earlier version; it’s saved as a new version, so the trail stays complete.</>] },
+  { t: 'Handle an urgent report', icon: 'speakup', href: '#/speakup?priority=urgent', link: 'Open urgent tickets', steps: [
+    <>Urgent tickets (self-harm, or the reporter ticked “urgent”) sit at the top of the Speak Up desk in red. The reporter already saw SOS Lane: <b>112</b> emergency, <b>1930</b> cyber crime, <b>181</b> women helpline.</>,
+    <>Open the ticket, set status <b>Reviewing</b> — the reporter gets a “a real human is looking” notice.</>,
+    <>Act on the target: <b>Warn user</b> (sends them a House Rules notice), <b>Remove content</b> (hides the Drop / message / product / Hood) or <b>Suspend user</b> (signs them out everywhere).</>,
+    <>Add an internal note describing what you did and, if useful, a short message to the reporter. Set <b>Actioned</b> or <b>Closed</b>.</>,
+    <>If someone may be in immediate danger, follow your escalation runbook and contact emergency services — the app can’t do that for you. Every step is in the Audit log.</>] },
+);

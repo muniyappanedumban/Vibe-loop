@@ -13,3 +13,4 @@ build/*.apk.tmp
 build/
 media/
 .master_key
+backend/.env

@@ -54,7 +54,7 @@ export const BUBBLEMOJI: BubbleDef[] = (() => {
 export const BUBBLE_CATEGORIES = CATS;
 export function bubbleSvg(id: number, uid = ''): string {
   const d = BUBBLEMOJI[(id - 1 + BUBBLEMOJI.length) % BUBBLEMOJI.length]; const g = `bm${id}${uid}`; const [a, b] = PALS[d.pal];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><defs><linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><path d="${BODIES[d.body]}" fill="url(#${g})"/><path d="${BODIES[d.body]}" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.2"/>${EYES[d.eyes]}${MOUTHS[d.mouth]}${ACCS[d.acc]}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><defs><linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><path d="${BODIES[d.body]}" fill="url(#${g})"/><path d="${BODIES[d.body]}" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.2"/><ellipse cx="17" cy="11" rx="8" ry="3.6" fill="#fff" opacity=".24"/>${EYES[d.eyes]}${MOUTHS[d.mouth]}${ACCS[d.acc]}</svg>`;
 }
 /** Chat quick-reaction row (Emoji Pop / Emoji Burst). */
 export const CHAT_REACTIONS = [3, 17, 42, 88, 120, 233];

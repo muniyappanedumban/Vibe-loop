@@ -337,7 +337,7 @@ def test_theme_merge_order_unit():
     ls = {"base": {"theme": {"social": {"accent": "#111111"}}}, "country:US": {"theme": {"social": {"preset": "ocean"}, "chat": {"preset": "coral"}}},
           "zone:GLOBAL": {"theme": {"social": {"radius": "sharp"}}}, "slab:pro": {"theme": {"chat": {"preset": "midnight", "density": "compact"}}}}
     b = R.resolve_with(ls, "IN", "IN-SOUTH", "starter", "en")["theme"]
-    assert b["social"]["preset"] == "prism" and b["social"]["accent"] == "#111111" and b["chat"]["preset"] == "aqua" and b["hash"]
+    assert b["social"]["preset"] == "studio" and b["social"]["accent"] == "#111111" and b["chat"]["preset"] == "mono" and b["hash"]
     us = R.resolve_with(ls, "US", "IN-SOUTH", "starter", "en")["theme"]
     assert us["social"]["primary"] == "#2563EB" and us["chat"]["primary"] == "#FF6B5A"
     g = R.resolve_with(ls, "US", "GLOBAL", "pro", "en")["theme"]
@@ -349,7 +349,7 @@ def test_theme_api_validation(client, admin):
     us = client.get("/app-config?country=US").json()["theme"]
     assert us["social"]["preset"] == "ocean" and us["chat"]["preset"] == "coral"
     p = client.get("/admin/theme/presets", headers=admin).json()
-    assert [x["key"] for x in p["social"]] == ["prism", "sunset", "ocean"] and [x["key"] for x in p["chat"]] == ["aqua", "midnight", "coral"]
+    assert [x["key"] for x in p["social"]] == ["studio", "prism", "sunset", "ocean"] and [x["key"] for x in p["chat"]] == ["mono", "aqua", "midnight", "coral"]
     r = client.put("/admin/config/zone:GLOBAL", headers=admin, json={"theme": {"social": {"primary": "#12345"}}})
     assert r.status_code == 422 and "#RRGGBB" in r.json()["detail"]
     r = client.put("/admin/config/zone:GLOBAL", headers=admin, json={"theme": {"chat": {"ink": "#DDDDDD"}}})

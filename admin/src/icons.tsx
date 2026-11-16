@@ -40,6 +40,10 @@ const P: Record<string, string> = {
   otp: 'M5 10h14v11H5zM8 10V7a4 4 0 0 1 8 0v3M9 15.5h.01M12 15.5h.01M15 15.5h.01',
   identity: 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1',
   chat: 'M4 5h16v11H9l-5 4z',
+  realtime: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.5 5.5a9 9 0 0 0 0 13M18.5 5.5a9 9 0 0 1 0 13',
+  calls: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z',
+  push: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0',
+  e2ee: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4M12 15v2',
   learn: 'M2 7l10-4 10 4-10 4zM6 9v5c0 1.5 3 3 6 3s6-1.5 6-3V9M22 7v6',
   down: 'M12 5v14M5 12l7 7 7-7',
   cashflow: 'M3 17l5-5 4 4 8-8M15 8h5v5',
@@ -49,6 +53,13 @@ const P: Record<string, string> = {
   boosts: 'M13 2L4 14h7l-1 8 9-12h-7z',
   stash: 'M4 7h16l-1.5 13h-13zM9 7V5a3 3 0 0 1 6 0v2',
   plugs: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
+  promos: 'M4 9v6h3l8 4V5L7 9zM18 9.5a3.5 3.5 0 0 1 0 5M7 15l1.5 5h2.5l-1.3-4.5',
+  pages: 'M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5',
+  blog: 'M4 4h16v16H4zM8 8h8M8 12h8M8 16h4',
+  reviews: 'M12 3l2.5 5.3 5.8.7-4.3 4 1.1 5.7L12 16l-5.1 2.7 1.1-5.7-4.3-4 5.8-.7zM12 8v4',
+  speakup: 'M4 5h16v11h-7l-5 4v-4H4zM12 8v3M12 13.5v.01',
+  uploads: 'M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4',
+  'x-clock': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
   't-home': 'M3 11l9-7 9 7v9h-6v-6H9v6H3z',
   't-compass': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15.5 8.5l-2 5-5 2 2-5z',
   't-plus': 'M12 5v14M5 12h14',
@@ -73,12 +84,12 @@ export function Logo() {
     <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden>
       <defs>
         <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6C3BFF" /><stop offset=".55" stopColor="#FF3D9A" /><stop offset="1" stopColor="#FF8A3D" />
+          <stop offset="0" stopColor="#5B4CF5" /><stop offset="1" stopColor="#3F33C9" />
         </linearGradient>
       </defs>
       <circle cx="16" cy="16" r="15" fill="url(#lg)" />
       <path d="M9 16a7 7 0 0 1 12-5M23 16a7 7 0 0 1-12 5" stroke="#fff" strokeWidth="2.6" fill="none" strokeLinecap="round" />
-      <circle cx="16" cy="16" r="2.4" fill="#C8F45A" />
+      <circle cx="16" cy="16" r="2.4" fill="#fff" />
     </svg>
   );
 }

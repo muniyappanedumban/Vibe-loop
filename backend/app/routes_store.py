@@ -1,6 +1,6 @@
 """v3 "Stash": creator store. Gated by features money && store."""
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,9 +17,10 @@ def product_json(p: M.Product) -> dict:
             "kind": p.kind, "stock": p.stock, "active": p.active, "demo": p.demo}
 
 @router.get("/store")
-def list_store(creator: str | None = None, u: M.User = Depends(current_user), db: Session = Depends(get_db)):
+def list_store(creator: str | None = Query(default=None, max_length=40), limit: int = Query(100, ge=1), offset: int = Query(0, ge=0),
+               u: M.User = Depends(current_user), db: Session = Depends(get_db)):
     gate(db, u, "store")
-    q = select(M.Product).where(M.Product.active == True).order_by(M.Product.at.desc())  # noqa: E712
+    q = select(M.Product).where(M.Product.active == True).order_by(M.Product.at.desc(), M.Product.id).offset(offset).limit(min(limit, 100))  # noqa: E712
     if creator: q = q.where(M.Product.creator_id == creator)
     return [product_json(p) for p in db.scalars(q)]
 
@@ -33,6 +34,8 @@ class ProductPatch(BaseModel):
 @router.post("/store/products")
 def create_product(b: ProductIn, u: M.User = Depends(require(*CREATORS)), db: Session = Depends(get_db)):
     gate(db, u, "store")
+    from .routes_media import mark_public
+    mark_public(db, b.mediaUrl, u)
     p = M.Product(creator_id=u.id, title=b.title.strip(), desc=b.desc, price=b.price, media_url=b.mediaUrl, kind=b.kind, stock=b.stock)
     db.add(p); db.flush(); audit(db, u.handle, "store.product_create", p.id); db.commit(); return product_json(p)
 
@@ -43,7 +46,9 @@ def patch_product(pid: str, b: ProductPatch, u: M.User = Depends(current_user), 
     if not p: raise HTTPException(404, "Product not found")
     if p.creator_id != u.id: raise HTTPException(403, "Only the creator can edit this product")
     d = b.model_dump(exclude_unset=True)
-    if "mediaUrl" in d: p.media_url = d.pop("mediaUrl")
+    if "mediaUrl" in d:
+        from .routes_media import mark_public
+        mark_public(db, d["mediaUrl"], u); p.media_url = d.pop("mediaUrl")
     for k, v in d.items(): setattr(p, k, v)
     audit(db, u.handle, "store.product_patch", f"{pid} {','.join(b.model_fields_set)}"); db.commit(); return product_json(p)
 
@@ -54,16 +59,20 @@ def store_order(b: StoreOrderIn, u: M.User = Depends(current_user), db: Session 
     p = db.get(M.Product, b.productId)
     if not p or not p.active: raise HTTPException(404, "Product not found")
     if p.stock is not None and p.stock <= 0: raise HTTPException(409, "Sold out")
-    if p.price == 0: return {"orderId": None, "status": "free", "payUrl": None, "provider": None, "testMode": False, "message": "This one is free — no payment needed.", "mediaUrl": p.media_url}
+    if p.price == 0:  # v5: record the claim so free claimers can write Real Talk (no payment order is created)
+        if not db.get(M.StoreClaim, (u.id, p.id)):
+            db.add(M.StoreClaim(user_id=u.id, product_id=p.id, creator_id=p.creator_id)); audit(db, u.handle, "store.claim_free", p.id); db.commit()
+        return {"orderId": None, "status": "free", "payUrl": None, "provider": None, "testMode": False, "message": "This one is free — no payment needed.", "mediaUrl": p.media_url}
     return create_order(db, u, kind="product", ref_id=p.id, creator_id=p.creator_id, amount=p.price, currency=p.currency, provider=b.provider, description=p.title)
 
 # ---------- admin moderation ----------
 STAFF = require("owner")
 @router.get("/admin/store")
-def admin_store(a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
-    users = {u.id: u.handle for u in db.scalars(select(M.User))}
-    return {"products": [{**product_json(p), "creatorHandle": users.get(p.creator_id)} for p in db.scalars(select(M.Product).order_by(M.Product.at.desc()))],
-            "orders": [order_json(o) for o in db.scalars(select(M.Order).where(M.Order.kind == "product").order_by(M.Order.at.desc()).limit(200))]}
+def admin_store(limit: int = Query(100, ge=1), offset: int = Query(0, ge=0), a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
+    prods = db.scalars(select(M.Product).order_by(M.Product.at.desc(), M.Product.id).offset(offset).limit(min(limit, 100))).all()
+    users = {u.id: u.handle for u in db.scalars(select(M.User).where(M.User.id.in_({p.creator_id for p in prods})))} if prods else {}
+    return {"products": [{**product_json(p), "creatorHandle": users.get(p.creator_id)} for p in prods],
+            "orders": [order_json(o) for o in db.scalars(select(M.Order).where(M.Order.kind == "product").order_by(M.Order.at.desc()).limit(100))]}
 
 class AdminProductPatch(BaseModel): active: bool
 @router.patch("/admin/store/products/{pid}")

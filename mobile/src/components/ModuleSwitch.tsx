@@ -12,11 +12,17 @@ import { PRISM } from '../theme/tokens';
 import { AQUA } from '../chat/theme';
 import { useT } from '../lib/config';
 
+// Hop Back: each module remembers the screen you were on (e.g. an open chat), so one tap brings you right back.
+const lastSpot: Record<'social' | 'chat', { screen: string; params?: any } | undefined> = { social: undefined, chat: undefined };
+const CHAT_STACK = new Set(['ChatRoom', 'NewChat', 'ChatSearch', 'Starred', 'MyCode', 'StatusCompose', 'StatusView', 'CreateTown', 'TownRoom', 'ChangeHandle', 'ChatSecurity', 'BubbleMojiGallery']);
 export function switchModule(nav: any, m: 'social' | 'chat', then?: { screen: string; params?: any }) {
+  try { const st = nav.getState?.(); const top = st?.routes?.[st.index ?? 0]; const from = useSession.getState().module;
+    if (top && !['Main', 'ChatMain'].includes(top.name)) lastSpot[CHAT_STACK.has(top.name) ? 'chat' : from] = { screen: top.name, params: top.params }; } catch {}
   useSession.getState().setModule(m);
-  const root = m === 'chat' ? 'ChatMain' : 'Main';
-  nav.reset({ index: then ? 1 : 0, routes: then ? [{ name: root }, { name: then.screen, params: then.params }] : [{ name: root }] });
+  const root = m === 'chat' ? 'ChatMain' : 'Main'; const target = then ?? (require('../lib/config').feature('hopBack') ? lastSpot[m] : undefined);
+  nav.reset({ index: target ? 1 : 0, routes: target ? [{ name: root }, { name: target.screen, params: target.params }] : [{ name: root }] });
 }
+export const hopBackTarget = (m: 'social' | 'chat') => lastSpot[m];
 export function usePulse() {
   const socialUnread = useStore(s => s.notices.filter(n => !n.read && (n as any).module !== 'chat').length);
   const chatPulse = useChat(s => s.pulse.chat); const focus = useChat(s => s.profile?.focus_social_muted);

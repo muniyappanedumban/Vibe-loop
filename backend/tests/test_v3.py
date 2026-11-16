@@ -44,7 +44,7 @@ def test_subscribe_409_when_not_configured(client, riya, admin):
     assert client.post("/money/tips", json={"to": "u1", "amount": 5000}, headers=riya).status_code == 409
     assert client.post("/store/orders", json={"productId": "prd_zine"}, headers=riya).status_code == 409
     assert client.post("/store/orders", json={"productId": "prd_guide"}, headers=riya).json()["status"] == "free"
-    db = SessionLocal(); assert db.query(M.Order).count() == 0; db.close()
+    db = SessionLocal(); assert db.query(M.Order).filter(M.Order.id != "ord_demo_m3_presets").count() == 0; db.close()  # v5 seed adds one labelled demo paid order
 
 def _order(kind="product", provider="razorpay", amount=49900, ref="prd_zine", creator="u4"):
     db = SessionLocal(); o = M.Order(id=M.nid("ord"), user_id="usr_riya", kind=kind, ref_id=ref, creator_id=creator, amount=amount, provider=provider); db.add(o); db.commit(); db.close(); return o.id
@@ -69,7 +69,7 @@ def test_razorpay_webhook_signature(client, riya, admin):
 def test_cashfree_webhook_signature(client, admin):
     client.put("/admin/integrations", json={"cashfree": {"appId": "app_dummy", "secretKey": "sec_dummy", "webhookSecret": "cf_unit_secret"}}, headers=admin)
     oid = _order(provider="cashfree", kind="subscription", ref="plan_backstage", creator=None, amount=9900)
-    body = json.dumps({"type": "PAYMENT_LINK_EVENT", "data": {"link_id": oid, "link_status": "PAID"}}).encode(); ts = "1700000000"
+    body = json.dumps({"type": "PAYMENT_LINK_EVENT", "data": {"link_id": oid, "link_status": "PAID"}}).encode(); ts = str(int(__import__("time").time()))  # hardening: Cashfree timestamps must be within ±5 min
     sig = lambda key: base64.b64encode(hmac.new(key, ts.encode() + body, hashlib.sha256).digest()).decode()
     assert client.post("/webhooks/cashfree", content=body, headers={"x-webhook-timestamp": ts, "x-webhook-signature": sig(b"nope")}).status_code == 401
     assert _status(oid)[0] == "created"
@@ -150,7 +150,7 @@ def test_store_product_permissions(client, riya, admin):
     assert client.patch(f"/admin/store/products/{pid}", json={"active": False}, headers=riya).status_code == 403
     assert client.patch(f"/admin/store/products/{pid}", json={"active": False}, headers=admin).json()["active"] is False
     assert pid not in [p["id"] for p in client.get("/store", headers=riya).json()]
-    assert {"prd_presets", "prd_zine", "prd_guide"} <= {p["id"] for p in client.get("/store", headers=riya).json()}
+    assert {"prod_u1_presets", "prd_zine", "prd_guide"} <= {p["id"] for p in client.get("/store", headers=riya).json()}
 
 def test_admin_plans_and_countries(client, admin, riya):
     assert client.put("/admin/money/plans", json=[{"name": "X", "prices": {"JP": 100}}], headers=admin).status_code == 400

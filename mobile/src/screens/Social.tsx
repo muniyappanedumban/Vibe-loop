@@ -1,3 +1,4 @@
+import { SparkExtras } from '../chat/screens/Parity';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, FlatList, useWindowDimensions, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,11 +16,16 @@ import { Media } from '../components/Lens';
 import { VideoClip } from '../components/VideoClip';
 import { ReactionSheet } from '../components/ReactionSheet';
 import { AdSlot } from './Money2';
+import { PromoSlot } from '../components/PromoSlot';
+import { SuggestBar, stickerToken, parseSticker } from '../components/SuggestBar';
+import { shareOutside } from './Micro';
+import { call as apiCall } from '../lib/api';
 import { mediaUri } from './Studio';
 import { Linking } from 'react-native';
 import { chat } from '../chat/useChat';
 import { online } from '../lib/api';
-import { switchModule } from '../components/ModuleSwitch';
+import { switchModule, DSwitch } from '../components/ModuleSwitch';
+import { OutboxBanner } from './OutboxScreen';
 
 export function SparkRow({ navigation }: any) {
   const sp = useSocial(s => s.sparks); const seen = useSocial(s => s.seenSparks); const me = useStore(s => s.user);
@@ -40,7 +46,8 @@ export function SparkRow({ navigation }: any) {
 
 export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
   const st = useSocial(); const c = creator(p.by); const mine = st.myReacts[p.id]; const [pick, setPick] = useState(false); const [cm, setCm] = useState('');
-  const lastTap = React.useRef(0); const [burst, setBurst] = useState(false); const [lib, setLib] = useState(false);
+  const lastTap = React.useRef(0); const [burst, setBurst] = useState(false); const [lib, setLib] = useState(false); const [hop, setHop] = useState<string | null>(null);
+  React.useEffect(() => { if (hop) { const t = setTimeout(() => setHop(null), 2000); return () => clearTimeout(t); } }, [hop]);
   const total = Object.values(p.reactions).reduce((a, b) => a + b, 0); const p2c = useFeature('post2chat') && online();
   const following = st.following.includes(p.by);
   return (
@@ -48,10 +55,10 @@ export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 }}>
         <Avatar name={c.name} hue={c.hue} size={40} />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontWeight: '800' }}>{c.name} {'badge' in c && c.badge ? <Icon name="shield" size={13} color={C.violet} /> : null}</Text>
+          <Text style={{ fontWeight: '800' }} onPress={() => p.by !== 'me' && navigation.navigate('CreatorProfile', { id: p.by })}>{c.name} {'badge' in c && c.badge ? <Icon name="shield" size={13} color={C.violet} /> : null}</Text>
           <Text style={T.small}>{p.place ? `${p.place} · ` : ''}{ago(p.at)} · {p.mood}</Text>
         </View>
-        {p.by !== 'me' ? <Chip label={following ? 'Following' : 'Follow'} active={!following} onPress={() => st.follow(p.by)} /> : <Tag label="YOU" />}
+        {p.by !== 'me' ? <Chip label={following ? 'Following' : 'Follow'} active={!following} onPress={() => st.follow(p.by)} /> : <Pressable onPress={() => apiCall('POST', `/posts/${p.id}/pin`).then(() => {}).catch(() => {})} accessibilityLabel="Pin to profile (Pin 3)"><Tag label={(p as any).pinned ? 'PINNED' : 'PIN'} /></Pressable>}
       </View>
       {p.kind === 'thought' ? (
         <View style={[s.thought, { backgroundColor: p.bg ?? C.violet }]}><Text style={s.thoughtT}>{p.text}</Text></View>
@@ -70,14 +77,23 @@ export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
           {mine ? <VibeMoji id={mine.startsWith('m') ? Number(mine.slice(1)) : REACTIONS.find(r => r.key === mine)!.id} size={26} /> : <Icon name="heart" size={24} />}
           <Text style={{ fontWeight: '800' }}>{st.privacy.hideLikes && p.by === 'me' ? '' : compact(total)}</Text>
         </Pressable>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="comment" size={23} /><Text style={{ fontWeight: '800' }}>{p.comments.length}</Text></View>
-        <Pressable onPress={() => st.share(p.id)} accessibilityLabel="Share" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="send" size={22} /><Text style={{ fontWeight: '800' }}>{p.shares}</Text></Pressable>
+        <Pressable onPress={() => online() ? navigation.navigate('Comments', { id: p.id }) : undefined} accessibilityLabel="Comments" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="comment" size={23} /><Text style={{ fontWeight: '800' }}>{p.comments.length}</Text></Pressable>
+        <Pressable onPress={() => { st.share(p.id); shareOutside(p); }} accessibilityLabel="Share" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="send" size={22} /><Text style={{ fontWeight: '800' }}>{p.shares}</Text></Pressable>
         <View style={{ flex: 1 }} />
-        {p2c ? <Pressable onPress={() => navigation.navigate('ShareToChat', { type: 'post', id: p.id, title: p.text })} accessibilityLabel="Send to chat" style={{ marginRight: 12 }}><Icon name="chat" size={23} color={C.violet} /></Pressable> : null}
-        <Pressable onPress={() => st.save(p.id)} accessibilityLabel="Save"><Icon name="bookmark" size={23} color={st.saved.includes(p.id) ? C.violet : C.ink} /></Pressable>
+        {p2c ? <Pressable onPress={() => navigation.navigate('ShareToChat', { type: 'post', id: p.id, title: p.text })} onLongPress={() => { const last = [...chat.convsSorted()][0]; if (last) chat.share(last.id, 'post', p.id).then(() => setHop(`Sent to ${last.title}`)).catch(() => {}); }} accessibilityLabel="Send to chat (long-press: Hop Share to your latest chat)" style={{ marginRight: 12 }}><Icon name="chat" size={23} color={C.violet} /></Pressable> : null}
+        <Pressable onPress={() => st.save(p.id)} onLongPress={() => online() && navigation.navigate('SaveStack', { add: p.id })} accessibilityLabel="Save (long-press for Save Stack)"><Icon name="bookmark" size={23} color={st.saved.includes(p.id) ? C.violet : C.ink} /></Pressable>
       </View>
       <ReactionSheet kind="vibe" open={lib} onClose={() => setLib(false)} onPick={id => { st.react(p.id, `m${id}`); setPick(false); }} />
       {Object.keys(p.reactions).some(k => k.startsWith('m') && p.reactions[k] > 0) ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, paddingHorizontal: 14, paddingTop: 8 }}>{Object.entries(p.reactions).filter(([k, n]) => k.startsWith('m') && n > 0).slice(0, 8).map(([k, n]) => <View key={k} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.bg, borderRadius: 999, paddingRight: 6 }}><VibeMoji id={Number(k.slice(1))} size={22} /><Text style={{ fontSize: 11, fontWeight: '800' }}>{n}</Text></View>)}</View> : null}
+      {(p as any).poll ? (
+        <View style={{ marginHorizontal: 14, marginTop: 10, padding: 10, borderRadius: 14, backgroundColor: C.bg }}>
+          <Text style={{ fontWeight: '900', marginBottom: 6 }}>{(p as any).poll.q}</Text>
+          {(p as any).poll.options.map((o: any, i: number) => { const tot = (p as any).poll.options.reduce((a: number, x: any) => a + (x.votes || 0), 0) || 1; return (
+            <Pressable key={i} onPress={() => apiCall<any>('POST', `/posts/${p.id}/vote`, { option: i }).then(r => useSocial.setState(s => ({ posts: s.posts.map(x => (x.id === p.id ? { ...x, poll: r.poll ?? r } as any : x)) }))).catch(() => {})} style={{ height: 38, borderRadius: 10, marginTop: 5, overflow: 'hidden', backgroundColor: C.surface, justifyContent: 'center', paddingHorizontal: 10 }} accessibilityLabel={`Vote ${o.text}`}>
+              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${((o.votes || 0) / tot) * 100}%`, backgroundColor: C.violetSoft }} />
+              <Text style={{ fontWeight: '800' }}>{(p as any).poll.myVote === i ? '✓ ' : ''}{o.text} · {o.votes || 0}</Text>
+            </Pressable>); })}
+        </View>) : null}
       {pick ? (
         <View style={s.picker}>{REACTIONS.map(r => (
           <Pressable key={r.key} onPress={() => { st.react(p.id, r.key); setPick(false); }} style={[s.pickItem, mine === r.key && { backgroundColor: C.violetSoft }]} accessibilityLabel={r.label}>
@@ -85,6 +101,7 @@ export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
           </Pressable>))}
           <Pressable onPress={() => setLib(true)} style={s.pickItem} accessibilityLabel="More reactions"><View style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: C.violetSoft, alignItems: 'center', justifyContent: 'center' }}><Icon name="plus" size={18} color={C.violet} /></View><Text style={{ fontSize: 9, fontWeight: '700', color: C.inkSoft }}>1000</Text></Pressable></View>
       ) : null}
+      {hop ? <Text style={{ paddingHorizontal: 14, paddingTop: 6, color: '#12A27C', fontWeight: '800' }}>Hop Share · {hop}</Text> : null}
       {p.kind !== 'thought' ? <Text style={{ paddingHorizontal: 14, paddingTop: 8, lineHeight: 20 }}><Text style={{ fontWeight: '800' }}>{c.handle}{p.collab ? ` × ${p.collab}` : ''} </Text>{p.text}</Text> : null}
       {p.sound || (p.lat != null && p.lng != null) || p.audience === 'circle' ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingTop: 8 }}>
@@ -92,7 +109,8 @@ export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
           {p.audience === 'circle' ? <Tag label="CIRCLE ONLY" color="#12A27C" bg={C.mintSoft} /> : null}
           {p.lat != null && p.lng != null ? <Pressable onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`)} accessibilityRole="link"><Tag label="OPEN MAP" /></Pressable> : null}
         </View>) : null}
-      {p.comments.slice(-2).map((x, i) => <Text key={i} style={{ paddingHorizontal: 14, paddingTop: 4, color: C.inkSoft }}><Text style={{ fontWeight: '800', color: C.ink }}>{creator(x.by).handle} </Text>{x.text}</Text>)}
+      {p.comments.slice(-2).map((x, i) => parseSticker(x.text) ? <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingTop: 4 }}><Text style={{ fontWeight: '800', color: C.ink }}>{creator(x.by).handle}</Text><VibeMoji id={parseSticker(x.text)!.id} size={28} /></View> : <Text key={i} style={{ paddingHorizontal: 14, paddingTop: 4, color: C.inkSoft }}><Text style={{ fontWeight: '800', color: C.ink }}>{creator(x.by).handle} </Text>{x.text}</Text>)}
+      <View style={{ paddingHorizontal: 10 }}><SuggestBar text={cm} kind="vibe" onPick={m => { st.comment(p.id, stickerToken('vibe', m)); setCm(''); }} /></View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12 }}>
         <TextInput value={cm} onChangeText={setCm} placeholder="Add a comment…" placeholderTextColor="#A6A2BC" style={s.cIn} />
         <Pressable onPress={() => { if (cm.trim()) { st.comment(p.id, cm.trim()); setCm(''); } }} accessibilityLabel="Post comment"><Text style={{ color: C.violet, fontWeight: '800' }}>Post</Text></Pressable>
@@ -103,7 +121,7 @@ export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
 
 const FEEDS = ['For You', 'Circle', 'Trending', 'Fresh', 'Mood', 'Interests'] as const;
 const MOODS = ['Funny', 'Inspiring', 'Relaxing', 'Emotional', 'Happy'];
-export function Explore({ navigation }: any) {
+export function Home({ navigation }: any) {
   const st = useSocial(); const tr = useT();
   const [feed, setFeed] = useState<(typeof FEEDS)[number]>('For You');
   const [mood, setMood] = useState('Funny'); const [interest, setInterest] = useState('Food');
@@ -114,22 +132,25 @@ export function Explore({ navigation }: any) {
     : [...visible].sort((a, b) => (st.following.includes(b.by) ? 1 : 0) - (st.following.includes(a.by) ? 1 : 0) || b.at - a.at);
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: S.lg }}>
-        <Text style={[T.h1, { flex: 1 }]}>{tr('nav.Explore', 'Drift')}</Text>
-        <IconBtn name="chat" label="Open Chat" onPress={() => switchModule(navigation, 'chat')} />
-        <IconBtn name="bookmark" label="Vault" onPress={() => navigation.navigate('Vault')} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: S.md }}>
+        <Text style={s.logo}>vibeloop</Text>
+        <View style={{ flex: 1 }} />
+        <IconBtn name="heart" label="Pings" badge={useStore.getState().notices.filter(n => !n.read).length || undefined} onPress={() => navigation.navigate('Notifications')} />
+        <IconBtn name="chat" label="Open Hush" onPress={() => switchModule(navigation, 'chat')} />
       </View>
-      <Pressable onPress={() => navigation.navigate('Search')} style={s.search} accessibilityRole="search"><Icon name="search" size={18} color={C.inkSoft} /><Text style={{ color: C.inkSoft, fontWeight: '600' }}>Search creators, Drops, Hoods, VibeMoji…</Text></Pressable>
+      <View style={{ alignItems: 'center', marginBottom: S.md }}><DSwitch active="social" /></View>
+      <OutboxBanner onPress={() => navigation.navigate('Outbox')} />
+      <PromoSlot placement="home_banner" />
       <SparkRow navigation={navigation} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: S.lg }}>{FEEDS.map(f => <Chip key={f} label={f} active={feed === f} onPress={() => setFeed(f)} />)}</ScrollView>
       {feed === 'Mood' ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 8 }}>{MOODS.map(m => <Chip key={m} label={m} icon="smile" active={mood === m} onPress={() => setMood(m)} />)}</ScrollView> : null}
       {feed === 'Interests' ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 8 }}>{['Food', 'Travel', 'Finance', 'Art', 'Sports'].map(m => <Chip key={m} label={m} icon="hash" active={interest === m} onPress={() => setInterest(m)} />)}</ScrollView> : null}
-      <LinearGradient colors={['#EEE8FF', '#FFE6F2']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.oneQ}>
+      <LinearGradient colors={[C.violetSoft, C.bg]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.oneQ}>
         <VibeMoji id={311} size={44} />
         <View style={{ flex: 1 }}><Text style={T.tiny}>ONE QUESTION · TODAY</Text><Text style={[T.h3, { marginTop: 2 }]}>What's a small habit that changed your year?</Text></View>
       </LinearGradient>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: S.lg, marginBottom: 10 }}><Text style={[T.small, { flex: 1 }]}>{list.length} posts · {feed}</Text><DemoTag /></View>
-      {list.map((p, i) => <React.Fragment key={p.id}><PostCard p={p} navigation={navigation} />{i === 2 ? <AdSlot place="feed" /> : null}</React.Fragment>)}
+      <View style={{ height: S.lg }} />
+      {list.map((p, i) => <React.Fragment key={p.id}><PostCard p={p} navigation={navigation} />{i === 0 ? <PromoSlot placement="feed" /> : null}{i === 2 ? <AdSlot place="feed" /> : null}</React.Fragment>)}
       {!list.length ? <Text style={[T.small, { textAlign: 'center', marginTop: 30 }]}>Nothing here yet — follow creators to fill your Circle.</Text> : null}
     </Screen>
   );
@@ -148,7 +169,7 @@ export function Motion({ navigation }: any) {
             {(p as any).mediaKind === 'video' && p.mediaUrl ? <View style={StyleSheet.absoluteFill}><VideoClip uri={mediaUri(p.mediaUrl)!} edit={(p as any).edit} lens={p.lens} h={height} /></View> : <Thumb hue={p.hue} w="100%" h={height} radius={0} />}
             <LinearGradient colors={['rgba(0,0,0,0.35)', 'transparent', 'transparent', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFill} />
             {burst === p.id ? <View style={s.burst}><VibeMoji id={7} size={120} /></View> : null}
-            <View style={[s.reelTop, { top: ins.top + 10 }]}><Text style={s.reelTitle}>{tr('nav.Motion', 'Flicks')}</Text><View style={{ flex: 1 }} /><Tag label="DEMO DATA" color="#fff" bg="rgba(255,255,255,0.18)" /></View>
+            <View style={[s.reelTop, { top: ins.top + 10 }]}><Text style={s.reelTitle}>{tr('nav.Motion', 'Flicks')}</Text><View style={{ flex: 1 }} /></View>
             <View style={[s.rail, { bottom: 130 }]}>
               {[{ i: mine ? null : 'heart', moji: mine ? REACTIONS.find(r => r.key === mine)!.id : null, n: compact(Object.values(p.reactions).reduce((a, b) => a + b, 0)), on: () => st.react(p.id, 'heart'), l: 'React' },
                 { i: 'comment', n: String(p.comments.length), l: 'Comments' }, { i: 'send', n: String(p.shares), on: () => st.share(p.id), l: 'Share' },
@@ -175,7 +196,7 @@ export function Motion({ navigation }: any) {
 
 export function Sparks({ navigation, route }: any) {
   const st = useSocial(); const ins = useSafeAreaInsets();
-  const [i, setI] = useState(Number(route?.params?.start ?? 0)); const [prog, setProg] = useState(0); const [sent, setSent] = useState<number | null>(null);
+  const [i, setI] = useState(Number(route?.params?.start ?? 0)); const [prog, setProg] = useState(0); const [sent, setSent] = useState<number | null>(null); const [sentMsg, setSentMsg] = useState<string | null>(null);
   const sp = st.sparks[i]; const c = sp ? creator(sp.by) : null;
   useEffect(() => { if (!sp) return; st.seeSpark(sp.id); setProg(0); setSent(null); const t = setInterval(() => setProg(p => p + 0.02), 100); return () => clearInterval(t); }, [i]);
   useEffect(() => { if (prog >= 1) i < st.sparks.length - 1 ? setI(i + 1) : navigation.goBack(); }, [prog]);
@@ -213,6 +234,8 @@ export function Sparks({ navigation, route }: any) {
           <Pressable key={id} onPress={() => setSent(id)} style={[s.sparkMoji, sent === id && { backgroundColor: 'rgba(200,244,90,0.3)' }]} accessibilityLabel={`React ${id}`}><VibeMoji id={id} size={34} /></Pressable>
         ))}
       </View>
+      <SparkExtras id={sp.id} mine={sp.by === 'me'} bottom={ins.bottom + 140} onSent={m => setSentMsg(m)} />
+      {sentMsg ? <Text style={[s.sentT, { bottom: ins.bottom + 196 }]}>{sentMsg}</Text> : null}
       {sent ? <Text style={[s.sentT, { bottom: ins.bottom + 84 }]}>Reaction sent to {c.name.split(' ')[0]}</Text> : null}
       {online() && sp.by !== 'me' && !sent ? <Pressable onPress={() => chat.newConv([sp.by]).then(cv => navigation.navigate('ChatRoom', { id: cv.id })).catch(() => {})} style={[s.replyChat, { bottom: ins.bottom + 84 }]} accessibilityRole="button"><Icon name="chat" size={16} color="#fff" /><Text style={{ color: '#fff', fontWeight: '800' }}>Reply in Chat</Text></Pressable> : null}
     </View>
@@ -221,24 +244,8 @@ export function Sparks({ navigation, route }: any) {
 
 export { NewPost } from './Studio';
 
-export function Vault({ navigation }: any) {
-  const st = useSocial(); const saved = st.posts.filter(p => st.saved.includes(p.id));
-  return (
-    <Screen>
-      <Header title="My Vault" sub={`${saved.length} saved`} />
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {saved.map(p => (
-          <Pressable key={p.id} style={{ width: '48%' }} onPress={() => st.save(p.id)} accessibilityLabel="Remove from vault">
-            {p.kind === 'thought' ? <View style={[s.thought, { backgroundColor: p.bg, minHeight: 200, borderRadius: 20, padding: 16 }]}><Text style={[s.thoughtT, { fontSize: 15 }]} numberOfLines={6}>{p.text}</Text></View> : <Thumb hue={p.hue} w="100%" h={200} label={p.text} />}
-          </Pressable>
-        ))}
-      </View>
-      {!saved.length ? <Text style={T.small}>Tap the bookmark on any post to save it here.</Text> : <Text style={[T.small, { marginTop: 12 }]}>Tap an item to remove it.</Text>}
-    </Screen>
-  );
-}
-
 const s = StyleSheet.create({
+  logo: { fontSize: 26, fontWeight: '900', letterSpacing: -1, color: C.ink },
   addSpark: { position: 'absolute', right: -2, bottom: -2, width: 24, height: 24, borderRadius: 12, backgroundColor: C.lime, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg },
   sparkRing: { width: 66, height: 66, borderRadius: 33, padding: 3 }, sparkInner: { flex: 1, borderRadius: 33, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' },
   sparkName: { fontSize: 11, fontWeight: '700', marginTop: 6, color: C.ink },

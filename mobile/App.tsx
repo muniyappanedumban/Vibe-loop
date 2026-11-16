@@ -18,19 +18,31 @@ import { gate } from './src/components/Gate';
 import { ChatBubble } from './src/components/ModuleSwitch';
 import Onboarding from './src/screens/Onboarding';
 import SignIn from './src/screens/SignIn';
-import Home from './src/screens/Home';
+import { Profile } from './src/screens/Money';
+import CreatorHub from './src/screens/CreatorHub';
 import { LoopsScreen, NewLoop, LoopDetail, FanReact, Archive } from './src/screens/Loops';
 import { CreateHub, Copilot, Editor, Audio } from './src/screens/Create';
 import { Library, Memory } from './src/screens/Library';
-import { ReleaseGate, Profile, Earnings, Payout } from './src/screens/Money';
-import { Notifications, Settings } from './src/screens/System';
-import { Explore, Motion, Sparks, NewPost, Vault } from './src/screens/Social';
-import { Search, Live } from './src/screens/Connect';
-import { Emoji, Features, Growth, Trust, Learn, SettingsHub } from './src/screens/Extras';
-import { ChatList, ChatRoom, NewChat, ShareToChat, ChatSearch, Starred } from './src/chat/screens/Chats';
-import { Friends, MyCode, Vibes, StatusCompose, StatusView, Towns, CreateTown, TownRoom } from './src/chat/screens/People';
+import { ReleaseGate, Earnings, Payout } from './src/screens/Payouts';
+import { Features } from './src/screens/Catalog';
+import { Learn } from './src/screens/LevelUp';
 import { IconKitScreen } from './src/screens/IconKitScreen';
+import { Live } from './src/screens/LiveLane';
+import { Vault } from './src/screens/Keepers';
+import { Explore } from './src/screens/Discover';
+import { Notifications, Settings } from './src/screens/System';
+import { Home, Motion, Sparks, NewPost } from './src/screens/Social';
+import { Search } from './src/screens/Connect';
+import { Emoji, Growth, Trust, SettingsHub } from './src/screens/Extras';
+import { ChatList, ChatRoom, NewChat, ShareToChat, ChatSearch, Starred } from './src/chat/screens/Chats';
+import { CallScreen, CallLog, LiveCamera, SnapView, FollowRequests, needs, startParity } from './src/chat/screens/Parity';
+import { Friends, MyCode, Vibes, StatusCompose, StatusView, Towns, CreateTown, TownRoom } from './src/chat/screens/People';
 import { Stash, BackstagePass, Props, CashFlow } from './src/screens/Money2';
+import { OutboxScreen } from './src/screens/OutboxScreen';
+import { EditProfile } from './src/screens/EditProfile';
+import { Comments, LoveTrail, SaveStack, MoodDrop } from './src/screens/Micro';
+import { ContentHub, PageView, Blog, SpeakUp, CreatorProfile, ProductView } from './src/screens/Hub';
+import './src/lib/outbox';
 import { ChatMe, ChangeHandle, ChatSecurity, LanguageRegion, BubbleMojiGallery, Accounts } from './src/chat/screens/Me';
 
 const Stack = createNativeStackNavigator();
@@ -38,15 +50,18 @@ const SocialTab = createBottomTabNavigator();
 const ChatTab = createBottomTabNavigator();
 export const navRef = createNavigationContainerRef<any>();
 
-const SOCIAL_TABS: Record<string, React.ComponentType<any>> = { Home, Explore, Create: CreateHub, Motion, Profile };
+const SOCIAL_TABS: Record<string, React.ComponentType<any>> = { Home, Explore, Create: NewPost, Motion, Profile };
 const CHAT_TABS: Record<string, React.ComponentType<any>> = { Chats: ChatList, Friends, Vibes, Towns, ChatMe };
 // Stack screens: every one is wrapped by gate(key) so the server config can switch it off per country/zone/slab.
 const STACK: Record<string, React.ComponentType<any>> = {
-  NewLoop, LoopDetail, FanReact, Archive, Copilot, Editor, Audio, Memory, ReleaseGate, Earnings, Payout, Notifications, Settings,
-  Loops: LoopsScreen, Library, Sparks, NewPost, Vault, Search, Live, Emoji, Features, Growth, Trust, Learn, SettingsHub,
-  ChatRoom, NewChat, ShareToChat, ChatSearch, Starred, MyCode, StatusCompose, StatusView, CreateTown, TownRoom, ChangeHandle, ChatSecurity, LanguageRegion, BubbleMojiGallery, Accounts, IconKit: IconKitScreen, Stash, BackstagePass, Props, CashFlow,
+  Notifications, Settings, Sparks, NewPost, Search, Emoji, Growth, Trust, SettingsHub,
+  // Creator Studio & classic screens — restored; each can be switched off in Admin → Screen Switches.
+  CreatorHub, Loops: LoopsScreen, NewLoop, LoopDetail, FanReact, Archive, CreateHub, Copilot, Editor, Audio, Library, Memory, ReleaseGate, Earnings, Payout, Features, Learn, IconKit: IconKitScreen, Live, Vault,
+  Call: needs('calls', CallScreen), CallLog: needs('calls', CallLog), LiveCamera: needs('liveCamera', LiveCamera), SnapView: needs('snaps', SnapView), FollowRequests: needs('followRequests', FollowRequests),
+  ChatRoom, NewChat, ShareToChat, ChatSearch, Starred, MyCode, StatusCompose, StatusView, CreateTown, TownRoom, ChangeHandle, ChatSecurity, LanguageRegion, BubbleMojiGallery, Accounts, Stash, BackstagePass, Props, CashFlow, Outbox: OutboxScreen, EditProfile, Comments, LoveTrail, SaveStack, MoodDrop, ContentHub, PageView, Blog, SpeakUp, CreatorProfile, ProductView,
 };
 export const STACK_SCREENS = Object.keys(STACK);
+startParity(navRef as any);
 const GATED = Object.fromEntries(Object.entries(STACK).map(([k, Comp]) => [k, gate(k, Comp)]));
 
 function SocialTabs() {

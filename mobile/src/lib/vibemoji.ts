@@ -82,7 +82,7 @@ export function vibemojiSvg(id: number, uid = ''): string {
   const d = VIBEMOJI[(id - 1 + VIBEMOJI.length) % VIBEMOJI.length];
   const g = `vm${id}${uid}`;
   const [a, b] = PALS[d.pal];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><path d="${SHAPES[d.shape]}" fill="url(#${g})"/><path d="${SHAPES[d.shape]}" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.2"/>${EYES[d.eyes]}${MOUTHS[d.mouth]}${ACCS[d.acc]}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><path d="${SHAPES[d.shape]}" fill="url(#${g})"/><path d="${SHAPES[d.shape]}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.2"/><ellipse cx="17" cy="11" rx="9" ry="4.5" fill="#fff" opacity=".22"/>${EYES[d.eyes]}${MOUTHS[d.mouth]}${ACCS[d.acc]}</svg>`;
 }
 /** Named reaction set (feature group "Vibe Expression"). */
 export const REACTIONS = [

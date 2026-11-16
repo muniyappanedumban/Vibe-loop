@@ -22,7 +22,7 @@ export function LoopsScreen({ navigation }: any) {
   const list = loops.filter(l => f === 'all' || l.status === f);
   return (
     <Screen>
-      <Header title="Your Loops" sub="Private testing groups · real people only" right={<IconBtn name="plus" label="New Loop" onPress={() => navigation.navigate('NewLoop')} />} />
+      <Header title="Loop Lab" sub="Private test groups · real people only" right={<IconBtn name="plus" label="New Loop" onPress={() => navigation.navigate('NewLoop')} />} />
       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
         {(['all', 'testing', 'released', 'archived'] as const).map(k => <Chip key={k} label={k[0].toUpperCase() + k.slice(1)} active={f === k} onPress={() => setF(k)} />)}
       </View>
@@ -115,7 +115,7 @@ export function LoopDetail({ navigation, route }: any) {
     <View style={{ flex: 1 }}>
       <Screen>
         <Header title={l.title} sub={`${l.template} · ${l.members.length}/${l.sizeLimit} members`} right={<IconBtn name="link" label="Invite link" onPress={() => { const c = st.makeInvite(l.id); show(`One-time invite ${c} · expires in 24h`); }} />} />
-        <LinearGradient colors={['#2A1D63', '#120F24']} style={s.dark}>
+        <LinearGradient colors={['#1E1E27', '#120F24']} style={s.dark}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
             <ScoreRing score={sc} dark size={124} target={l.minScore} />
             <View style={{ flex: 1, gap: 8 }}>
@@ -189,7 +189,7 @@ export function LoopDetail({ navigation, route }: any) {
 
         <Card style={{ marginTop: S.lg }}>
           <Row icon="eye" title="Silent mode" sub="Pause reaction notifications while testing" right={<Toggle value={l.silent} onChange={() => st.toggleLoopFlag(l.id, 'silent')} label="Silent mode" />} />
-          {online() ? <Row icon="send" title="Draft Bridge" sub="Send this private draft to a friend in Chat for feedback" onPress={() => navigation.navigate('ShareToChat', { type: 'loop', id: l.id, title: l.title })} /> : null}
+          {online() ? <Row icon="send" title="Draft Bridge" sub="Send this private draft to a friend in Hush for feedback" onPress={() => navigation.navigate('ShareToChat', { type: 'loop', id: l.id, title: l.title })} /> : null}
           <Row icon="copy" title="Clone Loop" sub="Reuse settings for a new experiment" onPress={() => { const nid = st.cloneLoop(l.id); navigation.replace('LoopDetail', { id: nid }); }} />
         </Card>
 
@@ -266,7 +266,7 @@ export function Archive({ navigation }: any) {
   const arch = st.loops.filter(l => l.status === 'archived');
   return (
     <Screen>
-      <Header title="Learning Archive" sub="Every experiment that didn't make it — and why" />
+      <Header title="Flop Files" sub="Every experiment that didn't land — and why" />
       <LinearGradient colors={['#FFF0E3', '#FFE6F2']} style={s.tip}><Icon name="bulb" color={C.tangerine} /><Text style={{ flex: 1, fontWeight: '600' }}>Failed experiments stay here permanently. Learnings survive even if you delete the media.</Text></LinearGradient>
       {arch.map(l => (
         <Card key={l.id} style={{ marginBottom: 12 }}>

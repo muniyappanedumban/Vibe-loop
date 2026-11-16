@@ -4,14 +4,15 @@ export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefin
 const KEY = 'vibeloop.admin.token';
 const UKEY = 'vibeloop.admin.user';
 
-export interface ApiUser { id: string; email: string; handle: string; name: string; role: string; suspended: boolean; mfaRequired: boolean; createdAt: number }
+export interface ApiUser { id: string; email: string; handle: string; name: string; role: string; suspended: boolean; mfaRequired: boolean; createdAt: number; avatar?: string | null; lastSeenAt?: number | null }
 export interface Overview { users: number; creators: number; loops: number; reactions: number; posts: number; openReports: number; pendingPayouts: number; pendingPrivacy: number; gross: number; fees: number }
 export interface Report { id: string; reporter: string; target: string; reason: string; reasonCode: string | null; status: string; at: number }
 export interface ApiPayout { id: string; creator: string; amount: number; status: string; at: number; reviewedBy: string | null }
 export interface AuditRow { id: number; at: number; actor: string; action: string; detail: string }
 export interface PrivacyReq { id: string; user: string; kind: string; status: string; at: number }
 export interface ApiAnnouncement { id: string; title: string; body: string; audience: string; by: string; at: number }
-export interface SearchResult { users: ApiUser[]; posts: { id: string; text: string }[]; loops: { id: string; title: string }[]; audit: { id: number; action: string; detail: string }[] }
+export interface SearchResult { users: ApiUser[]; posts: { id: string; text: string }[]; loops: { id: string; title: string }[]; audit: { id: number; action: string; detail: string }[];
+  promos?: { id: string; title: string; active: boolean; placement: string[] }[]; uploads?: { id: string; name: string | null; kind: string; mime: string; size: number }[] }
 export type KV<T = Record<string, unknown>> = Record<string, T>;
 
 export class ApiError extends Error {
@@ -73,4 +74,19 @@ export function useApi<T>(path: string | null) {
   }, [path, n]);
   const reload = useCallback(() => setN(x => x + 1), []);
   return { data, error, loading, reload };
+}
+
+export type Uploaded = { url: string; kind: string; mime: string; size: number; name: string };
+/** Resumable upload through /uploads (5 MB chunks, resumes from the server's `received` on 409). */
+export async function uploadFile(file: File, onProgress?: (pct: number) => void): Promise<Uploaded> {
+  const start = await api<{ uploadId: string; chunkSize: number }>('/uploads', { method: 'POST', body: { filename: file.name, size: file.size, mime: file.type } });
+  let off = 0;
+  while (off < file.size) {
+    const res = await fetch(`${API_URL}/uploads/${start.uploadId}/chunk?offset=${off}`, { method: 'PUT', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/octet-stream' }, body: file.slice(off, off + start.chunkSize) });
+    const j = await res.json().catch(() => ({}));
+    if (res.status === 409 && typeof j.received === 'number') { off = j.received; continue; }
+    if (!res.ok) throw new ApiError(typeof j.detail === 'string' ? j.detail : `Upload failed (${res.status})`, res.status);
+    off = j.received; onProgress?.(Math.round((off / file.size) * 100));
+  }
+  return api<Uploaded>(`/uploads/${start.uploadId}/complete`, { method: 'POST' });
 }

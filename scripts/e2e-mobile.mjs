@@ -14,7 +14,7 @@ await pg.getByPlaceholder('@riya.makes').fill('@riya.makes'); await pg.getByRole
 await pg.getByText('Demo mode', { exact: false }).waitFor({ timeout: 8000 });
 await pg.getByLabel('Code input').fill('000000'); await pg.getByText(/Wrong code|invalid|Invalid|incorrect/i).first().waitFor({ timeout: 8000 }); ok(true, 'wrong OTP is rejected by the server');
 await pg.getByRole('button', { name: 'Use', exact: true }).click();
-await pg.getByText('Good', { exact: false }).first().waitFor({ timeout: 15000 }); ok(true, 'OTP sign-in (@ID, no phone number) loads Home from /bootstrap');
+await pg.getByText('Hub', { exact: true }).first().waitFor({ timeout: 15000 }); ok(true, 'OTP sign-in (@ID, no phone number) loads Home from /bootstrap');
 const before = (await api('GET', '/loops/l1', null, T)).reactions.length;
 await pg.goto(`${base}/?s=FanReact&id=l1`, { waitUntil: 'networkidle' });
 await pg.getByLabel('Would share').click(); await pg.getByPlaceholder('Tell the creator why (helps quality score)').fill('E2E: love this cold open');

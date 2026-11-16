@@ -1,8 +1,8 @@
 """Server-driven app config: public resolver + owner admin for layers, zones, slabs, languages."""
-import jwt
+import jwt, json, hashlib
+from fastapi.responses import Response
 from fastapi import APIRouter, Depends, HTTPException, Header, Body
 from sqlalchemy.orm import Session
-from .config import JWT_SECRET
 from .db import get_db
 from . import models as M
 from .security import require, audit
@@ -13,20 +13,26 @@ STAFF = require("owner")
 
 def optional_user(db: Session, authorization: str) -> M.User | None:
     if not authorization.startswith("Bearer "): return None
-    try: data = jwt.decode(authorization[7:], JWT_SECRET, ["HS256"])
+    from .security import decode_access
+    try: data = decode_access(authorization[7:])
     except jwt.PyJWTError: return None
     u = db.get(M.User, data.get("sub"))
     return u if u and not u.suspended and data.get("tv", 0) == (u.token_version or 0) else None
 
 @router.get("/app-config")
 def app_config(country: str | None = None, lang: str | None = None, authorization: str = Header(default=""), x_country: str | None = Header(default=None),
-               db: Session = Depends(get_db)):
+               if_none_match: str | None = Header(default=None), db: Session = Depends(get_db)):
     if country and (len(country) != 2 or not country.isalpha()): raise HTTPException(400, "country must be ISO2")
     if lang and (not 2 <= len(lang) <= 3 or not lang.isalpha()): raise HTTPException(400, "lang must be a 2–3 letter code")
     u = optional_user(db, authorization)
     hdr = x_country if x_country and len(x_country) == 2 and x_country.isalpha() else None
     c = country or ((u.profile or {}).get("country") if u else None) or hdr
-    return R.resolve(db, u, country=c, lang=lang)
+    cfg = R.resolve(db, u, country=c, lang=lang)
+    body = json.dumps(cfg, separators=(",", ":"), ensure_ascii=False).encode()
+    etag = '"' + hashlib.sha256(body).hexdigest()[:20] + '"'
+    hdr = {"ETag": etag, "Cache-Control": "private, no-cache", "Vary": "Authorization, X-Country"}
+    if if_none_match and etag in [x.strip() for x in if_none_match.split(",")]: return Response(status_code=304, headers=hdr)
+    return Response(body, media_type="application/json", headers=hdr)
 
 def bump(db: Session) -> int:
     v = R.version(db) + 1; db.merge(M.KV(ns="config_meta", key="version", value={"v": v})); return v

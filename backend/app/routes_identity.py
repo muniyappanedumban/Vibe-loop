@@ -9,20 +9,19 @@ from sqlalchemy.orm import Session
 from .db import get_db
 from . import models as M
 from .security import make_access, current_user, require, audit
-from .ratelimit import enforce
+from .ratelimit import enforce, write_limit
 from .v2common import (bare_handle, stored_handle, handle_problem, find_by_handle, mask_email, mask_ip, prof, user_json, are_friends,
-                       blocked_between, can_message, chat_notice, EMAIL_RE, MAX_ACCOUNTS_PER_EMAIL, DAY, HANDLE_RE)
+                       blocked_between, can_message, chat_notice, mood_drop, EMAIL_RE, MAX_ACCOUNTS_PER_EMAIL, DAY, HANDLE_RE)
 
 import logging
 log = logging.getLogger("vibeloop.otp")
 router = APIRouter()
-OTP_SECRET = (os.environ.get("OTP_SECRET") or secrets.token_urlsafe(48)).encode()
-DEMO_OTP = os.environ.get("DEMO_OTP", "1") == "1"
+from .config import OTP_SECRET, DEMO_OTP  # env-only; ENV=prod refuses to start without OTP_SECRET or with DEMO_OTP=1
 OTP_TTL_MS = 5 * 60_000
 OTP_MAX_ATTEMPTS = 5
 FAKE_DOMAINS = ["gmail.com", "outlook.com", "yahoo.com", "icloud.com"]
 
-def client_ip(req: Request) -> str: return req.client.host if req.client else ""  # X-Forwarded-For is spoofable; trust only behind a known proxy
+from .ratelimit import client_ip  # X-Forwarded-For honoured only with TRUST_PROXY=1
 
 def otp_hash(otp_id: str, code: str) -> str: return hmac.new(OTP_SECRET, f"{otp_id}:{code}".encode(), hashlib.sha256).hexdigest()
 
@@ -139,7 +138,9 @@ def lookup(handle: str, u: M.User = Depends(current_user), db: Session = Depends
 def profile_json(u: M.User) -> dict:
     p = prof(u); nxt = (u.handle_changed_at + 30 * DAY) if u.handle_changed_at else None
     return {"id": u.id, "handle": u.handle, "name": u.name, "email": mask_email(u.email), "verified": bool(u.verified), "hue": u.hue, "social_bio": u.bio,
-            **p, "handleChangedAt": u.handle_changed_at, "nextHandleChangeAt": nxt}
+            **p, "handleChangedAt": u.handle_changed_at, "nextHandleChangeAt": nxt,
+            "avatar_social": u.avatar_social, "avatar_chat": u.avatar_chat, "cover": u.cover, "state": u.state or "", "pronouns": u.pronouns or "",
+            "links": u.links or [], "last_seen_visible": u.last_seen_visible is not False, "last_seen_at": u.last_seen_at, "moodDrop": mood_drop(u)}
 @router.get("/me/profile")
 def get_profile(u: M.User = Depends(current_user)): return profile_json(u)
 
@@ -149,6 +150,10 @@ class ProfilePatch(BaseModel):
     who_can_message: Literal["everyone", "friends", "nobody"] | None = None; ghost_hours: bool | None = None; focus_social_muted: bool | None = None
     social_private: bool | None = None; chat_read_receipts: bool | None = None; mood: int | None = Field(default=None, ge=0, le=10000)
     country: str | None = Field(default=None, pattern=r"^[A-Za-z]{2}$"); lang: str | None = Field(default=None, pattern=r"^[a-z]{2,3}$")
+    # v4
+    avatar_social: str | None = Field(default=None, max_length=200); avatar_chat: str | None = Field(default=None, max_length=200); cover: str | None = Field(default=None, max_length=200)
+    state: str | None = Field(default=None, pattern=r"^[A-Za-z]{0,3}$"); pronouns: str | None = Field(default=None, max_length=30)
+    links: list[str] | None = Field(default=None, max_length=3); last_seen_visible: bool | None = None
 @router.patch("/me/profile")
 def patch_profile(b: ProfilePatch, u: M.User = Depends(current_user), db: Session = Depends(get_db)):
     d = b.model_dump(exclude_unset=True)
@@ -156,6 +161,8 @@ def patch_profile(b: ProfilePatch, u: M.User = Depends(current_user), db: Sessio
     else: d.pop("name", None)
     if "social_bio" in d: u.bio = d.pop("social_bio") or ""
     if d.get("country"): d["country"] = d["country"].upper()
+    from .routes_profile import apply_v4_profile
+    apply_v4_profile(db, u, d)
     u.profile = {**(u.profile or {}), **d}; db.commit(); return profile_json(u)
 
 class HandleIn(BaseModel): handle: str = Field(min_length=1, max_length=21)
@@ -181,12 +188,13 @@ def friends(u: M.User = Depends(current_user), db: Session = Depends(get_db)):
     rows = db.execute(select(M.Friend, M.User).join(M.User, M.User.id == M.Friend.friend_id).where(M.Friend.user_id == u.id).order_by(M.Friend.since.desc())).all()
     inc = db.execute(select(M.FriendRequest, M.User).join(M.User, M.User.id == M.FriendRequest.from_id).where(M.FriendRequest.to_id == u.id, M.FriendRequest.status == "pending").order_by(M.FriendRequest.at.desc())).all()
     out = db.execute(select(M.FriendRequest, M.User).join(M.User, M.User.id == M.FriendRequest.to_id).where(M.FriendRequest.from_id == u.id, M.FriendRequest.status == "pending").order_by(M.FriendRequest.at.desc())).all()
-    return {"friends": [{**user_json(x), "close": f.close, "bestie": f.bestie, "since": f.since} for f, x in rows],
+    from .routes_micro import flame_of
+    return {"friends": [{**user_json(x), "close": f.close, "bestie": f.bestie, "since": f.since, "flame": flame_of(f)} for f, x in rows],
             "incoming": [{"id": r.id, "from": user_json(x), "at": r.at} for r, x in inc], "outgoing": [{"id": r.id, "to": user_json(x), "at": r.at} for r, x in out]}
 
 class FriendReqIn(BaseModel): handle: str = Field(min_length=3, max_length=30)
 @router.post("/friends/request")
-def friend_request(b: FriendReqIn, u: M.User = Depends(current_user), db: Session = Depends(get_db)):
+def friend_request(b: FriendReqIn, u: M.User = Depends(write_limit("friend_request")), db: Session = Depends(get_db)):
     t = find_by_handle(db, b.handle)
     if not t or t.suspended or not t.verified or (prof(t)["hidden"] and not are_friends(db, u.id, t.id)): raise HTTPException(404, "No one with that @ID")
     if t.id == u.id: raise HTTPException(400, "That's you")
@@ -201,7 +209,7 @@ def friend_request(b: FriendReqIn, u: M.User = Depends(current_user), db: Sessio
 def make_friends(db: Session, a: str, b: str):
     for x, y in ((a, b), (b, a)):
         if not db.get(M.Friend, (x, y)): db.add(M.Friend(user_id=x, friend_id=y))
-    for c in db.scalars(select(M.Conv).where(M.Conv.group == False)):  # noqa: E712  clear any Request Gate between them
+    for c in db.scalars(select(M.Conv).where(M.Conv.group == False, M.has_member(M.Conv.members, a), M.has_member(M.Conv.members, b))):  # noqa: E712  clear any Request Gate between them
         if set(c.members) == {a, b}:
             st = {k: dict(v) for k, v in (c.state or {}).items()}
             for k in st: st[k]["request"] = False
@@ -234,10 +242,10 @@ def patch_friend(uid: str, b: FriendPatch, u: M.User = Depends(current_user), db
     if b.bestie is not None: f.bestie = b.bestie
     db.commit(); t = db.get(M.User, uid); return {**user_json(t), "close": f.close, "bestie": f.bestie, "since": f.since}
 
-PING_TITLES = {"wave": "Wave", "heart": "Heart Ping", "ping": "Vibe Ping"}
-class PingIn(BaseModel): to: str = Field(min_length=1, max_length=40); moji: int = Field(ge=0, le=10000); kind: Literal["wave", "heart", "ping"] = "ping"
+PING_TITLES = {"wave": "Wave", "heart": "Heart Ping", "ping": "Vibe Ping", "thanks": "Thank You Tap", "celebrate": "Celebrate Tap"}
+class PingIn(BaseModel): to: str = Field(min_length=1, max_length=40); moji: int = Field(ge=0, le=10000); kind: Literal["wave", "heart", "ping", "thanks", "celebrate"] = "ping"
 @router.post("/pings")
-def ping(b: PingIn, u: M.User = Depends(current_user), db: Session = Depends(get_db)):
+def ping(b: PingIn, u: M.User = Depends(write_limit("ping")), db: Session = Depends(get_db)):
     t = db.get(M.User, b.to)
     if not t or t.id == u.id: raise HTTPException(404, "Not found")
     if not are_friends(db, u.id, t.id) or blocked_between(db, u.id, t.id): raise HTTPException(403, "Pings are for friends")
@@ -247,11 +255,11 @@ def ping(b: PingIn, u: M.User = Depends(current_user), db: Session = Depends(get
 # ---------- pulse ----------
 @router.get("/pulse")
 def pulse(u: M.User = Depends(current_user), db: Session = Depends(get_db)):
-    from .routes_chat import unread_count
+    from .routes_chat import unread_count, my_convs
     social = db.scalar(select(func.count()).select_from(M.Notice).where(M.Notice.user_id == u.id, M.Notice.read == False, M.Notice.module == "social"))  # noqa: E712
     chat_n = db.scalar(select(func.count()).select_from(M.Notice).where(M.Notice.user_id == u.id, M.Notice.read == False, M.Notice.module == "chat"))  # noqa: E712
     reqs = db.scalar(select(func.count()).select_from(M.FriendRequest).where(M.FriendRequest.to_id == u.id, M.FriendRequest.status == "pending"))
-    convs = [c for c in db.scalars(select(M.Conv)) if u.id in c.members]
+    convs = my_convs(db, u)
     msgs = sum(unread_count(db, c, u) for c in convs)
     return {"social": social, "chat": msgs + reqs + chat_n, "detail": {"messages": msgs, "requests": reqs, "notices": chat_n}}
 
@@ -260,7 +268,7 @@ STAFF = require("owner")
 @router.get("/admin/otp")
 def admin_otp(a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
     out = []
-    for r in db.scalars(select(M.OtpRequest).order_by(M.OtpRequest.at.desc()).limit(200)):
+    for r in db.scalars(select(M.OtpRequest).order_by(M.OtpRequest.at.desc()).limit(100)):
         i = r.identifier
         masked = mask_email(i) if "@" in i[1:] else (i[:2] + "***" if len(i) > 2 else "***")
         out.append({"id": r.id, "identifier": masked, "at": r.at, "ip": mask_ip(r.ip), "verified": r.verified, "attempts": r.attempts, "rateLimited": r.rate_limited})
@@ -268,17 +276,21 @@ def admin_otp(a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
 
 @router.get("/admin/identity")
 def admin_identity(a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
-    per = db.execute(select(M.User.email, func.count()).group_by(M.User.email).order_by(func.count().desc()).limit(200)).all()
-    hc = db.scalars(select(M.HandleChange).order_by(M.HandleChange.at.desc()).limit(200)).all()
+    per = db.execute(select(M.User.email, func.count()).group_by(M.User.email).order_by(func.count().desc()).limit(100)).all()
+    hc = db.scalars(select(M.HandleChange).order_by(M.HandleChange.at.desc()).limit(100)).all()
     return {"accountsPerEmail": [{"email": mask_email(e), "count": n} for e, n in per],
             "handleChanges": [{"id": h.id, "userId": h.user_id, "old": h.old, "new": h.new, "at": h.at} for h in hc],
             "reserved": sorted([k.key for k in db.scalars(select(M.KV).where(M.KV.ns == "reserved")) if (k.value or {}).get("on", True)])}
 
 @router.get("/admin/towns")
-def admin_towns(a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
+def admin_towns(limit: int = 100, offset: int = 0, a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
     out = []
-    for t in db.scalars(select(M.Town).order_by(M.Town.at)):
-        n = db.scalar(select(func.count()).select_from(M.TownMember).where(M.TownMember.town_id == t.id))
+    towns = db.scalars(select(M.Town).order_by(M.Town.at, M.Town.id).offset(max(0, offset)).limit(max(1, min(limit, 100)))).all()
+    ids = [t.id for t in towns]
+    counts = dict(db.execute(select(M.TownMember.town_id, func.count()).where(M.TownMember.town_id.in_(ids)).group_by(M.TownMember.town_id)).all()) if ids else {}
+    if towns: db.scalars(select(M.User).where(M.User.id.in_({t.owner_id for t in towns}))).all()
+    for t in towns:
+        n = counts.get(t.id, 0)
         owner = db.get(M.User, t.owner_id)
         out.append({"id": t.id, "name": t.name, "open": t.open, "members": n, "owner": owner.handle if owner else None, "suspended": t.suspended, "at": t.at})
     return out
@@ -293,6 +305,6 @@ def admin_town(tid: str, b: TownAdminPatch, a: M.User = Depends(STAFF), db: Sess
 @router.get("/admin/chat-stats")
 def chat_stats(a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
     c = lambda m, *w: db.scalar(select(func.count()).select_from(m).where(*w))
-    reqs = sum(1 for cv in db.scalars(select(M.Conv)) if any((s or {}).get("request") for s in (cv.state or {}).values()))
+    reqs = sum(1 for (st,) in db.execute(select(M.Conv.state).execution_options(yield_per=1000)) if any((s or {}).get("request") for s in (st or {}).values()))
     return {"convs": c(M.Conv), "messages": c(M.ChatMsg), "requestsPending": c(M.FriendRequest, M.FriendRequest.status == "pending") + reqs,
             "statuses24h": c(M.Status, M.Status.at > M.now_ms() - DAY), "towns": c(M.Town)}

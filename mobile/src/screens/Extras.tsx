@@ -7,8 +7,6 @@ import { Screen, Header, Card, Btn, Chip, Tag, DemoTag, Section, Row, Toggle, No
 import { Icon } from '../components/Icon';
 import { VibeMoji } from '../components/VibeMoji';
 import { VIBEMOJI, VIBEMOJI_CATEGORIES, REACTIONS } from '../lib/vibemoji';
-import { SECTIONS, ALL_FEATURES } from '../data/features';
-import { PRD, PRD_GROUPS } from '../data/prd';
 import { useSocial, creator, CREATORS, compact } from '../store/useSocial';
 import { useStore } from '../store/useStore';
 import { useSession } from '../lib/api';
@@ -23,7 +21,7 @@ export function Emoji({ route }: any) {
       <FlatList data={list} numColumns={5} keyExtractor={x => String(x.id)} initialNumToRender={60} columnWrapperStyle={{ gap: 8, paddingHorizontal: 20 }} contentContainerStyle={{ gap: 8, paddingBottom: 160 }}
         ListHeaderComponent={<View style={{ paddingHorizontal: 20, paddingTop: 50 }}>
           <Header title="VibeMoji" sub={`1000 original emoji · ${list.length} shown`} />
-          <LinearGradient colors={['#2A1D63', '#120F24']} style={s.packHero}>
+          <LinearGradient colors={['#1E1E27', '#120F24']} style={s.packHero}>
             <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>Reaction set</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>{REACTIONS.map(r => <View key={r.key} style={{ alignItems: 'center', width: 52 }}><VibeMoji id={r.id} size={44} /><Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: '700', textAlign: 'center', marginTop: 4 }}>{r.label}</Text></View>)}</View>
           </LinearGradient>
@@ -48,58 +46,6 @@ export function Emoji({ route }: any) {
   );
 }
 
-const TABS = ['Home', 'Explore', 'Create', 'Motion', 'Profile'];
-const go = (navigation: any, r?: string) => r && r !== 'Admin' && (TABS.includes(r) ? navigation.navigate('Main', { screen: r }) : navigation.navigate(r));
-export function Features({ navigation, route }: any) {
-  const [q, setQ] = useState(''); const [open, setOpen] = useState<string | null>(route?.params?.tab === 'social' ? 'home' : PRD_GROUPS[0]);
-  const [tab, setTab] = useState<'prd' | 'social'>(route?.params?.tab === 'social' ? 'social' : 'prd');
-  const socialUnique = ALL_FEATURES.filter(f => !f.same);
-  const prdLive = PRD.filter(f => f.route && f.route !== 'Admin').length, prdAdmin = PRD.filter(f => f.route === 'Admin').length;
-  const socLive = socialUnique.filter(f => f.route).length;
-  return (
-    <Screen>
-      <Header title="All features" sub={`${200 + socialUnique.length} unique capabilities · ${ALL_FEATURES.length - socialUnique.length} social items link to the same PRD feature`} />
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: S.md }}>
-        <Chip label="Creator platform · 200" active={tab === 'prd'} onPress={() => { setTab('prd'); setOpen(PRD_GROUPS[0]); }} />
-        <Chip label="Social · 150" active={tab === 'social'} onPress={() => { setTab('social'); setOpen('home'); }} />
-      </View>
-      <View style={{ flexDirection: 'row', gap: 10, marginBottom: S.lg }}>
-        <Card style={{ flex: 1 }}><Text style={T.h1}>{tab === 'prd' ? prdLive : socLive}</Text><Text style={T.small}>In app (preview)</Text></Card>
-        {tab === 'prd' ? <Card style={{ flex: 1 }}><Text style={T.h1}>{prdAdmin}</Text><Text style={T.small}>Admin panel</Text></Card> : null}
-        <Card style={{ flex: 1 }}><Text style={T.h1}>{tab === 'prd' ? 200 - prdLive - prdAdmin : socialUnique.length - socLive}</Text><Text style={T.small}>Planned</Text></Card>
-      </View>
-      <View style={s.search}><Icon name="search" size={18} color={C.inkSoft} /><TextInput value={q} onChangeText={setQ} placeholder="Find a feature" placeholderTextColor="#A6A2BC" style={{ flex: 1, fontWeight: '600', fontSize: 15, color: C.ink }} /></View>
-      {tab === 'prd' ? PRD_GROUPS.map((g, gi) => { const fs = PRD.filter(f => f.group === g && f.name.toLowerCase().includes(q.toLowerCase())); if (!fs.length) return null; const isOpen = open === g || !!q; const col = ['#6C3BFF', '#FF3D9A', '#FF8A3D', '#14B88D', '#2B7BF0', '#C86BFF', '#120F24'][gi]; return (
-        <Card key={g} style={{ marginBottom: 10, padding: 12 }}>
-          <Pressable onPress={() => setOpen(isOpen && !q ? null : g)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={[s.secIcon, { backgroundColor: col }]}><Text style={{ color: '#fff', fontWeight: '900' }}>{gi + 1}</Text></View>
-            <View style={{ flex: 1 }}><Text style={T.h3}>{g}</Text><Text style={T.small}>#{fs[0].n}–{fs[fs.length - 1].n} · {fs.filter(f => f.route).length}/{fs.length} available</Text></View>
-            <Icon name={isOpen ? 'close' : 'chevron'} size={18} color={C.inkSoft} />
-          </Pressable>
-          {isOpen ? fs.map(f => (
-            <Pressable key={f.n} onPress={() => go(navigation, f.route)} style={s.feat}>
-              <View style={{ flex: 1 }}><Text style={{ fontWeight: '700' }}>{f.n}. {f.name}</Text>{f.route ? <Text style={T.small}>{f.route === 'Admin' ? 'Staff admin panel' : `Screen: ${f.route}`}</Text> : null}</View>
-              {f.route === 'Admin' ? <Tag label="ADMIN" color={C.violet} bg={C.violetSoft} /> : f.route ? <Tag label="PREVIEW" color="#12A27C" bg={C.mintSoft} /> : <Tag label="PLANNED" color={C.inkSoft} bg="#ECE9F5" />}
-            </Pressable>)) : null}
-        </Card>); }) : null}
-      {tab === 'social' ? SECTIONS.map(sec => { const fs = sec.features.filter(f => (f.name + f.desc).toLowerCase().includes(q.toLowerCase())); if (!fs.length) return null; const isOpen = open === sec.key || !!q; return (
-        <Card key={sec.key} style={{ marginBottom: 10, padding: 12 }}>
-          <Pressable onPress={() => setOpen(isOpen && !q ? null : sec.key)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={[s.secIcon, { backgroundColor: sec.color }]}><Icon name={sec.icon} color="#fff" /></View>
-            <View style={{ flex: 1 }}><Text style={T.h3}>{sec.title}</Text><Text style={T.small}>{sec.sub} · {sec.features.filter(f => f.route).length}/10 have a screen</Text></View>
-            <Icon name={isOpen ? 'close' : 'chevron'} size={18} color={C.inkSoft} />
-          </Pressable>
-          {isOpen ? fs.map(f => (
-            <Pressable key={f.n} onPress={() => go(navigation, f.route)} style={s.feat}>
-              <View style={[s.fIcon, { backgroundColor: sec.color + '1A' }]}><Icon name={f.icon} size={18} color={sec.color === '#120F24' ? C.ink : sec.color} /></View>
-              <View style={{ flex: 1 }}><Text style={{ fontWeight: '800' }}>{f.n}. {f.name}</Text><Text style={T.small}>{f.desc}</Text></View>
-              {f.same ? <Tag label={`SAME AS #${f.same}`} color={C.pink} bg={C.pinkSoft} /> : f.route ? <Tag label="PREVIEW" color="#12A27C" bg={C.mintSoft} /> : <Tag label="PLANNED" color={C.inkSoft} bg="#ECE9F5" />}
-            </Pressable>)) : null}
-        </Card>); }) : null}
-    </Screen>
-  );
-}
-
 export function Growth() {
   const st = useSocial(); const mine = st.posts.filter(p => p.mine); const all = st.posts;
   const sum = (ps: typeof all, f: (p: any) => number) => ps.reduce((a, p) => a + f(p), 0);
@@ -109,7 +55,7 @@ export function Growth() {
   const top = [...base].sort((a, b) => b.shares - a.shares).slice(0, 3);
   return (
     <Screen>
-      <Header title="Pulse Board" sub={mine.length ? 'Your posts' : 'Sample posts — you haven’t posted yet'} right={<DemoTag />} />
+      <Header title="Pulse Board" sub={mine.length ? 'Your posts' : 'Sample posts — you haven’t posted yet'} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {[['eye', 'Views', compact(views)], ['heart', 'Reactions', compact(hearts)], ['send', 'Shares', compact(shares)], ['users', 'Circle', String(st.following.length)]].map(([i, l, v]) => (
           <Card key={l} style={{ width: '48%' }}><Icon name={i as any} color={C.violet} /><Text style={[T.h1, { marginTop: 8 }]}>{v}</Text><Text style={T.small}>{l}</Text><Text style={[T.small, { fontSize: 10, marginTop: 4 }]}>Confidence: {base.length < 5 ? 'low' : 'medium'} · updated now</Text></Card>))}
@@ -132,8 +78,8 @@ export function Trust() {
   return (
     <View style={{ flex: 1 }}>
       <Screen>
-        <Header title="Trust & safety" sub="Privacy Lock · Block Shield · Comment Guard" />
-        <LinearGradient colors={['#2A1D63', '#120F24']} style={s.trustHero}><Icon name="shield" color={C.lime} size={30} /><View style={{ flex: 1 }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>You're in control</Text><Text style={{ color: 'rgba(255,255,255,0.7)', fontWeight: '600' }}>{st.blocked.length} blocked · {st.restricted.length} restricted · {st.reports.length} reports</Text></View></LinearGradient>
+        <Header title="Privacy & Safety" sub="Privacy Lock · Block Shield · Comment Guard" />
+        <LinearGradient colors={['#1E1E27', '#120F24']} style={s.trustHero}><Icon name="shield" color={C.lime} size={30} /><View style={{ flex: 1 }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>You're in control</Text><Text style={{ color: 'rgba(255,255,255,0.7)', fontWeight: '600' }}>{st.blocked.length} blocked · {st.restricted.length} restricted · {st.reports.length} reports</Text></View></LinearGradient>
         <Card style={{ marginTop: S.lg }}>
           <Row icon="lock" title="Private account" sub="Only approved followers see your posts" right={<Toggle value={p.privateAccount} onChange={v => st.setPrivacy('privateAccount', v)} label="Private account" />} />
           <Row icon="heart" title="Hide reaction counts" right={<Toggle value={p.hideLikes} onChange={v => st.setPrivacy('hideLikes', v)} label="Hide counts" />} />
@@ -166,38 +112,6 @@ export function Trust() {
   );
 }
 
-const LESSONS = [
-  { id: 'l1', t: 'How Loops work', d: 'Test privately, earn a score, then release', mins: 3, icon: 'loops' },
-  { id: 'l2', t: 'Writing a 2-second hook', d: 'Patterns from your own winners', mins: 4, icon: 'bolt' },
-  { id: 'l3', t: 'Reading your Loop Score', d: 'Why 3+ reactions and a 24h window', mins: 2, icon: 'chart' },
-  { id: 'l4', t: 'Sparks, polls & Close Circle', d: 'Daily touchpoints with fans', mins: 3, icon: 'clock' },
-  { id: 'l5', t: 'Rights & AI labels', d: 'What the release gate checks', mins: 3, icon: 'shield' },
-  { id: 'l6', t: 'Earning on VibeLoop', d: 'Tips, paid Loops, memberships — fees shown', mins: 4, icon: 'wallet' },
-  { id: 'l7', t: 'Staying safe', d: 'Comment Guard, restrict, block, report', mins: 2, icon: 'lock' },
-  { id: 'c1', t: 'Social ⇄ Chat in one tap', d: 'D-Switch, Swipe Worlds, Chat Bubble & Dual Pulse badges', mins: 2, icon: 'chat' },
-  { id: 'c2', t: 'Your @ID, no phone number', d: 'One-time codes, up to 5 accounts, changing your @ID', mins: 3, icon: 'fingerprint' },
-  { id: 'c3', t: 'Request Gate & Privacy Split', d: 'Who can message you, hidden identity, Focus Switch', mins: 3, icon: 'shield' },
-  { id: 'c4', t: 'Chat power moves', d: 'Reply, star, pin, edit (15 min), undo send (60 min), view once, polls, send later', mins: 4, icon: 'send' },
-  { id: 'c5', t: 'Vibes & Towns', d: '24-hour statuses and communities with topic rooms', mins: 3, icon: 'users' },
-];
-export function Learn() {
-  const st = useSocial(); const done = st.lessons.length;
-  return (
-    <Screen>
-      <Header title="Learn" sub="Short creator lessons" />
-      <LinearGradient colors={PRISM as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.learnHero}>
-        <Text style={{ color: '#fff', fontWeight: '900', fontSize: 22 }}>{done}/{LESSONS.length} lessons done</Text>
-        <View style={{ marginTop: 10 }}><Bar pct={(done / LESSONS.length) * 100} color={C.lime} bg="rgba(255,255,255,0.3)" /></View>
-        <Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '600', marginTop: 8 }}>About {LESSONS.reduce((a, l) => a + l.mins, 0)} minutes total</Text>
-      </LinearGradient>
-      {LESSONS.map((l, i) => { const on = st.lessons.includes(l.id); return (
-        <Card key={l.id} style={{ marginBottom: 10, padding: 10 }}>
-          <Row icon={l.icon as any} tint={on ? '#12A27C' : C.violet} title={`${i + 1}. ${l.t}`} sub={`${l.d} · ${l.mins} min`} right={<Chip label={on ? 'Done' : 'Mark done'} icon={on ? 'check' : undefined} active={on} onPress={() => st.doneLesson(l.id)} />} />
-        </Card>); })}
-    </Screen>
-  );
-}
-
 const SET_SECTIONS = [
   { key: 'account', t: 'Account & security', d: 'Profile, two-factor, biometrics, sessions', icon: 'lock' },
   { key: 'privacy', t: 'Privacy & data', d: 'Who can join, visibility, export, deletion', icon: 'eye' },
@@ -210,16 +124,16 @@ export function SettingsHub({ navigation }: any) {
   return (
     <Screen>
       <SyncCard navigation={navigation} />
-      <Header title="Settings" sub="Everything, in one place" />
+      <Header title="Control Room" sub="Everything, in one place" />
       <Card>{SET_SECTIONS.map(x => <Row key={x.key} icon={x.icon as any} title={x.t} sub={x.d} onPress={() => navigation.navigate('Settings', { section: x.key })} />)}</Card>
       <Card style={{ marginTop: 12 }}>
-        <Row icon="users" tint="#14B88D" title="Accounts" sub="Switch between up to 5 @IDs" onPress={() => navigation.navigate('Accounts')} />
-        <Row icon="globe" tint={C.violet} title="Language & region" sub="App language, country, zone & plan slab" onPress={() => navigation.navigate('LanguageRegion')} />
-        <Row icon="shield" tint={C.pink} title="Trust & safety" sub="Privacy Lock, block, restrict, Comment Guard, reports" onPress={() => navigation.navigate('Trust')} />
+        <Row icon="bulb" tint={C.violet} title="Help & Support" sub="Help Hub, House Rules, Privacy Promise, SOS Lane, Hit Us Up" onPress={() => navigation.navigate('ContentHub')} />
+        <Row icon="flag" tint={C.danger} title="Speak Up" sub="Report harassment, violations, scams" onPress={() => navigation.navigate('SpeakUp')} />
+        <Row icon="send" tint={C.violet} title="Outbox" sub="Offline posts, messages & uploads" onPress={() => navigation.navigate('Outbox')} />
+        <Row icon="users" tint="#14B88D" title="Five Faces" sub="Switch between up to 5 @IDs" onPress={() => navigation.navigate('Accounts')} />
+        <Row icon="globe" tint={C.violet} title="Region & Lingo" sub="App language, country, zone & tier" onPress={() => navigation.navigate('LanguageRegion')} />
+        <Row icon="shield" tint={C.pink} title="Privacy & Safety" sub="Private account, block, restrict, Comment Guard, reports" onPress={() => navigation.navigate('Trust')} />
         <Row icon="smile" tint={C.tangerine} title="VibeMoji & Reaction Pack" sub="1000 original emoji" onPress={() => navigation.navigate('Emoji')} />
-        <Row icon="library" tint={C.violet} title="IconKit" sub="1000 original icons per module" onPress={() => navigation.navigate('IconKit')} />
-        <Row icon="book" tint="#12A27C" title="Learn" sub="Short creator lessons" onPress={() => navigation.navigate('Learn')} />
-        <Row icon="library" tint={C.violet} title="All features" sub="The 150-feature roadmap and its status" onPress={() => navigation.navigate('Features')} />
       </Card>
     </Screen>
   );

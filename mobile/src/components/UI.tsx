@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, ViewStyle, TextInput, TextInputProps, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, ViewStyle, TextInput, TextInputProps, Platform, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SG, Stop, Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -104,10 +104,11 @@ export function ScoreRing({ score, size = 120, stroke = 12, dark, label = 'Loop 
   );
 }
 
-export function Avatar({ name, hue = 260, size = 36, ring }: { name: string; hue?: number; size?: number; ring?: boolean }) {
+export function Avatar({ name, hue = 260, size = 36, ring, uri }: { name: string; hue?: number; size?: number; ring?: boolean; uri?: string | null }) {
+  if (uri) return <View style={{ width: size, height: size, borderRadius: size / 2, padding: ring ? 2 : 0, backgroundColor: ring ? C.lime : 'transparent' }}><Image source={{ uri: uri.startsWith('/') ? require('../lib/api').useSession.getState().apiUrl + uri : uri }} style={{ flex: 1, borderRadius: size, borderWidth: ring ? 2 : 0, borderColor: C.bg }} accessibilityLabel={`${name} photo`} /></View>;
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, padding: ring ? 2 : 0, backgroundColor: ring ? C.lime : 'transparent' }}>
-      <LinearGradient colors={[hsl(hue, 85, 68), hsl(hue + 50, 85, 55)]} style={{ flex: 1, borderRadius: size, alignItems: 'center', justifyContent: 'center', borderWidth: ring ? 2 : 0, borderColor: C.bg }}>
+      <LinearGradient colors={[hsl(hue, 45, 62), hsl(hue + 30, 40, 46)]} style={{ flex: 1, borderRadius: size, alignItems: 'center', justifyContent: 'center', borderWidth: ring ? 2 : 0, borderColor: C.bg }}>
         <Text style={{ color: '#fff', fontWeight: '800', fontSize: size * 0.38 }}>{name.slice(0, 1)}</Text>
       </LinearGradient>
     </View>
@@ -118,7 +119,7 @@ export function Avatar({ name, hue = 260, size = 36, ring }: { name: string; hue
 export function Thumb({ hue, w = 120, h = 180, label, children, radius = R.md }: { hue: number; w?: number | string; h?: number; label?: string; children?: React.ReactNode; radius?: number }) {
   return (
     <View style={{ width: w as any, height: h, borderRadius: radius, overflow: 'hidden', backgroundColor: C.ink }}>
-      <LinearGradient colors={[hsl(hue, 80, 58), hsl(hue + 40, 85, 45), '#120F24']} locations={[0, 0.55, 1]} start={{ x: 0, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={[hsl(hue, 42, 56), hsl(hue + 30, 38, 38), '#0A0A0F']} locations={[0, 0.55, 1]} start={{ x: 0, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFill} />
       <Svg width="100%" height="100%" viewBox="0 0 100 150" preserveAspectRatio="xMidYMid slice" style={StyleSheet.absoluteFill}>
         <Circle cx="78" cy="30" r="26" fill="rgba(255,255,255,0.16)" />
         <Circle cx="20" cy="95" r="34" fill="rgba(255,255,255,0.08)" />

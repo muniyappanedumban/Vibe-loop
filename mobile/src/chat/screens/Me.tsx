@@ -9,12 +9,13 @@ import { CScreen, CTop, CHeader, CAvatar, CCard, CBtn, CChip, CRow, CInput, CTog
 import { useChat, chat } from '../useChat';
 import { useSession, online, MAX_ACCOUNTS, forgetAccount } from '../../lib/api';
 import { switchAccount, signOut, signOutEverywhere } from '../../lib/sync';
+const alert = (m: string) => (globalThis as any).alert ? (globalThis as any).alert(m) : require('react-native').Alert.alert('Push', m);
 import { useConfig, loadConfig, LANG_NAMES, useT } from '../../lib/config';
 import { call } from '../../lib/api';
 import { SignInNeeded } from './Chats';
 
 export function ChatMe({ navigation }: any) {
-  const st = useChat(); const sess = useSession(); const tr = useT(); const p = st.profile; const { toast, show } = useCToast();
+  const st = useChat(); const sess = useSession(); const tr = useT(); const p = st.profile; const { toast, show } = useCToast(); const feats = useConfig(s => s.cfg.features);
   const [chatBio, setChatBio] = useState(p?.chat_bio ?? ''); const [socialBio, setSocialBio] = useState(p?.social_bio ?? '');
   useEffect(() => { setChatBio(p?.chat_bio ?? ''); setSocialBio(p?.social_bio ?? ''); }, [p?.chat_bio, p?.social_bio]);
   if (!online()) return <SignInNeeded navigation={navigation} />;
@@ -24,7 +25,7 @@ export function ChatMe({ navigation }: any) {
     <View style={{ flex: 1 }}><CScreen>
       <CTop title={tr('nav.ChatMe', 'Me')} />
       <LinearGradient colors={AQUA as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.idCard}>
-        <CAvatar name={me?.name ?? ''} h={me?.hue ?? 180} size={60} />
+        <Pressable onPress={() => navigation.navigate('EditProfile', { module: 'chat' })} accessibilityLabel="Edit profile"><CAvatar name={me?.name ?? ''} h={me?.hue ?? 180} size={60} uri={p?.avatar_chat ?? p?.avatar_social} /></Pressable>
         <View style={{ flex: 1 }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>{p?.name ?? me?.name}</Text><Text style={{ color: 'rgba(255,255,255,.9)', fontWeight: '800' }}>{p?.handle ?? me?.handle}</Text><Text style={{ color: 'rgba(255,255,255,.8)', fontSize: 12, marginTop: 2 }}>No phone number linked · ever</Text></View>
         <Pressable onPress={() => navigation.navigate('MyCode')} style={s.qrBtn} accessibilityLabel="My code"><ChatIcon name="qr" size={22} color={CC.ink} /></Pressable>
       </LinearGradient>
@@ -42,33 +43,39 @@ export function ChatMe({ navigation }: any) {
 
       <Text style={[ct.tiny, { marginTop: 16, marginBottom: 8 }]}>TWO FACES · DIFFERENT BIO PER MODULE</Text>
       <CCard>
-        <CInput label="Chat bio (friends see this in Chat)" value={chatBio} onChangeText={setChatBio} maxLength={140} />
-        <CInput label="Social bio (public profile)" value={socialBio} onChangeText={setSocialBio} maxLength={160} />
+        <CInput label="Hush bio (your Squad sees this)" value={chatBio} onChangeText={setChatBio} maxLength={140} />
+        <CInput label="Glow bio (public profile)" value={socialBio} onChangeText={setSocialBio} maxLength={160} />
         <CBtn small title="Save bios" icon="check" onPress={() => save({ chat_bio: chatBio, social_bio: socialBio }, 'Bios updated')} />
       </CCard>
 
       <Text style={[ct.tiny, { marginTop: 16, marginBottom: 8 }]}>PRIVACY SPLIT</Text>
       <CCard>
-        <Text style={[ct.small, { fontWeight: '800', color: CC.ink }]}>Chat · who can message me</Text>
+        <Text style={[ct.small, { fontWeight: '800', color: CC.ink }]}>Hush · who can message me</Text>
         <View style={{ flexDirection: 'row', gap: 6, marginVertical: 8 }}>{(['everyone', 'friends', 'nobody'] as const).map(k => <CChip key={k} label={k[0].toUpperCase() + k.slice(1)} active={p?.who_can_message === k} onPress={() => save({ who_can_message: k })} />)}</View>
         <CRow icon="ghost" title="Hidden Identity" sub="Only exact-@ID search by friends finds you" right={<CToggle value={!!p?.hidden} onChange={v => save({ hidden: v })} label="Hidden identity" />} />
         <CRow icon="moon" title="Ghost Hours" sub="Hide online & typing indicators" right={<CToggle value={!!p?.ghost_hours} onChange={v => save({ ghost_hours: v })} label="Ghost hours" />} />
+        <CRow icon="clock" title="Last seen" sub="Off = you also won't see others' last seen" right={<CToggle value={p?.last_seen_visible !== false} onChange={v => save({ last_seen_visible: v })} label="Last seen" />} />
+        {feats.calls !== false ? <CRow icon="phone" title="Ring Log" sub="Voice & Face Call history" onPress={() => navigation.navigate('CallLog')} /> : null}
+        {feats.liveCamera !== false ? <CRow icon="camera" title="Live Lens" sub="Camera with lenses · send Snaps" onPress={() => navigation.navigate('LiveCamera')} /> : null}
+        {feats.e2ee !== false ? <CRow icon="lock" title="End-to-end encryption" sub="1:1 text is sealed on your device when both of you are on the app (NaCl box). No forward secrecy yet." /> : null}
+        {feats.push !== false ? <CRow icon="bell" title="Push notifications" sub="Tap to (re)register this device" onPress={() => import('../../lib/push').then(m => m.registerPush()).then(r => alert(r.message))} /> : null}
         <CRow icon="check" title="Read receipts" right={<CToggle value={!!p?.chat_read_receipts} onChange={v => save({ chat_read_receipts: v })} label="Read receipts" />} />
-        <CRow icon="eye" title="Social · private profile" sub="Separate from Chat privacy" right={<CToggle value={!!p?.social_private} onChange={v => save({ social_private: v })} label="Private social profile" />} />
+        <CRow icon="eye" title="Glow · private profile" sub="Separate from Hush privacy" right={<CToggle value={!!p?.social_private} onChange={v => save({ social_private: v })} label="Private social profile" />} />
       </CCard>
 
       <Text style={[ct.tiny, { marginTop: 16, marginBottom: 8 }]}>FOCUS SWITCH</Text>
-      <CCard><CRow icon="mute" title="Silence Social, keep Chat" sub="Social badges & alerts pause; chats from friends still arrive" right={<CToggle value={!!p?.focus_social_muted} onChange={v => save({ focus_social_muted: v }, v ? 'Focus on — Social is quiet' : 'Focus off')} label="Focus switch" />} /></CCard>
+      <CCard><CRow icon="mute" title="Mute Glow, keep Hush" sub="Glow badges & alerts pause; Hush messages still arrive" right={<CToggle value={!!p?.focus_social_muted} onChange={v => save({ focus_social_muted: v }, v ? 'Focus on — Social is quiet' : 'Focus off')} label="Focus switch" />} /></CCard>
 
       <Text style={[ct.tiny, { marginTop: 16, marginBottom: 8 }]}>MORE</Text>
       <CCard>
-        <CRow icon="key" title="Change @ID" sub="Once every 30 days" onPress={() => navigation.navigate('ChangeHandle')} />
-        <CRow icon="globe" title="Language & region" sub={`${LANG_NAMES[useConfig.getState().cfg.resolvedFor.lang] ?? 'English'} · ${useConfig.getState().cfg.resolvedFor.country}`} onPress={() => navigation.navigate('LanguageRegion')} />
+        <CRow icon="key" title="New @ID" sub="Once every 30 days" onPress={() => navigation.navigate('ChangeHandle')} />
+        <CRow icon="globe" title="Region & Lingo" sub={`${LANG_NAMES[useConfig.getState().cfg.resolvedFor.lang] ?? 'English'} · ${useConfig.getState().cfg.resolvedFor.country}`} onPress={() => navigation.navigate('LanguageRegion')} />
         <CRow icon="spark" title="BubbleMoji" sub="1000 chat emoji" onPress={() => navigation.navigate('BubbleMojiGallery')} />
-        <CRow icon="qr" title="IconKit · Hush" sub="1000 chat icons" onPress={() => navigation.navigate('IconKit', { kit: 'hush' })} />
         <CRow icon="star" title="Star Box" onPress={() => navigation.navigate('Starred')} />
-        <CRow icon="shield" title="Security" sub="Sessions, encryption status" onPress={() => navigation.navigate('ChatSecurity')} />
-        <CRow icon="spark" title="Learn" sub="Short lessons for Chat & Social" onPress={() => navigation.navigate('Learn')} />
+        <CRow icon="shield" title="Lockdown" sub="Sessions, encryption status" onPress={() => navigation.navigate('ChatSecurity')} />
+        <CRow icon="board" title="Help & Support" sub="Help Hub, House Rules, Privacy Promise, SOS Lane" onPress={() => navigation.navigate('ContentHub')} />
+        <CRow icon="shield" title="Speak Up" sub="Report harassment or a problem" onPress={() => navigation.navigate('SpeakUp')} />
+        <CRow icon="clock" title="Outbox" sub="Messages & files waiting to send" onPress={() => navigation.navigate('Outbox')} />
       </CCard>
       <CBtn kind="ghost" icon="close" title="Sign out of this account" style={{ marginTop: 16 }} onPress={() => signOut().then(() => navigation.reset({ index: 0, routes: [{ name: useSession.getState().activeId ? 'ChatMain' : 'SignIn' }] }))} />
     </CScreen>{toast}</View>
@@ -80,7 +87,7 @@ export function ChangeHandle({ navigation }: any) {
   const next = p?.handle_changed_at ? p.handle_changed_at + 30 * 86400_000 : 0;
   return (
     <View style={{ flex: 1 }}><CScreen>
-      <CHeader title="Change @ID" sub={`Current: ${p?.handle ?? ''}`} />
+      <CHeader title="New @ID" sub={`Current: ${p?.handle ?? ''}`} />
       <CCard style={{ marginBottom: 12 }}><Text style={ct.small}>Your @ID is your public username, not your password. To stop impersonation and squatting you can change it once every 30 days, and your old @ID stays reserved for 30 days.{next > Date.now() ? ` Next change: ${new Date(next).toDateString()}.` : ''}</Text></CCard>
       <CInput label="New @ID" value={h} onChangeText={t => setH(t.trim().toLowerCase())} autoCapitalize="none" placeholder="@new.id" />
       <CBtn title="Change @ID" icon="key" onPress={() => chat.changeHandle(h).then(r => { useSession.setState(s => ({ accounts: s.accounts.map(a => (a.id === s.activeId ? { ...a, handle: r.handle ?? h } : a)) })); show('@ID changed'); setTimeout(() => navigation.goBack(), 700); }).catch(e => show(e.message, true))} />
@@ -92,7 +99,7 @@ export function ChatSecurity({ navigation }: any) {
   const { toast, show } = useCToast();
   return (
     <View style={{ flex: 1 }}><CScreen>
-      <CHeader title="Security" />
+      <CHeader title="Lockdown" />
       <CCard style={{ borderColor: CC.sun, backgroundColor: CC.sunSoft }}>
         <View style={{ flexDirection: 'row', gap: 10 }}><ChatIcon name="shield" size={24} color="#C98A00" /><View style={{ flex: 1 }}>
           <Text style={ct.h3}>End-to-end encryption: not yet enabled</Text>
@@ -120,7 +127,7 @@ export function LanguageRegion() {
   };
   return (
     <View style={{ flex: 1 }}><CScreen>
-      <CHeader title="Language & region" sub="Controls labels, features and availability" />
+      <CHeader title="Region & Lingo" sub="Controls labels, features and availability" />
       <CCard>
         <Text style={ct.tiny}>APP LANGUAGE</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 10 }}>{cfg.languages.available.map(l => <CChip key={l} label={LANG_NAMES[l] ?? l} active={cfg.resolvedFor.lang === l} onPress={() => !busy && apply({ lang: l }, 'Language updated')} />)}</View>
@@ -163,7 +170,7 @@ export function Accounts({ navigation }: any) {
   const sess = useSession(); const { toast, show } = useCToast();
   return (
     <View style={{ flex: 1 }}><CScreen>
-      <CHeader title="Accounts" sub={`${sess.accounts.length} of ${MAX_ACCOUNTS} on this device`} />
+      <CHeader title="Five Faces" sub={`${sess.accounts.length} of ${MAX_ACCOUNTS} on this device`} />
       {sess.accounts.map(a => (
         <CCard key={a.id} style={{ marginBottom: 8 }}>
           <CRow title={a.name} sub={a.handle} right={a.id === sess.activeId ? <ChatIcon name="check" size={22} color={CC.teal} /> : <CBtn small title="Switch" onPress={() => switchAccount(a.id).then(() => { chat.reset(); loadConfig(); navigation.reset({ index: 0, routes: [{ name: sess.module === 'chat' ? 'ChatMain' : 'Main' }] }); }).catch(e => show(e.message, true))} />} />

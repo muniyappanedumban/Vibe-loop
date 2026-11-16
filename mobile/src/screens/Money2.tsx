@@ -53,7 +53,7 @@ export function Stash({ navigation }: any) {
           <Card key={p.id} style={{ width: '47.5%', padding: 0, overflow: 'hidden' }}>
             <Media uri={mediaUri(p.mediaUrl)} hue={(p.title.length * 37) % 360} h={120} />
             <View style={{ padding: 10 }}>
-              <Text style={T.h3} numberOfLines={2}>{p.title}</Text><Text style={T.small} numberOfLines={1}>by {c.name}</Text>
+              <Text style={T.h3} numberOfLines={2} onPress={() => navigation.navigate('ProductView', { id: p.id, product: p })}>{p.title}</Text><Text style={T.small} numberOfLines={1}>by {c.name}</Text>
               <Text style={{ fontWeight: '900', fontSize: 18, marginVertical: 6 }}>{p.price.amount === 0 ? 'Free' : p.price.display}</Text>
               <Btn small title={p.price.amount === 0 ? 'Get' : 'Buy'} onPress={() => checkout('/store/orders', { productId: p.id, provider: prov }, show)} />
             </View>
@@ -117,7 +117,6 @@ export function CashFlow({ navigation }: any) {
         {f.store ? <Row icon="shop" title={tr('name.store', 'Stash')} sub="Sell presets, zines, guides" onPress={() => navigation.navigate('Stash')} /> : null}
         {f.subscriptions ? <Row icon="star" title={tr('name.subscription', 'Backstage Pass')} sub="Plans & your subscription" onPress={() => navigation.navigate('BackstagePass')} /> : null}
         {f.tips ? <Row icon="heart" title={tr('name.tip', 'Props')} sub="Tips you've sent & received" onPress={() => navigation.navigate('Props')} /> : null}
-        <Row icon="wallet" title={tr('name.payout', 'Cashout')} sub="Request a payout" onPress={() => navigation.navigate('Payout')} />
       </Card>
     </Screen>
   );

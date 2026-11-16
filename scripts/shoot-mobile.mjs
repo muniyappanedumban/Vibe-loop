@@ -5,7 +5,7 @@ import http from 'node:http'; import fs from 'node:fs'; import path from 'node:p
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'mobile', 'dist');
 // Two flat folders: Social module → screenshots/vibeloop, Chat module → screenshots/chat
-const CHAT = new Set(['Chats', 'ChatRoom', 'NewChat', 'ChatSearch', 'Starred', 'Friends', 'MyCode', 'Vibes', 'StatusCompose', 'StatusView', 'Towns', 'TownRoom', 'CreateTown', 'ChatMe', 'ChangeHandle', 'ChatSecurity', 'BubbleMojiGallery', 'ShareToChat', 'Accounts', 'LanguageRegion']);
+const CHAT = new Set(['Chats', 'ChatRoom', 'NewChat', 'ChatSearch', 'Starred', 'Friends', 'MyCode', 'Vibes', 'StatusCompose', 'StatusView', 'Towns', 'TownRoom', 'CreateTown', 'ChatMe', 'ChangeHandle', 'ChatSecurity', 'BubbleMojiGallery', 'ShareToChat', 'Accounts', 'LanguageRegion', 'Call', 'CallLog', 'SnapView']);
 const DIRS = { social: path.join(root, 'screenshots', 'vibeloop'), chat: path.join(root, 'screenshots', 'chat') };
 const out = DIRS.social;
 const API = process.env.API_URL || 'http://localhost:8787';
@@ -41,7 +41,7 @@ await page.getByRole('button', { name: 'Send login code' }).click();
 await page.getByText('Demo mode', { exact: false }).waitFor({ timeout: 10000 });
 await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, '01b-otp-code.png') });
 await page.getByRole('button', { name: 'Use', exact: true }).click();
-await page.getByText('Good', { exact: false }).first().waitFor({ timeout: 15000 });
+await page.getByText('Hub', { exact: true }).first().waitFor({ timeout: 15000 });
 console.log('✓ signed in against', API);
 let failures = 0;
 for (const s of SCREENS.filter(x => !only || x.folder.startsWith(only))) {
@@ -49,7 +49,7 @@ for (const s of SCREENS.filter(x => !only || x.folder.startsWith(only))) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${base}/?s=${s.name}${s.q ? '&' + s.q : ''}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(/^(5|6)\d-/.test(s.folder) ? 2200 : 900);
-  const dir = CHAT.has(s.name) || s.folder.includes('hush') ? DIRS.chat : DIRS.social;
+  const dir = CHAT.has(s.name) || s.folder.includes('hush') ? DIRS.chat : DIRS.social;  // Hush Hub/Guide/Notes → chat folder
   await page.screenshot({ path: path.join(dir, `${s.folder}.png`) });
   const h = await page.evaluate(() => Math.max(...[...document.querySelectorAll('div')].filter(d => d.offsetParent !== null && getComputedStyle(d).overflowY !== 'visible' && d.getBoundingClientRect().left >= 0 && d.getBoundingClientRect().left < 50).map(d => d.scrollHeight), 844));
   if (h > 900) { await page.setViewportSize({ width: 390, height: Math.min(h, 6000) }); await page.waitForTimeout(400); await page.screenshot({ path: path.join(dir, `${s.folder}-full.png`) }); }

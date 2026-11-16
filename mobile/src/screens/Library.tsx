@@ -17,11 +17,11 @@ export function Library({ navigation }: any) {
   const list = st.assets.filter(a => (k === 'all' || a.kind === k) && a.title.toLowerCase().includes(q.toLowerCase()));
   return (
     <Screen>
-      <Header title="Library" sub={`${st.assets.length} assets · every version kept`} right={<IconBtn name="graph" label="Memory Graph" onPress={() => navigation.navigate('Memory')} />} />
+      <Header title="Asset Locker" sub={`${st.assets.length} assets · every version kept`} right={<IconBtn name="graph" label="Memory Graph" onPress={() => navigation.navigate('Memory')} />} />
       <Pressable onPress={() => navigation.navigate('Memory')}>
         <LinearGradient colors={PRISM as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.mem}>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>Creator Memory Graph</Text>
+            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>Your Brain Map</Text>
             <Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '600', marginTop: 4 }}>{st.insights.length} insights · {st.loops.length} Loops learned from</Text>
           </View>
           <View style={s.memIcon}><Icon name="graph" color={C.ink} /></View>
@@ -67,8 +67,8 @@ export function Memory() {
   return (
     <View style={{ flex: 1 }}>
       <Screen>
-        <Header title="Memory Graph" sub="What works — uniquely for you" />
-        <LinearGradient colors={['#1B1538', '#120F24']} style={{ borderRadius: 28, padding: 8 }}>
+        <Header title="Brain Map" sub="What works — uniquely for you" />
+        <LinearGradient colors={['#17171F', '#120F24']} style={{ borderRadius: 28, padding: 8 }}>
           <Svg width="100%" height={250} viewBox="0 0 300 250">
             {nodes.slice(1).map((n, i) => <Line key={i} x1={150} y1={110} x2={n.x} y2={n.y} stroke="rgba(255,255,255,0.18)" strokeWidth={2} />)}
             <Line x1={60} y1={50} x2={55} y2={180} stroke="rgba(200,244,90,0.4)" strokeWidth={2} strokeDasharray="4 4" />

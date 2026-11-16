@@ -30,7 +30,8 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "extraProguardRules": "-keep class org.webrtc.** { *; }\n-dontwarn org.webrtc.**"
           }
         }
       ],
@@ -47,7 +48,34 @@
           "locationWhenInUsePermission": "VibeLoop uses your location only when you tag a place on a post or story."
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "VibeLoop uses the microphone for voice notes and calls."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "VibeLoop uses the camera for photos, Blinks, snaps and video calls.",
+          "microphonePermission": "VibeLoop uses the microphone for videos, voice notes and calls.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#5B4CF5"
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "VibeLoop uses the camera for video calls.",
+          "microphonePermission": "VibeLoop uses the microphone for calls."
+        }
+      ]
     ],
     "scheme": "vibeloop",
     "splash": {

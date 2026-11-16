@@ -38,3 +38,19 @@
 
 ## Engineering
 - Request ID middleware (X-Request-ID echo + structured log line), DB indexes on hot paths (posts.at, messages.conv/at, notices.user/read), pagination everywhere lists can grow, GZip responses, ETag/Cache-Control on /app-config and media.
+
+## Implementation notes & deviations (v4 build)
+- **Promo targeting semantics:** `global` matches everyone; otherwise the non-empty lists (countries, zones, states) are combined with **AND** (e.g. countries [IN] + states [TN] = Tamil Nadu only, so a US "TN" (Tennessee) doesn't match). A promo with global off and no lists is rejected (400). Anonymous callers: `?country=` / `?state=` / `X-Country`; signed-in callers use profile country (default IN) + `state`.
+- **`promos` feature off** → `GET /promos` returns `[]` (200), not 403. Admin preview returns `enabled:false`.
+- **Idempotent create** returns the existing row with 200 when the same caller re-sends the id; an id owned by someone else → 409 (`POST /posts` previously answered 409 for any duplicate id).
+- **Paging** uses an opaque integer `cursor` (offset) and returns `{items, nextCursor}` for `/feed`, `/posts/{id}/comments`, `/me/likes`.
+- **60 s video rule** is enforced when a video is attached to a post/Blink (`POST /posts`, `POST /sparks`), using the duration recorded at upload (ffprobe when installed, else client `durationSec`). Chat file videos aren't limited.
+- **Pin 3** is a toggle (`POST /posts/{id}/pin` pins/unpins own post). Extra: `GET /users/{id|me}/pinned`. Extra: `DELETE /collections/{id}/items/{postId}`, `DELETE /me/mood`, `GET /admin/users/{id}` (staff member detail; staff always see last seen), `GET /admin/uploads`; `/admin/search` gains `promos` + `uploads`.
+- **Share** body is optional (defaults `to:"external"`) so the old no-body call still works.
+- **Mood Drop** is stored in `profile.moodDrop` and appears as `moodDrop` on user objects for 24 h. Pings accept `thanks` / `celebrate`.
+- **Friend Flame** is stored on `friends` (`flame`, `flame_day`, `last_msg_day`), bumped on 1:1 messages when both sides messaged the same UTC day; shown while the last shared day is today or yesterday.
+- **Presence/viewer context:** a request middleware decodes the bearer token, updates `last_seen_at` at most once per 60 s, sets the viewer for reciprocal `lastSeen`, echoes/creates `X-Request-ID`, and logs one JSON line per request. Module for `avatar` = chat for chat-prefixed routes (`/friends`, `/conv`, `/status`, …), social elsewhere.
+- **GZip** applies to API responses ≥1 KB; `/media/*` and `/uploads/*` are not gzipped. `/app-config` returns `ETag` + `Cache-Control: private, no-cache` and answers 304 to `If-None-Match`.
+- Also fixed: the body-cap middleware used to answer `http.disconnect` right after replaying the request body, which cut large file responses off; it now waits for the real disconnect.
+- Theme defaults are now `studio` (social) and `mono` (chat); older presets still work. Lens allowlist has 36 keys and applies to `/sparks` too.
+- Seed: riya gets one post (`p9`, pinned), so `/bootstrap` returns 9 posts (test updated from 8).

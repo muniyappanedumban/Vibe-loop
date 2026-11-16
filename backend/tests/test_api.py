@@ -12,7 +12,7 @@ def test_auth_rules(client):
 def test_bootstrap_shapes(client, riya):
     d = client.get("/bootstrap", headers=riya).json()
     assert [l["id"] for l in d["loops"]] == ["l1", "l2", "l3"] and d["loops"][0]["score"] == 70
-    assert len(d["social"]["posts"]) == 8 and d["social"]["chats"][0]["msgs"]
+    assert len(d["social"]["posts"]) == 9 and d["social"]["chats"][0]["msgs"]
 
 def test_loop_create_and_reaction_rules(client, riya):
     l = client.post("/loops", headers=riya, json={"title": "Test loop", "template": "Comedy short", "sizeLimit": 99, "minScore": 60, "draft": {"title": "T", "hook": "h", "caption": "", "hue": 1, "durationSec": 30, "synthetic": False}}).json()

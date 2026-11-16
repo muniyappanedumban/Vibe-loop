@@ -1,7 +1,7 @@
 import hashlib, hmac, os, time, base64, jwt
 from fastapi import Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from .config import JWT_SECRET, APPROVAL_SECRET, ACCESS_TTL_MIN, APPROVAL_TTL_SEC
+from .config import JWT_SECRET, APPROVAL_SECRET, ACCESS_TTL_MIN, APPROVAL_TTL_SEC, JWT_LEEWAY_SEC
 from .db import get_db
 from . import models as M
 
@@ -21,11 +21,18 @@ def password_ok(pw: str) -> str | None:
 def make_access(user: M.User) -> str:
     return jwt.encode({"sub": user.id, "role": user.role, "tv": user.token_version or 0, "exp": int(time.time()) + ACCESS_TTL_MIN * 60, "iat": int(time.time())}, JWT_SECRET, "HS256")
 
+def decode_access(token: str) -> dict:
+    """Verify an access JWT: HS256 only, exp/iat/sub required, small clock-skew leeway. Raises jwt.PyJWTError."""
+    if len(token) > 2048: raise jwt.InvalidTokenError("token too long")
+    return jwt.decode(token, JWT_SECRET, ["HS256"], leeway=JWT_LEEWAY_SEC, options={"require": ["exp", "iat", "sub"]})
+
 def current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> M.User:
+    """Every authenticated request: valid signature + expiry, user exists, token version current (logout-all / suspension
+    revoke), and the account is not suspended — checked against the DB on each request, not from token claims."""
     if not authorization.startswith("Bearer "): raise HTTPException(401, "Sign in required")
-    try: data = jwt.decode(authorization[7:], JWT_SECRET, ["HS256"])
+    try: data = decode_access(authorization[7:])
     except jwt.PyJWTError: raise HTTPException(401, "Session expired — sign in again")
-    u = db.get(M.User, data["sub"])
+    u = db.get(M.User, str(data["sub"]))
     if not u: raise HTTPException(401, "Unknown user")
     if data.get("tv", 0) != (u.token_version or 0): raise HTTPException(401, "Session ended — sign in again")
     if u.suspended: raise HTTPException(403, "Account suspended")
@@ -48,7 +55,7 @@ def issue_approval(db: Session, user: M.User, action: str, payload: str) -> tupl
     return signed, tok
 
 def consume_approval(db: Session, user: M.User, signed: str, action: str, payload: str) -> M.ApprovalToken:
-    try: data = jwt.decode(signed, APPROVAL_SECRET, ["HS256"])
+    try: data = jwt.decode(signed, APPROVAL_SECRET, ["HS256"], leeway=JWT_LEEWAY_SEC)
     except jwt.ExpiredSignatureError: raise HTTPException(403, "Approval token expired")
     except jwt.PyJWTError: raise HTTPException(403, "Invalid approval token")
     tok = db.get(M.ApprovalToken, data.get("jti"))
