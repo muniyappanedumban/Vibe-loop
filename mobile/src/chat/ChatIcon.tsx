@@ -1,0 +1,60 @@
+// Chat module icon set — duotone (soft fill + stroke), distinct from the Social module's line icons.
+import React from 'react';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
+export type ChatIconName = 'chats' | 'friends' | 'vibes' | 'towns' | 'me' | 'send' | 'mic' | 'clip' | 'camera' | 'reply' | 'star' | 'pin' | 'edit' | 'undo' | 'fade' | 'lock'
+  | 'unlock' | 'poll' | 'forward' | 'search' | 'mute' | 'bell' | 'plus' | 'back' | 'qr' | 'wave' | 'heart' | 'shield' | 'switch' | 'eye' | 'check' | 'close' | 'clock'
+  | 'folder' | 'phone' | 'video' | 'link' | 'user' | 'gear' | 'globe' | 'hash' | 'board' | 'crown' | 'key' | 'ghost' | 'moon' | 'share' | 'more' | 'spark';
+const D: Record<ChatIconName, (c: string, f: string) => React.ReactNode> = {
+  chats: (c, f) => <><Path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h8A2.5 2.5 0 0 1 17 6.5v5a2.5 2.5 0 0 1-2.5 2.5H9l-4 3v-3.2A2.5 2.5 0 0 1 4 11.5z" fill={f} stroke={c} /><Path d="M19 9.5a2 2 0 0 1 1 1.7V15a2 2 0 0 1-1 1.7V19l-3-2h-3.5" stroke={c} /></>,
+  friends: (c, f) => <><Circle cx="9" cy="8.5" r="3.5" fill={f} stroke={c} /><Path d="M3 19.5c.8-3.3 3.2-5 6-5s5.2 1.7 6 5z" fill={f} stroke={c} /><Path d="M16 5.5a3 3 0 0 1 0 6M18 14.5c1.6.6 2.6 2 3 5" stroke={c} /></>,
+  vibes: (c, f) => <><Circle cx="12" cy="12" r="8.5" stroke={c} strokeDasharray="3.2 2.2" /><Circle cx="12" cy="12" r="5" fill={f} stroke={c} /></>,
+  towns: (c, f) => <><Path d="M3.5 20.5v-9l5-4 5 4v9z" fill={f} stroke={c} /><Path d="M13.5 20.5V9l3.5-3 3.5 3v11.5M2.5 20.5h19M7 20.5v-4h3v4" stroke={c} /></>,
+  me: (c, f) => <><Rect x="4" y="4" width="16" height="16" rx="6" fill={f} stroke={c} /><Circle cx="12" cy="10" r="2.6" stroke={c} /><Path d="M7.8 17c.9-2 2.4-3 4.2-3s3.3 1 4.2 3" stroke={c} /></>,
+  send: (c, f) => <Path d="M4 11.5 20 4l-5.5 16-3-6.5z" fill={f} stroke={c} />,
+  mic: (c, f) => <><Rect x="9" y="3.5" width="6" height="11" rx="3" fill={f} stroke={c} /><Path d="M6 11a6 6 0 0 0 12 0M12 17v3.5" stroke={c} /></>,
+  clip: (c) => <Path d="m19 11.5-6.8 6.8a4.5 4.5 0 0 1-6.4-6.4l7.4-7.4a3 3 0 0 1 4.3 4.3l-7.4 7.4a1.5 1.5 0 0 1-2.1-2.1l6.7-6.7" stroke={c} />,
+  camera: (c, f) => <><Rect x="3.5" y="7" width="17" height="12.5" rx="3.5" fill={f} stroke={c} /><Path d="M9 7l1.5-2.5h3L15 7" stroke={c} /><Circle cx="12" cy="13.2" r="3.2" stroke={c} /></>,
+  reply: (c) => <Path d="M10 6 4.5 11.5 10 17M5 11.5h8.5a6 6 0 0 1 6 6V19" stroke={c} />,
+  star: (c, f) => <Path d="m12 3.8 2.5 5.1 5.6.8-4 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.8z" fill={f} stroke={c} />,
+  pin: (c, f) => <><Path d="M9 3.5h6l-1 5 3.5 3.5h-11L10 8.5z" fill={f} stroke={c} /><Path d="M12 12v8.5" stroke={c} /></>,
+  edit: (c, f) => <><Path d="M15.5 4.5 19.5 8.5 9 19H5v-4z" fill={f} stroke={c} /><Path d="m13.5 6.5 4 4" stroke={c} /></>,
+  undo: (c) => <Path d="M8.5 6.5 4 11l4.5 4.5M4.5 11h10a5 5 0 0 1 0 10H11" stroke={c} />,
+  fade: (c, f) => <><Circle cx="12" cy="12" r="8.5" stroke={c} strokeDasharray="2 2.6" /><Path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill={f} /><Path d="M12 7.5V12l3 2" stroke={c} /></>,
+  lock: (c, f) => <><Rect x="5" y="10.5" width="14" height="10" rx="3.5" fill={f} stroke={c} /><Path d="M8 10.5V8a4 4 0 0 1 8 0v2.5M12 14.5v2" stroke={c} /></>,
+  unlock: (c, f) => <><Rect x="5" y="10.5" width="14" height="10" rx="3.5" fill={f} stroke={c} /><Path d="M8 10.5V8a4 4 0 0 1 7.6-1.7" stroke={c} /></>,
+  poll: (c, f) => <><Rect x="4" y="4" width="16" height="16" rx="4.5" fill={f} stroke={c} /><Path d="M8.5 16v-3.5M12 16V8M15.5 16v-5.5" stroke={c} /></>,
+  forward: (c) => <Path d="M14 6l5.5 5.5L14 17M19 11.5h-8.5a6 6 0 0 0-6 6V19" stroke={c} />,
+  search: (c, f) => <><Circle cx="10.5" cy="10.5" r="6" fill={f} stroke={c} /><Path d="m15 15 5 5" stroke={c} /></>,
+  mute: (c, f) => <><Path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill={f} stroke={c} /><Path d="m16 9.5 5 5M21 9.5l-5 5" stroke={c} /></>,
+  bell: (c, f) => <><Path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z" fill={f} stroke={c} /><Path d="M10 20.5h4" stroke={c} /></>,
+  plus: (c) => <Path d="M12 5v14M5 12h14" stroke={c} />,
+  back: (c) => <Path d="M14.5 5.5 8 12l6.5 6.5" stroke={c} />,
+  qr: (c, f) => <><Rect x="4" y="4" width="6" height="6" rx="1.5" fill={f} stroke={c} /><Rect x="14" y="4" width="6" height="6" rx="1.5" fill={f} stroke={c} /><Rect x="4" y="14" width="6" height="6" rx="1.5" fill={f} stroke={c} /><Path d="M14 14h2.5v2.5H14zM17.5 17.5H20V20h-2.5zM20 14v1.5M14 20h1.5" stroke={c} /></>,
+  wave: (c, f) => <Path d="M8 13.5V6.5a1.5 1.5 0 0 1 3 0v5-7a1.5 1.5 0 0 1 3 0v7-5a1.5 1.5 0 0 1 3 0V14a6.5 6.5 0 0 1-11.6 4L3.2 14.6a1.6 1.6 0 0 1 2.5-2z" fill={f} stroke={c} />,
+  heart: (c, f) => <Path d="M12 19.5s-7.5-4.4-7.5-10A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10z" fill={f} stroke={c} />,
+  shield: (c, f) => <><Path d="M12 3.5 19 6v5.5c0 4.2-3 7.6-7 9-4-1.4-7-4.8-7-9V6z" fill={f} stroke={c} /><Path d="m9 12 2 2 4-4" stroke={c} /></>,
+  switch: (c, f) => <><Rect x="3" y="7" width="18" height="10" rx="5" fill={f} stroke={c} /><Circle cx="15.5" cy="12" r="3" stroke={c} /><Path d="M6.5 12h3" stroke={c} /></>,
+  eye: (c, f) => <><Path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill={f} stroke={c} /><Circle cx="12" cy="12" r="3" stroke={c} /></>,
+  check: (c) => <Path d="m5 12.5 4.5 4.5L19 7.5" stroke={c} />,
+  close: (c) => <Path d="M6 6l12 12M18 6 6 18" stroke={c} />,
+  clock: (c, f) => <><Circle cx="12" cy="12" r="8" fill={f} stroke={c} /><Path d="M12 7.5V12l3 2" stroke={c} /></>,
+  folder: (c, f) => <Path d="M3.5 7A2.5 2.5 0 0 1 6 4.5h3.5l2 2.5H18A2.5 2.5 0 0 1 20.5 9.5v7.5A2.5 2.5 0 0 1 18 19.5H6A2.5 2.5 0 0 1 3.5 17z" fill={f} stroke={c} />,
+  phone: (c, f) => <Path d="M6.5 4h3l1.5 4-2 1.5a10 10 0 0 0 5.5 5.5l1.5-2 4 1.5v3a2 2 0 0 1-2 2A15.5 15.5 0 0 1 4.5 6a2 2 0 0 1 2-2z" fill={f} stroke={c} />,
+  video: (c, f) => <><Rect x="3" y="6.5" width="12.5" height="11" rx="3" fill={f} stroke={c} /><Path d="m15.5 10.5 5.5-3v9l-5.5-3" stroke={c} /></>,
+  link: (c) => <Path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" stroke={c} />,
+  user: (c, f) => <><Circle cx="12" cy="8.5" r="3.8" fill={f} stroke={c} /><Path d="M4.5 20c1.2-3.6 4-5.3 7.5-5.3s6.3 1.7 7.5 5.3" stroke={c} /></>,
+  gear: (c, f) => <><Path d="M10.3 3.5h3.4l.6 2.4 2 1.1 2.4-.7 1.7 2.9-1.8 1.8v2.2l1.8 1.8-1.7 2.9-2.4-.7-2 1.1-.6 2.4h-3.4l-.6-2.4-2-1.1-2.4.7-1.7-2.9 1.8-1.8v-2.2L3.6 9.2l1.7-2.9 2.4.7 2-1.1z" fill={f} stroke={c} /><Circle cx="12" cy="12" r="2.6" stroke={c} /></>,
+  globe: (c, f) => <><Circle cx="12" cy="12" r="8.5" fill={f} stroke={c} /><Path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z" stroke={c} /></>,
+  hash: (c) => <Path d="M9.5 4 8 20M16 4l-1.5 16M4.5 9h15M4 15h15" stroke={c} />,
+  board: (c, f) => <><Path d="M4 9.5 14.5 5v14L4 14.5z" fill={f} stroke={c} /><Path d="M14.5 9.5h3a2.5 2.5 0 0 1 0 5h-3M7 14.8l1 4.7h3l-1-4" stroke={c} /></>,
+  crown: (c, f) => <Path d="M4 17.5 3 8l5 4 4-6 4 6 5-4-1 9.5z" fill={f} stroke={c} />,
+  key: (c, f) => <><Circle cx="8" cy="12" r="4" fill={f} stroke={c} /><Path d="M12 12h8.5M17.5 12v3M20.5 12v2.5" stroke={c} /></>,
+  ghost: (c, f) => <><Path d="M5.5 20V11a6.5 6.5 0 0 1 13 0v9l-2.2-1.6-2.1 1.6-2.2-1.6-2.1 1.6-2.2-1.6z" fill={f} stroke={c} /><Path d="M9.5 10.5v1M14.5 10.5v1" stroke={c} /></>,
+  moon: (c, f) => <Path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z" fill={f} stroke={c} />,
+  share: (c, f) => <><Circle cx="6.5" cy="12" r="2.5" fill={f} stroke={c} /><Circle cx="17.5" cy="6" r="2.5" fill={f} stroke={c} /><Circle cx="17.5" cy="18" r="2.5" fill={f} stroke={c} /><Path d="m8.7 10.8 6.6-3.6M8.7 13.2l6.6 3.6" stroke={c} /></>,
+  more: (c) => <><Circle cx="6" cy="12" r="1.4" fill={c} /><Circle cx="12" cy="12" r="1.4" fill={c} /><Circle cx="18" cy="12" r="1.4" fill={c} /></>,
+  spark: (c, f) => <Path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" fill={f} stroke={c} />,
+};
+export function ChatIcon({ name, size = 22, color = '#0B1F24', fill }: { name: ChatIconName; size?: number; color?: string; fill?: string }) {
+  return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">{(D[name] ?? D.spark)(color, fill ?? color + '2E')}</Svg>;
+}

@@ -20,8 +20,10 @@ def post_json(db: Session, p: M.Post, me: M.User) -> dict:
     cms = db.scalars(select(M.Comment).where(M.Comment.post_id == p.id, M.Comment.held == False).order_by(M.Comment.at)).all()  # noqa: E712
     return {"id": p.id, "by": me_id(p.author_id, me), "kind": p.kind, "text": p.text, "hue": p.hue, "mood": p.mood, "interest": p.interest, "place": p.place,
             "bg": p.bg, "slides": p.slides, "at": p.at, "shares": p.shares, "views": p.views, "mine": p.author_id == me.id,
-            "reactions": {k: counts.get(k, 0) for k in ["heart", "fire", "laugh", "touch", "clap", "boom"]},
-            "comments": [{"by": me_id(c.by, me), "text": c.text} for c in cms]}
+            "reactions": {**{k: counts.get(k, 0) for k in ["heart", "fire", "laugh", "touch", "clap", "boom"]}, **{k: n for k, n in counts.items() if k.startswith("m") and n >= 1}},
+            "comments": [{"by": me_id(c.by, me), "text": c.text} for c in cms],
+            "mediaUrl": p.media_url, "lens": p.lens, "lat": p.lat, "lng": p.lng, "tags": p.tags or [], "collab": p.collab, "sound": p.sound, "audience": p.audience,
+            "mediaKind": p.media_kind, "edit": p.edit}
 
 def creator_json(u: M.User, followers: int) -> dict:
     return {"id": u.id, "name": u.name, "handle": u.handle, "hue": u.hue, "city": u.city, "badge": u.badge, "bio": u.bio, "followers": followers}

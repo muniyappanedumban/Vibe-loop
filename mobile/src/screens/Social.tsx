@@ -10,14 +10,24 @@ import { REACTIONS } from '../lib/vibemoji';
 import { useSocial, creator, compact, Post } from '../store/useSocial';
 import { useStore } from '../store/useStore';
 import { ago } from '../lib/util';
+import { useFeature, useT } from '../lib/config';
+import { Media } from '../components/Lens';
+import { VideoClip } from '../components/VideoClip';
+import { ReactionSheet } from '../components/ReactionSheet';
+import { AdSlot } from './Money2';
+import { mediaUri } from './Studio';
+import { Linking } from 'react-native';
+import { chat } from '../chat/useChat';
+import { online } from '../lib/api';
+import { switchModule } from '../components/ModuleSwitch';
 
 export function SparkRow({ navigation }: any) {
   const sp = useSocial(s => s.sparks); const seen = useSocial(s => s.seenSparks); const me = useStore(s => s.user);
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: 20 }} style={{ marginHorizontal: -20 }}>
-      <Pressable onPress={() => navigation.navigate('NewPost')} style={{ alignItems: 'center', width: 66 }}>
+      <Pressable onPress={() => navigation.navigate('NewPost', { mode: 'story' })} style={{ alignItems: 'center', width: 66 }} accessibilityLabel="Create a Blink">
         <View><Avatar name={me.name} hue={280} size={62} /><View style={s.addSpark}><Icon name="plus" size={14} color={C.ink} stroke={3} /></View></View>
-        <Text style={s.sparkName}>Your Spark</Text>
+        <Text style={s.sparkName}>Your Blink</Text>
       </Pressable>
       {sp.map((x, i) => { const c = creator(x.by); const on = !seen.includes(x.id); return (
         <Pressable key={x.id} onPress={() => navigation.navigate('Sparks', { start: i })} style={{ alignItems: 'center', width: 66 }} accessibilityLabel={`${c.name} Spark`}>
@@ -30,7 +40,8 @@ export function SparkRow({ navigation }: any) {
 
 export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
   const st = useSocial(); const c = creator(p.by); const mine = st.myReacts[p.id]; const [pick, setPick] = useState(false); const [cm, setCm] = useState('');
-  const total = Object.values(p.reactions).reduce((a, b) => a + b, 0);
+  const lastTap = React.useRef(0); const [burst, setBurst] = useState(false); const [lib, setLib] = useState(false);
+  const total = Object.values(p.reactions).reduce((a, b) => a + b, 0); const p2c = useFeature('post2chat') && online();
   const following = st.following.includes(p.by);
   return (
     <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
@@ -45,30 +56,42 @@ export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
       {p.kind === 'thought' ? (
         <View style={[s.thought, { backgroundColor: p.bg ?? C.violet }]}><Text style={s.thoughtT}>{p.text}</Text></View>
       ) : (
-        <Pressable onPress={() => p.kind === 'motion' && navigation.navigate('Motion')}>
-          <Thumb hue={p.hue} w="100%" h={p.kind === 'motion' ? 420 : 340} radius={0}>
+        <Pressable onPress={() => { const n = Date.now(); if (n - lastTap.current < 320) { if (st.myReacts[p.id] !== 'heart') st.react(p.id, 'heart'); setBurst(true); setTimeout(() => setBurst(false), 650); } lastTap.current = n; }} onLongPress={() => p.kind === 'motion' && navigation.navigate('Main', { screen: 'Motion' })} accessibilityHint="Double tap to like">
+          {(p as any).mediaKind === 'video' && p.mediaUrl ? <VideoClip uri={mediaUri(p.mediaUrl)!} edit={(p as any).edit} lens={p.lens} city={p.place} h={440} /> :
+          <Media uri={mediaUri(p.mediaUrl)} hue={p.hue} lens={p.lens} city={p.place?.split(',').pop()?.trim()} h={p.kind === 'motion' ? 420 : 340}>
+            {burst ? <View style={s.burstSmall}><VibeMoji id={7} size={96} /></View> : null}
             {p.kind === 'motion' ? <View style={s.playBadge}><Icon name="play" size={16} color="#fff" /><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{compact(p.views)}</Text></View> : null}
             {p.kind === 'carousel' ? <View style={s.dots}>{Array.from({ length: p.slides ?? 3 }).map((_, i) => <View key={i} style={[s.dot, i === 0 && { backgroundColor: '#fff', width: 16 }]} />)}</View> : null}
-          </Thumb>
+          </Media>}
         </Pressable>
       )}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, paddingTop: 12 }}>
         <Pressable onPress={() => setPick(!pick)} onLongPress={() => setPick(true)} accessibilityLabel="React" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {mine ? <VibeMoji id={REACTIONS.find(r => r.key === mine)!.id} size={26} /> : <Icon name="heart" size={24} />}
+          {mine ? <VibeMoji id={mine.startsWith('m') ? Number(mine.slice(1)) : REACTIONS.find(r => r.key === mine)!.id} size={26} /> : <Icon name="heart" size={24} />}
           <Text style={{ fontWeight: '800' }}>{st.privacy.hideLikes && p.by === 'me' ? '' : compact(total)}</Text>
         </Pressable>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="comment" size={23} /><Text style={{ fontWeight: '800' }}>{p.comments.length}</Text></View>
         <Pressable onPress={() => st.share(p.id)} accessibilityLabel="Share" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Icon name="send" size={22} /><Text style={{ fontWeight: '800' }}>{p.shares}</Text></Pressable>
         <View style={{ flex: 1 }} />
+        {p2c ? <Pressable onPress={() => navigation.navigate('ShareToChat', { type: 'post', id: p.id, title: p.text })} accessibilityLabel="Send to chat" style={{ marginRight: 12 }}><Icon name="chat" size={23} color={C.violet} /></Pressable> : null}
         <Pressable onPress={() => st.save(p.id)} accessibilityLabel="Save"><Icon name="bookmark" size={23} color={st.saved.includes(p.id) ? C.violet : C.ink} /></Pressable>
       </View>
+      <ReactionSheet kind="vibe" open={lib} onClose={() => setLib(false)} onPick={id => { st.react(p.id, `m${id}`); setPick(false); }} />
+      {Object.keys(p.reactions).some(k => k.startsWith('m') && p.reactions[k] > 0) ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, paddingHorizontal: 14, paddingTop: 8 }}>{Object.entries(p.reactions).filter(([k, n]) => k.startsWith('m') && n > 0).slice(0, 8).map(([k, n]) => <View key={k} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.bg, borderRadius: 999, paddingRight: 6 }}><VibeMoji id={Number(k.slice(1))} size={22} /><Text style={{ fontSize: 11, fontWeight: '800' }}>{n}</Text></View>)}</View> : null}
       {pick ? (
         <View style={s.picker}>{REACTIONS.map(r => (
           <Pressable key={r.key} onPress={() => { st.react(p.id, r.key); setPick(false); }} style={[s.pickItem, mine === r.key && { backgroundColor: C.violetSoft }]} accessibilityLabel={r.label}>
             <VibeMoji id={r.id} size={34} /><Text style={{ fontSize: 9, fontWeight: '700', color: C.inkSoft }}>{p.reactions[r.key] ?? 0}</Text>
-          </Pressable>))}</View>
+          </Pressable>))}
+          <Pressable onPress={() => setLib(true)} style={s.pickItem} accessibilityLabel="More reactions"><View style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: C.violetSoft, alignItems: 'center', justifyContent: 'center' }}><Icon name="plus" size={18} color={C.violet} /></View><Text style={{ fontSize: 9, fontWeight: '700', color: C.inkSoft }}>1000</Text></Pressable></View>
       ) : null}
-      {p.kind !== 'thought' ? <Text style={{ paddingHorizontal: 14, paddingTop: 8, lineHeight: 20 }}><Text style={{ fontWeight: '800' }}>{c.handle} </Text>{p.text}</Text> : null}
+      {p.kind !== 'thought' ? <Text style={{ paddingHorizontal: 14, paddingTop: 8, lineHeight: 20 }}><Text style={{ fontWeight: '800' }}>{c.handle}{p.collab ? ` × ${p.collab}` : ''} </Text>{p.text}</Text> : null}
+      {p.sound || (p.lat != null && p.lng != null) || p.audience === 'circle' ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingTop: 8 }}>
+          {p.sound ? <Tag label={`SOUND · ${p.sound}`} color={C.pink} bg={C.pinkSoft} /> : null}
+          {p.audience === 'circle' ? <Tag label="CIRCLE ONLY" color="#12A27C" bg={C.mintSoft} /> : null}
+          {p.lat != null && p.lng != null ? <Pressable onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`)} accessibilityRole="link"><Tag label="OPEN MAP" /></Pressable> : null}
+        </View>) : null}
       {p.comments.slice(-2).map((x, i) => <Text key={i} style={{ paddingHorizontal: 14, paddingTop: 4, color: C.inkSoft }}><Text style={{ fontWeight: '800', color: C.ink }}>{creator(x.by).handle} </Text>{x.text}</Text>)}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12 }}>
         <TextInput value={cm} onChangeText={setCm} placeholder="Add a comment…" placeholderTextColor="#A6A2BC" style={s.cIn} />
@@ -81,7 +104,7 @@ export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
 const FEEDS = ['For You', 'Circle', 'Trending', 'Fresh', 'Mood', 'Interests'] as const;
 const MOODS = ['Funny', 'Inspiring', 'Relaxing', 'Emotional', 'Happy'];
 export function Explore({ navigation }: any) {
-  const st = useSocial();
+  const st = useSocial(); const tr = useT();
   const [feed, setFeed] = useState<(typeof FEEDS)[number]>('For You');
   const [mood, setMood] = useState('Funny'); const [interest, setInterest] = useState('Food');
   const visible = st.posts.filter(p => !st.blocked.includes(p.by));
@@ -92,11 +115,11 @@ export function Explore({ navigation }: any) {
   return (
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: S.lg }}>
-        <Text style={[T.h1, { flex: 1 }]}>Explore</Text>
-        <IconBtn name="chat" label="Messages" onPress={() => navigation.navigate('Chats')} badge={st.chats.filter(c => c.request).length || undefined} />
+        <Text style={[T.h1, { flex: 1 }]}>{tr('nav.Explore', 'Drift')}</Text>
+        <IconBtn name="chat" label="Open Chat" onPress={() => switchModule(navigation, 'chat')} />
         <IconBtn name="bookmark" label="Vault" onPress={() => navigation.navigate('Vault')} />
       </View>
-      <Pressable onPress={() => navigation.navigate('Search')} style={s.search} accessibilityRole="search"><Icon name="search" size={18} color={C.inkSoft} /><Text style={{ color: C.inkSoft, fontWeight: '600' }}>Search creators, posts, tribes, VibeMoji…</Text></Pressable>
+      <Pressable onPress={() => navigation.navigate('Search')} style={s.search} accessibilityRole="search"><Icon name="search" size={18} color={C.inkSoft} /><Text style={{ color: C.inkSoft, fontWeight: '600' }}>Search creators, Drops, Hoods, VibeMoji…</Text></Pressable>
       <SparkRow navigation={navigation} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: S.lg }}>{FEEDS.map(f => <Chip key={f} label={f} active={feed === f} onPress={() => setFeed(f)} />)}</ScrollView>
       {feed === 'Mood' ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 8 }}>{MOODS.map(m => <Chip key={m} label={m} icon="smile" active={mood === m} onPress={() => setMood(m)} />)}</ScrollView> : null}
@@ -106,29 +129,31 @@ export function Explore({ navigation }: any) {
         <View style={{ flex: 1 }}><Text style={T.tiny}>ONE QUESTION · TODAY</Text><Text style={[T.h3, { marginTop: 2 }]}>What's a small habit that changed your year?</Text></View>
       </LinearGradient>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: S.lg, marginBottom: 10 }}><Text style={[T.small, { flex: 1 }]}>{list.length} posts · {feed}</Text><DemoTag /></View>
-      {list.map(p => <PostCard key={p.id} p={p} navigation={navigation} />)}
+      {list.map((p, i) => <React.Fragment key={p.id}><PostCard p={p} navigation={navigation} />{i === 2 ? <AdSlot place="feed" /> : null}</React.Fragment>)}
       {!list.length ? <Text style={[T.small, { textAlign: 'center', marginTop: 30 }]}>Nothing here yet — follow creators to fill your Circle.</Text> : null}
     </Screen>
   );
 }
 
 export function Motion({ navigation }: any) {
+  const tr = useT();
   const { height, width } = useWindowDimensions(); const ins = useSafeAreaInsets();
-  const st = useSocial(); const reels = st.posts.filter(p => p.kind === 'motion' && !st.blocked.includes(p.by));
+  const st = useSocial(); const reels = st.posts.filter(p => (p.kind === 'motion' || (p as any).mediaKind === 'video') && !st.blocked.includes(p.by));
   const [burst, setBurst] = useState<string | null>(null);
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
       <FlatList data={reels} keyExtractor={p => p.id} pagingEnabled showsVerticalScrollIndicator={false} snapToInterval={height} decelerationRate="fast"
         renderItem={({ item: p }) => { const c = creator(p.by); const mine = st.myReacts[p.id]; return (
           <Pressable onPress={() => { st.react(p.id, 'heart'); setBurst(p.id); setTimeout(() => setBurst(null), 700); }} style={{ width, height }}>
-            <Thumb hue={p.hue} w="100%" h={height} radius={0} />
+            {(p as any).mediaKind === 'video' && p.mediaUrl ? <View style={StyleSheet.absoluteFill}><VideoClip uri={mediaUri(p.mediaUrl)!} edit={(p as any).edit} lens={p.lens} h={height} /></View> : <Thumb hue={p.hue} w="100%" h={height} radius={0} />}
             <LinearGradient colors={['rgba(0,0,0,0.35)', 'transparent', 'transparent', 'rgba(0,0,0,0.7)']} style={StyleSheet.absoluteFill} />
             {burst === p.id ? <View style={s.burst}><VibeMoji id={7} size={120} /></View> : null}
-            <View style={[s.reelTop, { top: ins.top + 10 }]}><Text style={s.reelTitle}>Motion</Text><View style={{ flex: 1 }} /><Tag label="DEMO DATA" color="#fff" bg="rgba(255,255,255,0.18)" /></View>
+            <View style={[s.reelTop, { top: ins.top + 10 }]}><Text style={s.reelTitle}>{tr('nav.Motion', 'Flicks')}</Text><View style={{ flex: 1 }} /><Tag label="DEMO DATA" color="#fff" bg="rgba(255,255,255,0.18)" /></View>
             <View style={[s.rail, { bottom: 130 }]}>
               {[{ i: mine ? null : 'heart', moji: mine ? REACTIONS.find(r => r.key === mine)!.id : null, n: compact(Object.values(p.reactions).reduce((a, b) => a + b, 0)), on: () => st.react(p.id, 'heart'), l: 'React' },
                 { i: 'comment', n: String(p.comments.length), l: 'Comments' }, { i: 'send', n: String(p.shares), on: () => st.share(p.id), l: 'Share' },
-                { i: 'bookmark', n: st.saved.includes(p.id) ? 'Saved' : 'Save', on: () => st.save(p.id), l: 'Save' }].map((b: any) => (
+                { i: 'bookmark', n: st.saved.includes(p.id) ? 'Saved' : 'Save', on: () => st.save(p.id), l: 'Save' },
+                ...(online() ? [{ i: 'chat', n: 'Talk', on: () => navigation.navigate('ShareToChat', { type: 'post', id: p.id, title: p.text }), l: 'Reel2Talk' }] : [])].map((b: any) => (
                 <Pressable key={b.l} onPress={b.on} accessibilityLabel={b.l} style={{ alignItems: 'center', gap: 4 }}>
                   <View style={s.railBtn}>{b.moji ? <VibeMoji id={b.moji} size={30} /> : <Icon name={b.i} size={26} color="#fff" />}</View>
                   <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{b.n}</Text>
@@ -158,7 +183,7 @@ export function Sparks({ navigation, route }: any) {
   const vote = st.votes[sp.id];
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
-      <Thumb hue={sp.hue} w="100%" h={2000} radius={0} />
+      <View style={StyleSheet.absoluteFill}><Media uri={mediaUri(sp.mediaUrl)} hue={sp.hue} lens={sp.lens} city={sp.place} h={2000} /></View>
       <Pressable style={StyleSheet.absoluteFill} onPress={e => { const x = (e.nativeEvent as any).locationX ?? 300; x < 120 ? setI(Math.max(0, i - 1)) : i < st.sparks.length - 1 ? setI(i + 1) : navigation.goBack(); }} />
       <View style={{ position: 'absolute', top: ins.top + 8, left: 12, right: 12 }} pointerEvents="box-none">
         <View style={{ flexDirection: 'row', gap: 4 }}>{st.sparks.map((_, j) => <View key={j} style={s.progBg}><View style={[s.progFg, { width: `${j < i ? 100 : j === i ? Math.min(100, prog * 100) : 0}%` }]} /></View>)}</View>
@@ -189,44 +214,12 @@ export function Sparks({ navigation, route }: any) {
         ))}
       </View>
       {sent ? <Text style={[s.sentT, { bottom: ins.bottom + 84 }]}>Reaction sent to {c.name.split(' ')[0]}</Text> : null}
+      {online() && sp.by !== 'me' && !sent ? <Pressable onPress={() => chat.newConv([sp.by]).then(cv => navigation.navigate('ChatRoom', { id: cv.id })).catch(() => {})} style={[s.replyChat, { bottom: ins.bottom + 84 }]} accessibilityRole="button"><Icon name="chat" size={16} color="#fff" /><Text style={{ color: '#fff', fontWeight: '800' }}>Reply in Chat</Text></Pressable> : null}
     </View>
   );
 }
 
-const BGS = ['#6C3BFF', '#FF3D9A', '#FF8A3D', '#14B88D', '#120F24', '#FFC23D'];
-export function NewPost({ navigation }: any) {
-  const add = useSocial(s => s.addPost);
-  const [kind, setKind] = useState<'photo' | 'carousel' | 'thought'>('photo');
-  const [text, setText] = useState(''); const [bg, setBg] = useState(BGS[0]); const [mood, setMood] = useState('Happy'); const [place, setPlace] = useState(''); const [hue, setHue] = useState(280);
-  const { toast, show } = useToast();
-  return (
-    <View style={{ flex: 1 }}>
-      <Screen>
-        <Header title="New Moment" sub="Photo, carousel or thought" />
-        <View style={{ flexDirection: 'row', gap: 8 }}>{([['photo', 'Moment Drop', 'image'], ['carousel', 'Swipe Story', 'layers'], ['thought', 'Thought Drop', 'text']] as const).map(([k, l, i]) => <Chip key={k} label={l} icon={i as any} active={kind === k} onPress={() => setKind(k)} />)}</View>
-        <View style={{ marginTop: S.lg }}>
-          {kind === 'thought' ? (
-            <View style={[s.thought, { backgroundColor: bg, borderRadius: 26, minHeight: 260 }]}><Text style={s.thoughtT}>{text || 'Your thought appears here…'}</Text></View>
-          ) : (
-            <Pressable onPress={() => setHue((hue + 47) % 360)}><Thumb hue={hue} w="100%" h={300} radius={26} label={kind === 'carousel' ? 'Carousel · 3 slides (tap to change cover)' : 'Tap to change cover'} /></Pressable>
-          )}
-        </View>
-        {kind === 'thought' ? <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>{BGS.map(b => <Pressable key={b} onPress={() => setBg(b)} accessibilityLabel={`Background ${b}`} style={[s.swatch, { backgroundColor: b }, bg === b && { borderColor: C.lime, borderWidth: 3 }]} />)}</View> : null}
-        <View style={{ marginTop: S.lg }}><Field label={kind === 'thought' ? 'Thought' : 'Caption'} value={text} onChangeText={setText} multiline placeholder="Say something real…" /></View>
-        <Text style={[T.tiny, { marginBottom: 8 }]}>MOOD TAG</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{MOODS.map(m => <Chip key={m} label={m} active={mood === m} onPress={() => setMood(m)} />)}</View>
-        <View style={{ marginTop: S.lg }}><Field label="Place pin" value={place} onChangeText={setPlace} placeholder="e.g. Indiranagar, Bengaluru" /></View>
-        <View style={s.notice}><Icon name="image" size={16} color={C.tangerine} /><Text style={[T.small, { flex: 1 }]}>Photo upload from the camera roll isn't connected in this preview — covers are generated art.</Text></View>
-        <Btn title="Share Moment" icon="send" onPress={() => {
-          if (!text.trim()) return show('Write a caption first', 'err');
-          add({ kind, text: text.trim(), hue, mood, interest: 'Life', place: place.trim() || undefined, bg: kind === 'thought' ? bg : undefined, slides: kind === 'carousel' ? 3 : undefined });
-          show('Posted to your Circle'); setTimeout(() => navigation.navigate('Main', { screen: 'Explore' }), 700);
-        }} />
-      </Screen>
-      {toast}
-    </View>
-  );
-}
+export { NewPost } from './Studio';
 
 export function Vault({ navigation }: any) {
   const st = useSocial(); const saved = st.posts.filter(p => st.saved.includes(p.id));
@@ -262,6 +255,8 @@ const s = StyleSheet.create({
   reelInfo: { position: 'absolute', left: 18, right: 90, bottom: 120 }, followBtn: { borderWidth: 1.5, borderColor: '#fff', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   burst: { position: 'absolute', top: '38%', alignSelf: 'center' },
   progBg: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.35)', overflow: 'hidden' }, progFg: { height: 3, backgroundColor: '#fff' },
+  burstSmall: { position: 'absolute', top: '35%', alignSelf: 'center' },
+  replyChat: { position: 'absolute', right: 16, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(18,15,36,0.7)', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999 },
   sparkCenter: { position: 'absolute', top: '30%', left: 24, right: 24, alignItems: 'center' }, sparkText: { color: '#fff', fontSize: 30, fontWeight: '900', textAlign: 'center', letterSpacing: -0.8 },
   poll: { marginTop: 24, width: '100%', backgroundColor: '#fff', borderRadius: 24, padding: 16 },
   pollOpt: { height: 48, borderRadius: 16, borderWidth: 1, borderColor: C.line, marginTop: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, overflow: 'hidden' },

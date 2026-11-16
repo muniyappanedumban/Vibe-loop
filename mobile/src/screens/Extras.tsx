@@ -22,12 +22,12 @@ export function Emoji({ route }: any) {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <FlatList data={list} numColumns={5} keyExtractor={x => String(x.id)} initialNumToRender={60} columnWrapperStyle={{ gap: 8, paddingHorizontal: 20 }} contentContainerStyle={{ gap: 8, paddingBottom: 160 }}
         ListHeaderComponent={<View style={{ paddingHorizontal: 20, paddingTop: 50 }}>
-          <Header title="VibeMoji" sub={`500 original emoji · ${list.length} shown`} />
+          <Header title="VibeMoji" sub={`1000 original emoji · ${list.length} shown`} />
           <LinearGradient colors={['#2A1D63', '#120F24']} style={s.packHero}>
             <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>Reaction set</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>{REACTIONS.map(r => <View key={r.key} style={{ alignItems: 'center', width: 52 }}><VibeMoji id={r.id} size={44} /><Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: '700', textAlign: 'center', marginTop: 4 }}>{r.label}</Text></View>)}</View>
           </LinearGradient>
-          <View style={s.search}><Icon name="search" size={18} color={C.inkSoft} /><TextInput value={q} onChangeText={setQ} placeholder="Search 500 VibeMoji" placeholderTextColor="#A6A2BC" style={{ flex: 1, fontWeight: '600', fontSize: 15, color: C.ink }} /></View>
+          <View style={s.search}><Icon name="search" size={18} color={C.inkSoft} /><TextInput value={q} onChangeText={setQ} placeholder="Search 1000 VibeMoji" placeholderTextColor="#A6A2BC" style={{ flex: 1, fontWeight: '600', fontSize: 15, color: C.ink }} /></View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 14 }}>{['All', 'My Pack', ...VIBEMOJI_CATEGORIES].map(c => <Chip key={c} label={c} active={cat === c} onPress={() => setCat(c)} />)}</ScrollView>
         </View>}
         renderItem={({ item }) => (
@@ -174,6 +174,11 @@ const LESSONS = [
   { id: 'l5', t: 'Rights & AI labels', d: 'What the release gate checks', mins: 3, icon: 'shield' },
   { id: 'l6', t: 'Earning on VibeLoop', d: 'Tips, paid Loops, memberships — fees shown', mins: 4, icon: 'wallet' },
   { id: 'l7', t: 'Staying safe', d: 'Comment Guard, restrict, block, report', mins: 2, icon: 'lock' },
+  { id: 'c1', t: 'Social ⇄ Chat in one tap', d: 'D-Switch, Swipe Worlds, Chat Bubble & Dual Pulse badges', mins: 2, icon: 'chat' },
+  { id: 'c2', t: 'Your @ID, no phone number', d: 'One-time codes, up to 5 accounts, changing your @ID', mins: 3, icon: 'fingerprint' },
+  { id: 'c3', t: 'Request Gate & Privacy Split', d: 'Who can message you, hidden identity, Focus Switch', mins: 3, icon: 'shield' },
+  { id: 'c4', t: 'Chat power moves', d: 'Reply, star, pin, edit (15 min), undo send (60 min), view once, polls, send later', mins: 4, icon: 'send' },
+  { id: 'c5', t: 'Vibes & Towns', d: '24-hour statuses and communities with topic rooms', mins: 3, icon: 'users' },
 ];
 export function Learn() {
   const st = useSocial(); const done = st.lessons.length;
@@ -208,8 +213,11 @@ export function SettingsHub({ navigation }: any) {
       <Header title="Settings" sub="Everything, in one place" />
       <Card>{SET_SECTIONS.map(x => <Row key={x.key} icon={x.icon as any} title={x.t} sub={x.d} onPress={() => navigation.navigate('Settings', { section: x.key })} />)}</Card>
       <Card style={{ marginTop: 12 }}>
+        <Row icon="users" tint="#14B88D" title="Accounts" sub="Switch between up to 5 @IDs" onPress={() => navigation.navigate('Accounts')} />
+        <Row icon="globe" tint={C.violet} title="Language & region" sub="App language, country, zone & plan slab" onPress={() => navigation.navigate('LanguageRegion')} />
         <Row icon="shield" tint={C.pink} title="Trust & safety" sub="Privacy Lock, block, restrict, Comment Guard, reports" onPress={() => navigation.navigate('Trust')} />
-        <Row icon="smile" tint={C.tangerine} title="VibeMoji & Reaction Pack" sub="500 original emoji" onPress={() => navigation.navigate('Emoji')} />
+        <Row icon="smile" tint={C.tangerine} title="VibeMoji & Reaction Pack" sub="1000 original emoji" onPress={() => navigation.navigate('Emoji')} />
+        <Row icon="library" tint={C.violet} title="IconKit" sub="1000 original icons per module" onPress={() => navigation.navigate('IconKit')} />
         <Row icon="book" tint="#12A27C" title="Learn" sub="Short creator lessons" onPress={() => navigation.navigate('Learn')} />
         <Row icon="library" tint={C.violet} title="All features" sub="The 150-feature roadmap and its status" onPress={() => navigation.navigate('Features')} />
       </Card>

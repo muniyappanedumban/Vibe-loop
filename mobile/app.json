@@ -33,7 +33,21 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "VibeLoop uses your photos only when you pick one to post or send.",
+          "cameraPermission": "VibeLoop uses the camera only when you take a photo to post."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "VibeLoop uses your location only when you tag a place on a post or story."
+        }
+      ],
+      "expo-video"
     ],
     "scheme": "vibeloop",
     "splash": {

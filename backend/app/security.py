@@ -19,7 +19,7 @@ def password_ok(pw: str) -> str | None:
     return None
 
 def make_access(user: M.User) -> str:
-    return jwt.encode({"sub": user.id, "role": user.role, "exp": int(time.time()) + ACCESS_TTL_MIN * 60, "iat": int(time.time())}, JWT_SECRET, "HS256")
+    return jwt.encode({"sub": user.id, "role": user.role, "tv": user.token_version or 0, "exp": int(time.time()) + ACCESS_TTL_MIN * 60, "iat": int(time.time())}, JWT_SECRET, "HS256")
 
 def current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> M.User:
     if not authorization.startswith("Bearer "): raise HTTPException(401, "Sign in required")
@@ -27,6 +27,7 @@ def current_user(authorization: str = Header(default=""), db: Session = Depends(
     except jwt.PyJWTError: raise HTTPException(401, "Session expired — sign in again")
     u = db.get(M.User, data["sub"])
     if not u: raise HTTPException(401, "Unknown user")
+    if data.get("tv", 0) != (u.token_version or 0): raise HTTPException(401, "Session ended — sign in again")
     if u.suspended: raise HTTPException(403, "Account suspended")
     return u
 

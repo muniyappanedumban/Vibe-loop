@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from typing import Literal
+import re
 from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import Session
 from .config import CORS_ORIGINS, PLATFORM_FEE
@@ -8,10 +10,23 @@ from .db import get_db, engine, Base
 from . import models as M
 from .security import (hash_password, verify_password, password_ok, make_access, current_user, require, issue_approval, consume_approval, audit)
 from .score import loop_score
+from .middleware import SecurityMiddleware
+from . import routes_identity, routes_chat, routes_config
+from .ratelimit import enforce
+from fastapi import Request
+from .v2common import bare_handle
 from .serial import loop_json, post_json, creator_json, chat_json, user_admin_json
 
 app = FastAPI(title="VibeLoop API", version="1.0.0")
+app.add_middleware(SecurityMiddleware)
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
+from .routes_media import router as media_router
+app.include_router(media_router)
+app.include_router(routes_identity.router)
+app.include_router(routes_chat.router)
+app.include_router(routes_config.router)
+from . import routes_money, routes_store, routes_ads, routes_integrations
+for _r in (routes_money, routes_store, routes_ads, routes_integrations): app.include_router(_r.router)
 STAFF = ("owner",)
 
 @app.get("/health")
@@ -30,9 +45,12 @@ def signup(b: SignUp, db: Session = Depends(get_db)):
     db.add(u); db.flush(); audit(db, u.handle, "auth.signup"); db.commit()
     return {"token": make_access(u), "user": user_admin_json(u)}
 @app.post("/auth/login")
-def login(b: SignIn, db: Session = Depends(get_db)):
-    u = db.scalar(select(M.User).where(M.User.email == b.email.lower()))
-    if not u or not verify_password(b.password, u.password_hash): raise HTTPException(401, "Wrong email or password")
+def login(b: SignIn, req: Request, db: Session = Depends(get_db)):
+    ident = b.email.strip().lower()[:200]
+    enforce("login", ident, req.client.host if req.client else "")
+    q = select(M.User).where(M.User.handle == "@" + bare_handle(ident)) if ident.startswith("@") else select(M.User).where(M.User.email == ident).order_by(M.User.created_at)
+    u = next((x for x in db.scalars(q) if verify_password(b.password, x.password_hash)), None)  # email may hold up to 5 accounts
+    if not u: raise HTTPException(401, "Wrong email or password")
     if u.suspended: raise HTTPException(403, "Account suspended")
     audit(db, u.handle, "auth.login"); db.commit()
     return {"token": make_access(u), "user": user_admin_json(u)}
@@ -57,7 +75,7 @@ def bootstrap(u: M.User = Depends(current_user), db: Session = Depends(get_db)):
         "loops": [loop_json(db, l) for l in loops],
         "txns": [{"id": t.id, "kind": t.kind, "from": t.from_name, "gross": t.gross, "fee": t.fee, "at": t.at, "demo": t.demo} for t in db.scalars(select(M.Txn).where(M.Txn.creator_id == u.id).order_by(M.Txn.at.desc()))],
         "payouts": [{"id": p.id, "amount": p.amount, "status": p.status, "at": p.at, "tokenId": p.token_id} for p in db.scalars(select(M.Payout).where(M.Payout.creator_id == u.id).order_by(M.Payout.at.desc()))],
-        "notices": [{"id": n.id, "kind": n.kind, "title": n.title, "body": n.body, "at": n.at, "read": n.read, "route": n.route, "params": n.params} for n in db.scalars(select(M.Notice).where(M.Notice.user_id == u.id).order_by(M.Notice.at.desc()).limit(100))],
+        "notices": [{"id": n.id, "module": n.module or "social", "kind": n.kind, "title": n.title, "body": n.body, "at": n.at, "read": n.read, "route": n.route, "params": n.params} for n in db.scalars(select(M.Notice).where(M.Notice.user_id == u.id).order_by(M.Notice.at.desc()).limit(100))],
         "audit": [{"id": str(a.id), "at": a.at, "actor": a.actor, "action": a.action, "detail": a.detail} for a in db.scalars(select(M.Audit).where(M.Audit.actor == u.handle).order_by(M.Audit.id.desc()).limit(50))],
         "assets": [{"id": a.id, "title": a.title, "kind": a.kind, "hue": a.hue, "synthetic": a.synthetic, "coreIdentity": a.core_identity, "versions": a.versions} for a in db.scalars(select(M.Asset).where(M.Asset.owner_id == u.id))],
         "insights": [{"id": i.id, "text": i.text, "source": i.source, "corrected": i.corrected, "note": i.note} for i in db.scalars(select(M.Insight).where(M.Insight.owner_id == u.id))],
@@ -66,7 +84,7 @@ def bootstrap(u: M.User = Depends(current_user), db: Session = Depends(get_db)):
         "social": {
             "creators": [creator_json(o, fol.get(o.id, 0)) for o in others],
             "posts": [post_json(db, p, u) for p in posts if p.author_id not in blocked],
-            "sparks": [{"id": s.id, "by": s.author_id, "hue": s.hue, "text": s.text, "poll": s.poll, "close": s.close, "at": s.at} for s in db.scalars(select(M.Spark).order_by(M.Spark.at.desc()))],
+            "sparks": [{"id": s.id, "by": "me" if s.author_id == u.id else s.author_id, "hue": s.hue, "text": s.text, "poll": s.poll, "close": s.close, "at": s.at, "lens": s.lens, "mediaUrl": s.media_url, "place": s.place, "expiresAt": s.expires_at or s.at + 86_400_000} for s in db.scalars(select(M.Spark).order_by(M.Spark.at.desc())) if (s.expires_at or s.at + 86_400_000) > M.now_ms()],
             "chats": [chat_json(db, c, u) for c in chats],
             "tribes": [{"id": t.id, "name": t.name, "kind": t.kind, "members": t.members, "hue": t.hue, "desc": t.desc} for t in db.scalars(select(M.Tribe))],
             "lives": [{"id": v.id, "by": v.author_id, "title": v.title, "at": v.at, "hue": v.hue} for v in db.scalars(select(M.LiveEvent).order_by(M.LiveEvent.at))],
@@ -211,11 +229,28 @@ def privacy_request(kind: str, u: M.User = Depends(current_user), db: Session = 
     r = M.PrivacyRequest(user_id=u.id, kind=kind); db.add(r); audit(db, u.handle, f"privacy.{kind}_request"); db.commit(); return {"id": r.id, "status": r.status}
 
 # ---------- social ----------
-class PostIn(BaseModel): id: str | None = Field(default=None, pattern=r'^[\w-]{3,40}$'); kind: str; text: str = Field(min_length=1, max_length=2200); hue: int = 200; mood: str = "Happy"; interest: str = "Life"; place: str | None = None; bg: str | None = None; slides: int | None = None
+LENS_KEYS = {"none", "warm", "cool", "noir", "neon", "vintage", "festival", "city", "mood", "sparkle"}
+class Caption(BaseModel):
+    text: str = Field(min_length=1, max_length=80); align: Literal["left", "center", "right"] = "center"; at: float = Field(ge=0, le=180); style: Literal["pop", "clean", "neon"] = "clean"
+class VideoEdit(BaseModel):
+    trimStart: float = Field(default=0, ge=0, le=180); trimEnd: float = Field(gt=0, le=180); speed: Literal[0.5, 1, 1.5, 2] = 1
+    captions: list[Caption] = Field(default_factory=list, max_length=20)
+    @model_validator(mode="after")
+    def _order(self):
+        if self.trimEnd <= self.trimStart: raise ValueError("trimEnd must be greater than trimStart")
+        return self
+class PostIn(BaseModel): id: str | None = Field(default=None, pattern=r'^[\w-]{3,40}$'); kind: str; text: str = Field(min_length=1, max_length=2200); hue: int = 200; mood: str = "Happy"; interest: str = "Life"; place: str | None = Field(default=None, max_length=120); bg: str | None = None; slides: int | None = None; mediaUrl: str | None = Field(default=None, pattern=r'^/media/[\w.-]+$'); lens: str | None = None; lat: float | None = Field(default=None, ge=-90, le=90); lng: float | None = Field(default=None, ge=-180, le=180); tags: list[str] = Field(default_factory=list, max_length=20); collab: str | None = Field(default=None, max_length=40); sound: str | None = Field(default=None, max_length=80); audience: str = "public"; edit: VideoEdit | None = None
 @app.post("/posts")
 def create_post(b: PostIn, u: M.User = Depends(current_user), db: Session = Depends(get_db)):
     if b.kind not in ("photo", "carousel", "thought", "motion"): raise HTTPException(400, "Unknown post type")
-    data = b.model_dump(); data['id'] = data['id'] or M.nid('p')
+    if b.lens and b.lens not in LENS_KEYS: raise HTTPException(400, 'Unknown lens')
+    if b.audience not in ('public', 'circle', 'quiet'): raise HTTPException(400, 'Audience must be public, circle or quiet')
+    mf = db.get(M.MediaFile, b.mediaUrl.split('/')[-1].split('.')[0]) if b.mediaUrl else None
+    if b.mediaUrl and not mf: raise HTTPException(400, 'Upload the media first')
+    if b.edit and (not mf or mf.kind != "video"): raise HTTPException(400, 'Video edits need an uploaded video')
+    if b.collab and not db.scalar(select(M.User).where(M.User.handle == ('@' + b.collab.lstrip('@')).lower())): raise HTTPException(404, 'Collab partner @ID not found')
+    data = b.model_dump(); data['media_url'] = data.pop('mediaUrl'); data['tags'] = [t.strip()[:40] for t in data['tags'] if t.strip()]; data['id'] = data['id'] or M.nid('p')
+    data['media_kind'] = mf.kind if mf else None
     if db.get(M.Post, data['id']): raise HTTPException(409, 'Post id exists')
     p = M.Post(author_id=u.id, **data); db.add(p); db.flush(); audit(db, u.handle, "post.create", p.id); db.commit(); return post_json(db, p, u)
 @app.delete("/posts/{pid}")
@@ -223,10 +258,12 @@ def delete_post(pid: str, u: M.User = Depends(current_user), db: Session = Depen
     p = db.get(M.Post, pid)
     if not p or p.author_id != u.id: raise HTTPException(404, "Not found")
     p.hidden = True; db.commit(); return {"ok": True}
+STD_REACTIONS = ("heart", "fire", "laugh", "touch", "clap", "boom")
+VMOJI_RE = re.compile(r"^m([1-9]\d{0,2}|1000)$")  # any VibeMoji m1..m1000
 @app.post("/posts/{pid}/react")
 def react_post(pid: str, b: dict, u: M.User = Depends(current_user), db: Session = Depends(get_db)):
     p = db.get(M.Post, pid); key = b.get("key")
-    if not p or key not in ("heart", "fire", "laugh", "touch", "clap", "boom"): raise HTTPException(400, "Invalid")
+    if not p or not isinstance(key, str) or not (key in STD_REACTIONS or VMOJI_RE.match(key)): raise HTTPException(400, "Invalid")
     ex = db.get(M.PostReaction, (u.id, pid))
     if ex and ex.key == key: db.delete(ex)
     elif ex: ex.key = key
@@ -347,7 +384,8 @@ def kv_get(ns: str, a: M.User = Depends(require(*STAFF)), db: Session = Depends(
     return {k.key: k.value for k in db.scalars(select(M.KV).where(M.KV.ns == ns))}
 @app.put("/admin/kv/{ns}/{key}")
 def kv_put(ns: str, key: str, value: dict, a: M.User = Depends(require(*STAFF)), db: Session = Depends(get_db)):
-    if ns not in ("flag", "kill", "settings", "roles", "emoji", "feature"): raise HTTPException(400, "Unknown namespace")
+    if ns not in ("flag", "kill", "settings", "roles", "emoji", "feature", "reserved"): raise HTTPException(400, "Unknown namespace")
+    if ns == "reserved": key = bare_handle(key)[:20]
     db.merge(M.KV(ns=ns, key=key, value=value)); audit(db, a.handle, f"{ns}.set", f"{key}={value}"); db.commit(); return {"ok": True}
 @app.get("/admin/privacy")
 def admin_privacy(a: M.User = Depends(require(*STAFF)), db: Session = Depends(get_db)):

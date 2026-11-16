@@ -11,6 +11,8 @@ import { useSocial, compact } from '../store/useSocial';
 import { VibeMoji } from '../components/VibeMoji';
 import { ago, money, DAY } from '../lib/util';
 import { online } from '../lib/api';
+import { switchModule } from '../components/ModuleSwitch';
+import { useMoney } from './Money2';
 import { publishOnline, payoutOnline } from '../lib/sync';
 
 /** Hold-to-sign: the explicit human approval step that mints a one-time token. */
@@ -82,7 +84,7 @@ export function ReleaseGate({ navigation, route }: any) {
 }
 
 export function Profile({ navigation }: any) {
-  const st = useStore(); const so = useSocial();
+  const st = useStore(); const so = useSocial(); const moneyOn = useMoney();
   const released = st.loops.filter(l => l.status === 'released').length;
   const mine = so.posts.filter(p => p.mine);
   const grid = mine.length ? mine : so.posts.slice(0, 6);
@@ -125,9 +127,10 @@ export function Profile({ navigation }: any) {
         <Card style={{ marginTop: S.lg }}>
           <Row icon="loops" title="Loops" sub="Private testing groups" onPress={() => navigation.navigate('Loops')} />
           <Row icon="library" title="Library & Memory Graph" onPress={() => navigation.navigate('Library')} />
+          {moneyOn ? <Row icon="cash" title="Cash Flow" sub="Stash · Backstage Pass · Props" onPress={() => navigation.navigate('CashFlow')} tint={C.violet} /> : null}
           <Row icon="wallet" title="Earnings & payouts" onPress={() => navigation.navigate('Earnings')} tint={C.pink} />
           <Row icon="chart" title="Pulse Board" sub="Growth analytics" onPress={() => navigation.navigate('Growth')} tint="#2B7BF0" />
-          <Row icon="chat" title="Messages" onPress={() => navigation.navigate('Chats')} tint="#12A27C" />
+          <Row icon="chat" title="Open Chat" sub="Messages live in the Chat module" onPress={() => switchModule(navigation, 'chat')} tint="#12A27C" />
           <Row icon="bookmark" title="My Vault" onPress={() => navigation.navigate('Vault')} />
           <Row icon="archive" title="Learning Archive" onPress={() => navigation.navigate('Archive')} tint={C.tangerine} />
           <Row icon="shield" title="Trust & safety" onPress={() => navigation.navigate('Trust')} tint={C.danger} />

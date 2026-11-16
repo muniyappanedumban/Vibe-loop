@@ -7,7 +7,8 @@ from app.main import app
 
 @pytest.fixture()
 def client():
-    seed.run(reset=True)
+    from app.ratelimit import limiter
+    seed.run(reset=True); limiter.reset()
     return TestClient(app)
 
 def login(c, email):

@@ -83,7 +83,7 @@ const P: Record<IconName, (c: string) => React.ReactNode> = {
 export function Icon({ name, size = 22, color = C.ink, stroke = 2 }: { name: IconName; size?: number; color?: string; stroke?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
-      {P[name](color)}
+      {(P[name] ?? P.spark)(color)}
     </Svg>
   );
 }

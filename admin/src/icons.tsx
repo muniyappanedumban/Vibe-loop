@@ -29,12 +29,41 @@ const P: Record<string, string> = {
   x: 'M6 6l12 12M18 6L6 18',
   up: 'M12 19V5M5 12l7-7 7 7',
   key: 'M8 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11 11l10 0M18 11v3M21 11v2',
+  navigation: 'M5 3h14v18H5zM5 16h14M8.5 18.5h.01M12 18.5h.01M15.5 18.5h.01',
+  screens: 'M7 2h10v20H7zM11 18h2',
+  themes: 'M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 21 9.8C21 6 17 3 12 3zM7.5 12.5h.01M9.5 8h.01M14.5 8h.01M17 11.5h.01',
+  limits: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4',
+  zones: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18',
+  slabs: 'M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5',
+  languages: 'M4 5h8M8 3v2M6 5c0 4 3 7 6 8M10 5c0 4-3 7-6 8M13 21l4-9 4 9M14.5 18h5',
+  preview: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  otp: 'M5 10h14v11H5zM8 10V7a4 4 0 0 1 8 0v3M9 15.5h.01M12 15.5h.01M15 15.5h.01',
+  identity: 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1',
+  chat: 'M4 5h16v11H9l-5 4z',
+  learn: 'M2 7l10-4 10 4-10 4zM6 9v5c0 1.5 3 3 6 3s6-1.5 6-3V9M22 7v6',
+  down: 'M12 5v14M5 12l7 7 7-7',
+  cashflow: 'M3 17l5-5 4 4 8-8M15 8h5v5',
+  money: 'M3 6h18v12H3zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 9v.01M18 15v.01',
+  plans: 'M4 8l8-5 8 5v8l-8 5-8-5zM4 8l8 5 8-5M12 13v8',
+  countries: 'M4 21V4M4 4h10l-1 3h7v8h-9l1-3H4',
+  boosts: 'M13 2L4 14h7l-1 8 9-12h-7z',
+  stash: 'M4 7h16l-1.5 13h-13zM9 7V5a3 3 0 0 1 6 0v2',
+  plugs: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
+  't-home': 'M3 11l9-7 9 7v9h-6v-6H9v6H3z',
+  't-compass': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15.5 8.5l-2 5-5 2 2-5z',
+  't-plus': 'M12 5v14M5 12h14',
+  't-play': 'M7 4l13 8-13 8z',
+  't-user': 'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.5-6 8-6s8 2 8 6',
+  't-users': 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21c0-4 3-6 7-6s7 2 7 6M16 3.5a4 4 0 0 1 0 7.5M18 15c2.5.6 4 2.6 4 6',
+  't-message': 'M4 5h16v11H9l-5 4z',
+  't-sparkle': 'M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z',
+  't-town': 'M3 21h18M5 21V10l4-3 4 3v11M13 21V6l3-3 3 3v15M8 13h2M8 17h2M15 9h2M15 13h2',
 };
 
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d={P[name]} />
+      <path d={P[name] ?? P['t-sparkle']} />
     </svg>
   );
 }

@@ -8,7 +8,7 @@ def nid(p: str) -> str: return f"{p}_{uuid.uuid4().hex[:12]}"
 class User(Base):
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("usr"))
-    email: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(200), index=True)  # not unique: up to 5 accounts per email (v2)
     handle: Mapped[str] = mapped_column(String(60), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
     password_hash: Mapped[str] = mapped_column(String(300))
@@ -22,6 +22,11 @@ class User(Base):
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
     social: Mapped[dict] = mapped_column(JSON, default=dict)  # privacy, reactionPack, lessons, reminders, mood
     created_at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+    # v2 identity
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    handle_changed_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    profile: Mapped[dict] = mapped_column(JSON, default=dict)  # chat_bio, hidden, who_can_message, ghost_hours, focus_social_muted, social_private, chat_read_receipts, mood
 
 class Loop(Base):
     __tablename__ = "loops"
@@ -81,6 +86,7 @@ class Notice(Base):
     title: Mapped[str] = mapped_column(String(200)); body: Mapped[str] = mapped_column(Text, default="")
     route: Mapped[str | None] = mapped_column(String(40), nullable=True); params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     read: Mapped[bool] = mapped_column(Boolean, default=False); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+    module: Mapped[str] = mapped_column(String(10), default="social", server_default="social")  # social|chat
 
 class Audit(Base):
     """Append-only: the API exposes no update or delete for this table."""
@@ -114,6 +120,13 @@ class Post(Base):
     shares: Mapped[int] = mapped_column(Integer, default=0); views: Mapped[int] = mapped_column(Integer, default=0)
     hidden: Mapped[bool] = mapped_column(Boolean, default=False); at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
     seed_reactions: Mapped[dict] = mapped_column(JSON, default=dict)  # demo baseline counts, labelled demo in UI
+    # creation studio: uploaded media, lens overlay, location tag, #tags/@mentions, collab partner, sound tag, audience
+    media_url: Mapped[str | None] = mapped_column(String(200), nullable=True); lens: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True); lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tags: Mapped[list] = mapped_column(JSON, default=list); collab: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    sound: Mapped[str | None] = mapped_column(String(80), nullable=True); audience: Mapped[str] = mapped_column(String(12), default="public")
+    # v3 video: media kind of the attached upload + validated edit metadata {trimStart, trimEnd, speed, captions[]}
+    media_kind: Mapped[str | None] = mapped_column(String(10), nullable=True); edit: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 class PostReaction(Base):
     __tablename__ = "post_reactions"
@@ -151,6 +164,14 @@ class Spark(Base):
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("s"))
     author_id: Mapped[str] = mapped_column(ForeignKey("users.id")); hue: Mapped[int] = mapped_column(Integer); text: Mapped[str] = mapped_column(Text)
     poll: Mapped[dict | None] = mapped_column(JSON, nullable=True); close: Mapped[bool] = mapped_column(Boolean, default=False); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+    lens: Mapped[str | None] = mapped_column(String(20), nullable=True); media_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    place: Mapped[str | None] = mapped_column(String(120), nullable=True); expires_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+class MediaFile(Base):
+    __tablename__ = "media_files"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True); owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    mime: Mapped[str] = mapped_column(String(40)); size: Mapped[int] = mapped_column(Integer); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+    kind: Mapped[str] = mapped_column(String(10), default="image", server_default="image")  # image|video
 
 class Tribe(Base):
     __tablename__ = "tribes"
@@ -186,3 +207,149 @@ class Announcement(Base):
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("an"))
     title: Mapped[str] = mapped_column(String(200)); body: Mapped[str] = mapped_column(Text); audience: Mapped[str] = mapped_column(String(30))
     by: Mapped[str] = mapped_column(String(120)); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+
+# ======================= v2: identity + chat module =======================
+class OtpRequest(Base):
+    """One row per OTP request. code_hash is HMAC-SHA256 (never the code). Unknown identifiers get a row with no user and no code."""
+    __tablename__ = "otp_requests"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("otp"))
+    user_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    identifier: Mapped[str] = mapped_column(String(200)); ip: Mapped[str] = mapped_column(String(64), default="")
+    code_hash: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    expires_at: Mapped[int] = mapped_column(BigInteger, default=0); attempts: Mapped[int] = mapped_column(Integer, default=0)
+    used_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True); verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    rate_limited: Mapped[bool] = mapped_column(Boolean, default=False); at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+
+class HandleChange(Base):
+    __tablename__ = "handle_changes"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("hc"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    old: Mapped[str] = mapped_column(String(60), index=True); new: Mapped[str] = mapped_column(String(60)); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class Friend(Base):
+    """Directional row per side of a friendship (close/bestie are per-side labels)."""
+    __tablename__ = "friends"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    friend_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    close: Mapped[bool] = mapped_column(Boolean, default=False); bestie: Mapped[bool] = mapped_column(Boolean, default=False)
+    since: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class FriendRequest(Base):
+    __tablename__ = "friend_requests"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("fr"))
+    from_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True); to_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    status: Mapped[str] = mapped_column(String(12), default="pending"); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class Conv(Base):
+    __tablename__ = "convs"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("cv"))
+    title: Mapped[str] = mapped_column(String(120), default=""); group: Mapped[bool] = mapped_column(Boolean, default=False)
+    members: Mapped[list] = mapped_column(JSON, default=list)
+    state: Mapped[dict] = mapped_column(JSON, default=dict)  # {userId: {folder, muted, pinned, locked, theme, request, lastRead}}
+    fade_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(40), default=""); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class ChatMsg(Base):
+    __tablename__ = "chat_messages"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("cm"))
+    conv_id: Mapped[str] = mapped_column(ForeignKey("convs.id"), index=True); sender: Mapped[str] = mapped_column(String(40))
+    kind: Mapped[str] = mapped_column(String(12), default="text"); text: Mapped[str] = mapped_column(Text, default="")
+    reply_to: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    reactions: Mapped[list] = mapped_column(JSON, default=list); starred_by: Mapped[list] = mapped_column(JSON, default=list)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False); edited: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+    expires_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True); send_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    poll: Mapped[dict | None] = mapped_column(JSON, nullable=True); ref: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    opened_by: Mapped[list] = mapped_column(JSON, default=list)
+
+class Status(Base):
+    __tablename__ = "statuses"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("st"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(10)); text: Mapped[str] = mapped_column(String(300), default="")
+    moji: Mapped[int | None] = mapped_column(Integer, nullable=True); bg: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    audience: Mapped[str] = mapped_column(String(10), default="friends"); at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+
+class Town(Base):
+    __tablename__ = "towns"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("town"))
+    name: Mapped[str] = mapped_column(String(80)); open: Mapped[bool] = mapped_column(Boolean, default=True)
+    hue: Mapped[int] = mapped_column(Integer, default=200); about: Mapped[str] = mapped_column(String(500), default="")
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id")); invite_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    suspended: Mapped[bool] = mapped_column(Boolean, default=False); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class TownMember(Base):
+    __tablename__ = "town_members"
+    town_id: Mapped[str] = mapped_column(ForeignKey("towns.id"), primary_key=True); user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    role: Mapped[str] = mapped_column(String(12), default="member"); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class TownChannel(Base):
+    __tablename__ = "town_channels"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("ch"))
+    town_id: Mapped[str] = mapped_column(ForeignKey("towns.id"), index=True); name: Mapped[str] = mapped_column(String(40))
+
+class TownMessage(Base):
+    __tablename__ = "town_messages"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("tm"))
+    channel_id: Mapped[str] = mapped_column(ForeignKey("town_channels.id"), index=True); sender: Mapped[str] = mapped_column(String(40))
+    text: Mapped[str] = mapped_column(Text); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class TownBoard(Base):
+    __tablename__ = "town_board"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("tb"))
+    town_id: Mapped[str] = mapped_column(ForeignKey("towns.id"), index=True); text: Mapped[str] = mapped_column(String(1000))
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+
+# ======================= v3: money (admin-switchable), store, ads =======================
+class Plan(Base):
+    """Subscription plan. prices = {ISO2: minor units}; currency per country comes from the country-pricing table."""
+    __tablename__ = "plans"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("plan"))
+    name: Mapped[str] = mapped_column(String(80)); perks: Mapped[list] = mapped_column(JSON, default=list)
+    period: Mapped[str] = mapped_column(String(10), default="month"); prices: Mapped[dict] = mapped_column(JSON, default=dict)
+    active: Mapped[bool] = mapped_column(Boolean, default=True); demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort: Mapped[int] = mapped_column(Integer, default=0); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class Product(Base):
+    __tablename__ = "store_products"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("prd"))
+    creator_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(120)); desc: Mapped[str] = mapped_column(Text, default="")
+    price: Mapped[int] = mapped_column(Integer, default=0); currency: Mapped[str] = mapped_column(String(3), default="INR")  # minor units
+    media_url: Mapped[str | None] = mapped_column(String(200), nullable=True); kind: Mapped[str] = mapped_column(String(10), default="digital")
+    stock: Mapped[int | None] = mapped_column(Integer, nullable=True); active: Mapped[bool] = mapped_column(Boolean, default=True)
+    demo: Mapped[bool] = mapped_column(Boolean, default=False); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class Order(Base):
+    """A payment intent. Only a verified provider webhook moves status to paid (and records the platform fee)."""
+    __tablename__ = "orders"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("ord"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(12))  # subscription|product|tip
+    ref_id: Mapped[str] = mapped_column(String(40)); creator_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    amount: Mapped[int] = mapped_column(Integer); currency: Mapped[str] = mapped_column(String(3), default="INR")
+    provider: Mapped[str] = mapped_column(String(12)); provider_ref: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    pay_url: Mapped[str | None] = mapped_column(String(300), nullable=True); test_mode: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(12), default="created"); fee: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str] = mapped_column(String(200), default=""); at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+    paid_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("sub"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True); plan_id: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(12), default="active"); renews_at: Mapped[int] = mapped_column(BigInteger)
+    order_id: Mapped[str] = mapped_column(String(40)); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class Ad(Base):
+    """Admin-created ads only; always shown labelled \"Sponsored\"."""
+    __tablename__ = "ads"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("ad"))
+    title: Mapped[str] = mapped_column(String(80)); body: Mapped[str] = mapped_column(String(200), default="")
+    cta: Mapped[str] = mapped_column(String(30), default="Learn more"); url: Mapped[str] = mapped_column(String(300))
+    sponsor: Mapped[str] = mapped_column(String(80)); places: Mapped[list] = mapped_column(JSON, default=list)
+    active: Mapped[bool] = mapped_column(Boolean, default=True); demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    impressions: Mapped[int] = mapped_column(Integer, default=0); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)

@@ -23,9 +23,9 @@ const RAW: [string, string, IconName, string, string[]][] = [
     'Vote Spark|Interactive story polls|chart|Sparks', 'Ask Spark|Question-and-answer stickers|chat|', 'React Spark|VibeMoji reactions on stories|smile|Sparks',
     'Countdown Spark|Event countdowns|calendar|', 'Local Spark|Location-tagged stories|pin|', 'Link Spark|Share approved external links|link|', 'Forever Sparks|Permanent story highlights|star|Profile']],
   ['connect', 'Loop Connect', 'chat', '#14B88D', [
-    'Loop Talk|Private direct messages|chat|Chats', 'Circle Chat|Group messaging|users|Chats', 'Voice Bubble|Voice messages|mic|',
-    'Snap Reply|Photo and video replies|camera|', 'Quick React|VibeMoji message reactions|smile|Chats', 'Pin Talk|Pin important conversations|pin|Chats',
-    'Chat Finder|Search messages|search|Search', 'Chat Vibes|Conversation themes|palette|', 'Quiet Mode|Mute conversations|bell|Chats', 'Safe Inbox|Message requests, blocking and reporting|shield|Trust']],
+    'Loop Talk|Private direct messages|chat|ChatMain', 'Circle Chat|Group messaging|users|ChatMain', 'Voice Bubble|Voice messages|mic|',
+    'Snap Reply|Photo and video replies|camera|', 'Quick React|VibeMoji message reactions|smile|ChatMain', 'Pin Talk|Pin important conversations|pin|ChatMain',
+    'Chat Finder|Search messages|search|ChatSearch', 'Chat Vibes|Conversation themes|palette|', 'Quiet Mode|Mute conversations|bell|ChatMain', 'Safe Inbox|Message requests, blocking and reporting|shield|Trust']],
   ['identity', 'Loop Identity', 'user', '#2B7BF0', [
     'My Space|Custom profile page|user|Profile', 'Vibe Circle|Followers and following|users|Profile', 'Vibe Bio|Personalized biography|text|Profile',
     'Link Shelf|Multiple profile links|link|', 'Profile Mood|Temporary status or mood|smile|Profile', 'Cover Space|Profile banner|image|Profile',
@@ -36,8 +36,8 @@ const RAW: [string, string, IconName, string, string[]][] = [
     'Reel Factory|Produce short-form videos|film|Editor', 'Creator Calendar|Schedule content|calendar|', 'Growth Pulse|Reach and engagement analytics|chart|Growth', 'Content Battle|Compare creative variations (A/B Loops)|layers|Loops']],
   ['local', 'Loop Local', 'pin', '#FF3D9A', [
     'Desi Vibes|Discover Indian regional content|spark|Explore', 'Namma Voice|Natural regional-language content|chat|', 'City Pulse|City-specific content feed|pin|',
-    'Area Circle|Neighborhood communities|users|Tribes', 'Festival Flow|Regional festival content|gift|', 'Foodie Streets|Discover local food creators|flame|Tribes',
-    'Campus Buzz|College and campus communities|book|Tribes', 'Match Vibes|Sports fan conversations|trophy|Tribes', 'City Stories|Local travel and lifestyle posts|globe|', 'Local Talent|Spotlight regional creators|star|']],
+    'Area Circle|Neighborhood communities|users|ChatMain', 'Festival Flow|Regional festival content|gift|', 'Foodie Streets|Discover local food creators|flame|ChatMain',
+    'Campus Buzz|College and campus communities|book|ChatMain', 'Match Vibes|Sports fan conversations|trophy|ChatMain', 'City Stories|Local travel and lifestyle posts|globe|', 'Local Talent|Spotlight regional creators|star|']],
   ['expression', 'Vibe Expression', 'smile', '#FFA62E', [
     'Vibe Hearts|Standard like reaction|heart|Emoji', 'Heat Wave|Excitement reaction|flame|Emoji', 'Giggle Burst|Funny content reaction|smile|Emoji',
     'Soft Spot|Emotional reaction|heart|Emoji', 'Big Applause|Appreciation reaction|star|Emoji', 'Mind Pop|Surprise reaction|spark|Emoji',
@@ -47,8 +47,8 @@ const RAW: [string, string, IconName, string, string[]][] = [
     'Live Hearts|Real-time reactions|heart|Live', 'Live Questions|Audience questions|chat|', 'Live Vote|Polls during broadcasts|chart|',
     'Live Countdown|Scheduled live announcements|calendar|Live', 'Audio Room|Live audio discussions|mic|', 'Live Replay|Save permitted recordings|play|', 'Live Shield|Moderation, reporting and host controls|shield|']],
   ['tribes', 'Loop Tribes', 'users', '#14B88D', [
-    'Loop Tribes|Interest-based groups|users|Tribes', 'City Tribes|City communities|pin|Tribes', 'Food Tribes|Food discussion groups|flame|Tribes',
-    'Gaming Tribes|Gaming communities|star|Tribes', 'Creative Tribes|Art and design communities|palette|Tribes', 'Student Tribes|Student groups|book|Tribes',
+    'Loop Tribes|Interest-based groups|users|ChatMain', 'City Tribes|City communities|pin|ChatMain', 'Food Tribes|Food discussion groups|flame|ChatMain',
+    'Gaming Tribes|Gaming communities|star|ChatMain', 'Creative Tribes|Art and design communities|palette|ChatMain', 'Student Tribes|Student groups|book|ChatMain',
     'Tribe Board|Community announcements|flag|', 'Tribe Events|Group events|calendar|', 'Tribe Polls|Community voting|chart|', 'Tribe Guard|Group moderation tools|shield|']],
   ['originals', 'Loop Originals', 'spark', '#C86BFF', [
     'Secret Cheer|Private appreciation with abuse controls|heart|', 'Story Chain|Friends continue a shared visual story|link|', 'Mood Match|Find content matching a mood|smile|Explore',

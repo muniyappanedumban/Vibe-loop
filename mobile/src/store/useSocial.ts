@@ -6,8 +6,9 @@ import { uid, HOUR, DAY } from '../lib/util';
 import { bg, replacePost, replaceChat } from '../lib/sync';
 
 export type Creator = { id: string; name: string; handle: string; hue: number; city: string; badge?: boolean; bio: string; followers: number };
-export type Post = { id: string; by: string; kind: 'photo' | 'carousel' | 'thought' | 'motion'; text: string; hue: number; slides?: number; mood: string; interest: string; place?: string; at: number; reactions: Record<string, number>; comments: { by: string; text: string }[]; shares: number; views: number; mine?: boolean; bg?: string };
-export type Spark = { id: string; by: string; hue: number; text: string; poll?: { q: string; a: string; b: string; va: number; vb: number }; close?: boolean; at: number };
+export type Post = { id: string; by: string; kind: 'photo' | 'carousel' | 'thought' | 'motion'; text: string; hue: number; slides?: number; mood: string; interest: string; place?: string; at: number; reactions: Record<string, number>; comments: { by: string; text: string }[]; shares: number; views: number; mine?: boolean; bg?: string;
+  mediaUrl?: string | null; lens?: string | null; lat?: number | null; lng?: number | null; tags?: string[]; collab?: string | null; sound?: string | null; audience?: string };
+export type Spark = { id: string; by: string; hue: number; text: string; poll?: { q: string; a: string; b: string; va: number; vb: number }; close?: boolean; at: number; lens?: string | null; mediaUrl?: string | null; place?: string | null; expiresAt?: number };
 export type Msg = { id: string; from: string; text: string; at: number; react?: number };
 export type Chat = { id: string; title: string; members: string[]; group: boolean; pinned: boolean; muted: boolean; msgs: Msg[]; request?: boolean };
 export type Tribe = { id: string; name: string; kind: string; members: number; hue: number; desc: string };

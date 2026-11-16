@@ -12,11 +12,11 @@ def run(reset=False):
     db = SessionLocal()
     if db.get(M.User, "usr_riya"): print("already seeded"); return
     t = int(time.time() * 1000); pw = hash_password(DEMO_PASSWORD)
-    U = lambda id, email, handle, name, role, hue=280, **k: M.User(id=id, email=email, handle=handle, name=name, role=role, hue=hue, password_hash=pw, **k)
+    U = lambda id, email, handle, name, role, hue=280, **k: M.User(id=id, email=email, handle=handle, name=name, role=role, hue=hue, password_hash=pw, verified=True, **k)
     db.add_all([
         U("usr_admin", "admin@vibeloop.app", "@vibeloop.staff", "VibeLoop Staff", "owner", 250),
         U("usr_riya", "riya@vibeloop.app", "@riya.makes", "Riya Kapoor", "creator", 280, bio="Comedy shorts about office chai life · testing everything in Loops first",
-          settings={"minPayout": 500, "currency": "INR"}, social={"privacy": {"privateAccount": False, "teenSpace": False, "hideLikes": False, "commentGuard": True, "guardWords": ["spam", "fake followers"], "msgRequests": True}, "reactionPack": [7, 42, 118, 203, 77, 311], "profileMood": 118}),
+          created_at=t - 400 * D, settings={"minPayout": 500, "currency": "INR"}, social={"privacy": {"privateAccount": False, "teenSpace": False, "hideLikes": False, "commentGuard": True, "guardWords": ["spam", "fake followers"], "msgRequests": True}, "reactionPack": [7, 42, 118, 203, 77, 311], "profileMood": 118}),
     ])
     creators = [("u1", "Aanya Rao", "@aanya.eats", 20, "Bengaluru", True, "Street food, one plate at a time"), ("u2", "Kabir Shah", "@kabir.frames", 260, "Mumbai", False, "Cinematic city walks"),
                 ("u3", "Meera Iyer", "@meera.learns", 160, "Chennai", True, "Finance, explained simply"), ("u4", "Zoya Khan", "@zoya.draws", 320, "Hyderabad", False, "Illustrator · color days"),
@@ -82,8 +82,91 @@ def run(reset=False):
     db.add_all([M.Edge(user_id="usr_riya", kind="follow", target=x) for x in ["u1", "u3", "u4"]] + [M.Edge(user_id="usr_riya", kind="save", target="p3"), M.Edge(user_id="usr_riya", kind="join", target="t1")])
     db.add_all([M.Report(reporter_id="u3", target="p5", reason="Spam"), M.Report(reporter_id="u1", target="x1", reason="Spam message request")])
     db.add(M.Payout(creator_id="usr_riya", amount=500, status="pending_review", token_id="apr_seed2", at=t - 20 * H))
-    for k in ["publishing", "payouts", "ai_generation", "signups"]: db.add(M.KV(ns="kill", key=k, value={"on": False}))
+    for k in ["publishing", "payouts", "ai_generation", "signups", "chat", "social", "otp"]: db.add(M.KV(ns="kill", key=k, value={"on": False}))
+    seed_v2(db, t)
+    seed_v3(db, t)
     db.add(M.Audit(actor="system", action="seed", detail="demo data loaded"))
     db.commit(); print("seeded. demo logins: riya@vibeloop.app / admin@vibeloop.app, password", DEMO_PASSWORD)
+
+def seed_v2(db, t):
+    """v2: multi-account, chat world, towns, statuses, server-driven config."""
+    from .config_seed import LAYERS
+    from .config_resolver import DEFAULT_ZONES, DEFAULT_SLABS, DEFAULT_LANGS
+    MIN = 60_000
+    db.add(M.User(id="usr_riya_chat", email="riya@vibeloop.app", handle="@riya.chats", name="Riya (Chat)", role="creator", hue=300, verified=True,
+                  password_hash="!otp-only", created_at=t - 100 * D, profile={"chat_bio": "Chat-only account · DMs open for collabs", "mood": 42}))
+    db.get(M.User, "usr_riya").profile = {"chat_bio": "Chai, comedy & Coimbatore", "mood": 118, "country": "IN", "lang": "en"}
+    for uid, bio in [("u1", "Dosa diaries"), ("u3", "Ask me about SIPs"), ("u4", "Drawing every day"), ("u6", "On a train somewhere")]:
+        db.get(M.User, uid).profile = {"chat_bio": bio}
+    F = lambda a, b, since, close=False, bestie=False: [M.Friend(user_id=a, friend_id=b, close=close, bestie=bestie, since=since), M.Friend(user_id=b, friend_id=a, since=since)]
+    db.add_all(F("usr_riya", "u1", t - 300 * D, close=True, bestie=True) + F("usr_riya", "u3", t - 200 * D, close=True) + F("usr_riya", "u4", t - 90 * D) + F("usr_riya", "u6", t - 30 * D)
+               + F("u1", "u4", t - 50 * D) + F("u4", "u6", t - 40 * D) + F("u1", "u6", t - 20 * D))
+    db.add_all([M.FriendRequest(id="fr_u5", from_id="u5", to_id="usr_riya", at=t - 4 * H), M.FriendRequest(id="fr_u2", from_id="usr_riya", to_id="u2", at=t - 26 * H)])
+    db.add_all([M.Conv(id="cv_u1", members=["usr_riya", "u1"], created_by="u1", at=t - 10 * D, state={"usr_riya": {"pinned": True, "folder": "friends", "lastRead": t - 45 * MIN}, "u1": {"folder": "friends"}}),
+                M.Conv(id="cv_u3", members=["usr_riya", "u3"], created_by="usr_riya", at=t - 8 * D, state={"usr_riya": {"folder": "work", "lastRead": t}, "u3": {}}),
+                M.Conv(id="cv_weekend", title="Weekend Plan", group=True, members=["usr_riya", "u1", "u4", "u6"], created_by="u4", at=t - 3 * D,
+                       state={"usr_riya": {"folder": "groups", "lastRead": t - 3 * H}, "u1": {"folder": "groups"}, "u4": {}, "u6": {}}),
+                M.Conv(id="cv_x1", members=["x1", "usr_riya"], created_by="x1", at=t - 3 * H, state={"x1": {}, "usr_riya": {"request": True}})])
+    db.flush()
+    C = lambda id, cv, by, text, ago, **k: M.ChatMsg(id=id, conv_id=cv, sender=by, text=text, at=t - ago, **k)
+    db.add_all([
+        C("cm_a1", "cv_u1", "u1", "Your chai episode had me crying ", 60 * MIN, reactions=[{"moji": 7, "by": "usr_riya"}]),
+        C("cm_a2", "cv_u1", "usr_riya", "Haha thank you! Collab on a food ep?", 55 * MIN, starred_by=["usr_riya"]),
+        C("cm_a3", "cv_u1", "u1", "Yes!! Saturday? I know a benne dosa place", 50 * MIN, reply_to="cm_a2", pinned=True),
+        C("cm_a4", "cv_u1", "usr_riya", "Saturday 8am, I'll bring the camera", 46 * MIN, reply_to="cm_a3"),
+        C("cm_a5", "cv_u1", "u1", "Deal. Sending the location soon", 30 * MIN),
+        C("cm_a6", "cv_u1", "u1", "", 20 * MIN, kind="post", ref={"type": "post", "id": "p1", "title": "Benne dosa at 7am hits different. Tag your breakfast buddy.", "hue": 25}),
+        C("cm_m1", "cv_u3", "u3", "Sent you the SIP explainer script", D, starred_by=["usr_riya"]),
+        C("cm_m2", "cv_u3", "usr_riya", "Reading it tonight — the hook is great", D - 2 * H, pinned=True),
+        C("cm_m3", "cv_u3", "u3", "Cool, tell me if the numbers part drags", D - 3 * H, reply_to="cm_m2"),
+        C("cm_g1", "cv_weekend", "u4", "Okay team, Saturday plan?", 5 * H),
+        C("cm_g2", "cv_weekend", "u4", "", 4 * H + 50 * MIN, kind="poll", poll={"q": "Where do we go Saturday?", "options": [{"text": "Isha Yoga Center", "votes": 2}, {"text": "Kovai Kondattam", "votes": 1}, {"text": "Brookefields Mall", "votes": 0}],
+                                                                       "voters": {"u4": 0, "u6": 0, "u1": 1}}),
+        C("cm_g3", "cv_weekend", "u6", "I'm in either way, bringing snacks", 4 * H),
+        C("cm_g4", "cv_weekend", "u1", "Riya vote pls ", 2 * H),
+        C("cm_x1", "cv_x1", "x1", "Want 10k followers fast? DM for prices ", 3 * H),
+    ])
+    db.add_all([M.Status(id="st_u1", user_id="u1", kind="text", text="Found the crispiest dosa in town", bg="#FF8A3D", audience="friends", at=t - 2 * H),
+                M.Status(id="st_u4", user_id="u4", kind="mood", moji=203, text="Sketching all day", audience="close", at=t - 5 * H),
+                M.Status(id="st_u6", user_id="u6", kind="text", text="Munnar mist this morning", bg="#3DBE8B", audience="public", at=t - 9 * H),
+                M.Status(id="st_riya", user_id="usr_riya", kind="text", text="Ep 5 script locked ", bg="#6C3BFF", audience="friends", at=t - 1 * H),
+                M.Status(id="st_old", user_id="u1", kind="text", text="(yesterday)", audience="public", at=t - 30 * H)])
+    db.add_all([M.Town(id="town_cbe", name="Coimbatore Creators", open=True, hue=280, about="Creators from Kovai — collabs, meetups, feedback", owner_id="usr_riya", at=t - 60 * D),
+                M.Town(id="town_chai", name="Chai Comedy Club", open=False, hue=30, about="Invite-only writers' room for chai-break comedy", owner_id="u4", invite_code="CHAI2026", at=t - 40 * D),
+                M.Town(id="town_indie", name="Indie Devs", open=True, hue=200, about="Ship small games and apps, together", owner_id="u2", at=t - 20 * D)])
+    db.flush()
+    db.add_all([M.TownMember(town_id="town_cbe", user_id="usr_riya", role="owner"), M.TownMember(town_id="town_cbe", user_id="u1", role="admin"),
+                M.TownMember(town_id="town_cbe", user_id="u3", role="member"), M.TownMember(town_id="town_cbe", user_id="u6", role="moderator"),
+                M.TownMember(town_id="town_chai", user_id="u4", role="owner"), M.TownMember(town_id="town_chai", user_id="usr_riya", role="member"),
+                M.TownMember(town_id="town_indie", user_id="u2", role="owner"), M.TownMember(town_id="town_indie", user_id="u5", role="member"),
+                M.TownChannel(id="ch_cbe_general", town_id="town_cbe", name="general"), M.TownChannel(id="ch_cbe_collabs", town_id="town_cbe", name="collabs"),
+                M.TownChannel(id="ch_chai_general", town_id="town_chai", name="general"), M.TownChannel(id="ch_indie_general", town_id="town_indie", name="general"),
+                M.TownBoard(town_id="town_cbe", text="Meetup this Sunday 5pm at Race Course — bring your best 30s idea!", at=t - 2 * D)])
+    db.flush()
+    db.add_all([M.TownMessage(channel_id="ch_cbe_general", sender="u1", text="Welcome new folks ", at=t - 2 * D), M.TownMessage(channel_id="ch_cbe_general", sender="usr_riya", text="Sunday meetup confirmed!", at=t - D),
+                M.TownMessage(channel_id="ch_cbe_collabs", sender="u6", text="Looking for a travel + food collab in Ooty", at=t - 6 * H),
+                M.TownMessage(channel_id="ch_chai_general", sender="u4", text="Tonight's prompt: the office kettle is sentient", at=t - 8 * H)])
+    db.add_all([M.Notice(user_id="usr_riya", module="chat", kind="friend", title="Rohan Das sent you a friend request", body="@rohan.plays", route="Friends", params={"requestId": "fr_u5"}, at=t - 4 * H),
+                M.Notice(user_id="usr_riya", module="chat", kind="ping", title="Aanya Rao sent you a Heart Ping", body="@aanya.eats", route="Friends", params={"from": "u1", "moji": 7, "kind": "heart"}, at=t - 90 * MIN)])
+    for k, v in LAYERS.items(): db.add(M.KV(ns="config", key=k, value=v))
+    db.add_all([M.KV(ns="config_meta", key="version", value={"v": 1}), M.KV(ns="appcfg", key="zones", value=DEFAULT_ZONES),
+                M.KV(ns="appcfg", key="slabs", value={"items": DEFAULT_SLABS}), M.KV(ns="appcfg", key="languages", value=DEFAULT_LANGS)])
+
+def seed_v3(db, t):
+    """v3 money: labelled demo plans/products/ads. Every money switch is OFF; integrations are empty (mode test) — no keys anywhere."""
+    from .routes_money import DEFAULT_SETTINGS, DEFAULT_COUNTRIES
+    from .routes_ads import DEFAULT_SLABS as AD_SLABS
+    from .routes_integrations import DEFAULTS as INTEG
+    db.add_all([M.KV(ns="money", key="settings", value=DEFAULT_SETTINGS), M.KV(ns="money", key="countries", value=DEFAULT_COUNTRIES),
+                M.KV(ns="ads", key="slabs", value=AD_SLABS)] + [M.KV(ns="integrations", key=k, value=dict(v)) for k, v in INTEG.items()])
+    db.add_all([M.Plan(id="plan_backstage", name="Backstage Pass", period="month", prices={"IN": 9900, "US": 199}, demo=True, sort=1,
+                       perks=["Demo plan — set real perks in admin", "Members-only Drops", "Early Flicks"]),
+                M.Plan(id="plan_creator_pro", name="Creator Pro", period="month", prices={"IN": 29900, "US": 499}, demo=True, sort=2,
+                       perks=["Demo plan — set real perks in admin", "Lower platform fee", "Stash analytics"])])
+    db.add_all([M.Product(id="prd_presets", creator_id="u1", title="Street-food preset pack (demo)", desc="Demo listing · 12 warm photo presets", price=14900, demo=True, at=t - 3 * D),
+                M.Product(id="prd_zine", creator_id="u4", title="Color Day sticker zine (demo)", desc="Demo listing · printable sticker zine", price=49900, demo=True, at=t - 2 * D),
+                M.Product(id="prd_guide", creator_id="u4", title="Free sketching guide (demo)", desc="Demo listing · free PDF guide", price=0, demo=True, at=t - D)])
+    db.add_all([M.Ad(id="ad_demo_chai", title="Chai Co. — demo ad", body="Demo Boost · shown labelled Sponsored", cta="Learn more", url="https://example.com/demo-chai", sponsor="Demo Sponsor", places=["feed", "explore"], demo=True),
+                M.Ad(id="ad_demo_bus", title="City Bus Pass — demo ad", body="Demo Boost · shown labelled Sponsored", cta="See more", url="https://example.com/demo-bus", sponsor="Demo Sponsor", places=["feed", "chat_list"], demo=True)])
 
 if __name__ == "__main__": run(reset="--reset" in sys.argv)

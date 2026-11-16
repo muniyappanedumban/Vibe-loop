@@ -1,4 +1,4 @@
-// VibeMoji — 500 original, procedurally composed emoji. Pure function → SVG string (shared by mobile + admin).
+// VibeMoji — 1000 original, procedurally composed emoji. Pure function → SVG string (shared by mobile + admin).
 // Each emoji = body shape × gradient palette × eyes × mouth × accessory; combinations are de-duplicated.
 export type VibeMojiDef = { id: number; name: string; category: string; shape: number; pal: number; eyes: number; mouth: number; acc: number };
 
@@ -61,24 +61,25 @@ const ACCS = [
 ];
 const CATS = ['Joy', 'Love', 'Chill', 'Wow', 'Feels', 'Fierce', 'Silly', 'Hype', 'Calm', 'Party'];
 const ADJ = ['Sunny', 'Velvet', 'Cosmic', 'Minty', 'Electric', 'Cozy', 'Neon', 'Misty', 'Brave', 'Fizzy', 'Lucky', 'Gentle', 'Wild', 'Dreamy', 'Zesty', 'Chill', 'Bouncy', 'Glowy', 'Sleepy', 'Spicy', 'Breezy', 'Sparkly', 'Mellow', 'Jolly', 'Starry'];
+const NOUN2 = ['Fizz', 'Glimmer', 'Doodle', 'Sprout', 'Twinkle', 'Nugget', 'Pixel', 'Quokka', 'Ember', 'Marble', 'Tango', 'Ziggy', 'Pudding', 'Breeze', 'Kiwi', 'Lumen', 'Pogo', 'Rumble', 'Sherbet', 'Yonder'];
 const NOUN = ['Beam', 'Bloop', 'Pip', 'Nova', 'Puff', 'Zing', 'Mochi', 'Drift', 'Twirl', 'Bolt', 'Pebble', 'Ripple', 'Comet', 'Bubble', 'Spark', 'Echo', 'Petal', 'Wisp', 'Jelly', 'Orbit'];
 
 const mix = (k: number) => { let h = (k + 1) * 2654435761; h ^= h >>> 13; h = Math.imul(h, 1274126177); h ^= h >>> 16; return h >>> 0; };
 export const VIBEMOJI: VibeMojiDef[] = (() => {
   const out: VibeMojiDef[] = []; const seen = new Set<string>();
-  for (let k = 0; out.length < 500; k++) {
+  for (let k = 0; out.length < 1000; k++) {
     const h = mix(k);
     const d = { shape: h % SHAPES.length, pal: (h >>> 3) % PALS.length, eyes: (h >>> 8) % EYES.length, mouth: (h >>> 13) % MOUTHS.length, acc: (h >>> 18) % ACCS.length };
     const key = `${d.shape}.${d.pal}.${d.eyes}.${d.mouth}.${d.acc}`; if (seen.has(key)) continue; seen.add(key);
     const i = out.length;
-    out.push({ id: i + 1, name: `${ADJ[i % 25]} ${NOUN[Math.floor(i / 25)]}`, category: CATS[(d.mouth + d.eyes) % CATS.length], ...d });
+    out.push({ id: i + 1, name: `${ADJ[i % 25]} ${[...NOUN, ...NOUN2][Math.floor(i / 25)]}`, category: CATS[(d.mouth + d.eyes) % CATS.length], ...d });
   }
   return out;
 })();
 export const VIBEMOJI_CATEGORIES = CATS;
 
 export function vibemojiSvg(id: number, uid = ''): string {
-  const d = VIBEMOJI[(id - 1 + 500) % 500];
+  const d = VIBEMOJI[(id - 1 + VIBEMOJI.length) % VIBEMOJI.length];
   const g = `vm${id}${uid}`;
   const [a, b] = PALS[d.pal];
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><path d="${SHAPES[d.shape]}" fill="url(#${g})"/><path d="${SHAPES[d.shape]}" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.2"/>${EYES[d.eyes]}${MOUTHS[d.mouth]}${ACCS[d.acc]}</svg>`;

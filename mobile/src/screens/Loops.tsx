@@ -189,6 +189,7 @@ export function LoopDetail({ navigation, route }: any) {
 
         <Card style={{ marginTop: S.lg }}>
           <Row icon="eye" title="Silent mode" sub="Pause reaction notifications while testing" right={<Toggle value={l.silent} onChange={() => st.toggleLoopFlag(l.id, 'silent')} label="Silent mode" />} />
+          {online() ? <Row icon="send" title="Draft Bridge" sub="Send this private draft to a friend in Chat for feedback" onPress={() => navigation.navigate('ShareToChat', { type: 'loop', id: l.id, title: l.title })} /> : null}
           <Row icon="copy" title="Clone Loop" sub="Reuse settings for a new experiment" onPress={() => { const nid = st.cloneLoop(l.id); navigation.replace('LoopDetail', { id: nid }); }} />
         </Card>
 

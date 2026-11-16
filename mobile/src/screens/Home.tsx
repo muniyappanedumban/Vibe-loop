@@ -8,9 +8,12 @@ import { Vibe } from '../components/Vibe';
 import { useStore, balanceOf } from '../store/useStore';
 import { loopScore, breakdown } from '../lib/score';
 import { ago, money } from '../lib/util';
+import { DSwitch, switchModule } from '../components/ModuleSwitch';
+import { useFeature, useT, useConfig, loadConfig } from '../lib/config';
+import { call, online } from '../lib/api';
 
 export default function Home({ navigation }: any) {
-  const st = useStore();
+  const st = useStore(); const showSwitch = useFeature('dswitch'); const tr = useT(); const banner = useConfig(s => s.cfg.banner); const lang = useConfig(s => s.cfg.resolvedFor.lang);
   const unread = st.notices.filter(n => !n.read).length;
   const live = st.loops.filter(l => l.status === 'testing');
   const hero = live[0];
@@ -27,16 +30,22 @@ export default function Home({ navigation }: any) {
     { icon: 'mic', label: 'Audio', route: 'Audio', colors: ['#37E0B4', '#14B88D'] },
   ];
   const more: { icon: IconName; label: string; route: string }[] = [
-    { icon: 'loops', label: 'Loops', route: 'Loops' }, { icon: 'library', label: 'Library', route: 'Library' }, { icon: 'chat', label: 'Chats', route: 'Chats' },
-    { icon: 'users', label: 'Tribes', route: 'Tribes' }, { icon: 'live', label: 'Live', route: 'Live' }, { icon: 'chart', label: 'Growth', route: 'Growth' },
+    { icon: 'loops', label: 'Loops', route: 'Loops' }, { icon: 'library', label: 'Library', route: 'Library' }, { icon: 'chat', label: 'Chat', route: '__chat' },
+    { icon: 'users', label: 'Hoods', route: '__hoods' }, { icon: 'live', label: 'Live', route: 'Live' }, { icon: 'chart', label: 'Growth', route: 'Growth' },
     { icon: 'smile', label: 'VibeMoji', route: 'Emoji' }, { icon: 'book', label: 'Learn', route: 'Learn' },
   ];
   return (
     <Screen>
+      {showSwitch ? <View style={{ alignItems: 'center', marginBottom: 14 }}><DSwitch active="social" /></View> : null}
+      {banner && typeof banner !== 'string' && banner.suggestLang !== lang ? (
+        <Card style={{ marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.violetSoft, borderColor: C.violetSoft }}>
+          <Icon name="globe" color={C.violet} /><Text style={[T.body, { flex: 1 }]}>{banner.text}</Text>
+          {banner.suggestLang && online() ? <Pressable onPress={() => call('PATCH', '/me/profile', { lang: banner.suggestLang }).then(loadConfig)} accessibilityRole="button"><Text style={{ color: C.violet, fontWeight: '900' }}>Switch</Text></Pressable> : null}
+        </Card>) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Avatar name={st.user.name} hue={280} size={46} ring />
         <View style={{ flex: 1 }}>
-          <Text style={T.small}>{greet},</Text>
+          <Text style={T.small}>{tr('home.greet', greet)},</Text>
           <Text style={[T.h3, { fontSize: 19 }]}>{st.user.name.split(' ')[0]} </Text>
         </View>
         <IconBtn name="search" label="Search" onPress={() => navigation.navigate('Search')} />
@@ -84,7 +93,7 @@ export default function Home({ navigation }: any) {
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: S.lg }}>
         {more.map(m => (
-          <Pressable key={m.label} onPress={() => navigation.navigate(m.route)} style={s.more} accessibilityRole="button" accessibilityLabel={m.label}>
+          <Pressable key={m.label} onPress={() => (m.route === '__chat' ? switchModule(navigation, 'chat') : m.route === '__hoods' ? switchModule(navigation, 'chat', { screen: 'ChatMain' }) : navigation.navigate(m.route))} style={s.more} accessibilityRole="button" accessibilityLabel={m.label}>
             <Icon name={m.icon} size={18} color={C.violet} /><Text style={{ fontWeight: '700', fontSize: 11, color: C.ink, marginTop: 4 }}>{m.label}</Text>
           </Pressable>))}
       </View>

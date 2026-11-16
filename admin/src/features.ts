@@ -40,7 +40,7 @@ const RAW: [string, string, string, string, string[]][] = [
   ['expression', 'Vibe Expression', 'smile', '#FFA62E', [
     'Vibe Hearts|Standard like reaction|heart|Emoji', 'Heat Wave|Excitement reaction|flame|Emoji', 'Giggle Burst|Funny content reaction|smile|Emoji',
     'Soft Spot|Emotional reaction|heart|Emoji', 'Big Applause|Appreciation reaction|star|Emoji', 'Mind Pop|Surprise reaction|spark|Emoji',
-    'Reaction Pack|Custom VibeMoji collections|library|Emoji', 'Vibe Stickies|500 original VibeMoji stickers|smile|Emoji', 'Festival Stickies|Indian festival sticker sets|gift|', 'Emoji Trails|Animated reaction effects|wave|']],
+    'Reaction Pack|Custom VibeMoji collections|library|Emoji', 'Vibe Stickies|1000 original VibeMoji stickers|smile|Emoji', 'Festival Stickies|Indian festival sticker sets|gift|', 'Emoji Trails|Animated reaction effects|wave|']],
   ['live', 'Loop Live', 'live', '#FF4D5E', [
     'Loop Live|Real-time video broadcasting|live|Live', 'Live Together|Multi-host live sessions|users|', 'Live Talk|Live comments|chat|Live',
     'Live Hearts|Real-time reactions|heart|Live', 'Live Questions|Audience questions|chat|', 'Live Vote|Polls during broadcasts|chart|',
@@ -70,6 +70,6 @@ const SUBS: Record<string, string> = { home: 'Feed & discovery', moments: 'Posts
 let n = 0;
 export const SECTIONS: FeatureSection[] = RAW.map(([key, title, icon, color, list]) => ({
   key, title, icon, color, sub: SUBS[key],
-  features: list.map(s => { const [name, desc, ic, route] = s.split('|'); n++; return { n, name, desc, icon: ic as string, route: route || undefined, moji: (n * 37) % 500 + 1, same: SAME_AS_PRD[n] }; }),
+  features: list.map(s => { const [name, desc, ic, route] = s.split('|'); n++; return { n, name, desc, icon: ic as string, route: route || undefined, moji: (n * 37) % 1000 + 1, same: SAME_AS_PRD[n] }; }),
 }));
 export const ALL_FEATURES = SECTIONS.flatMap(s => s.features);

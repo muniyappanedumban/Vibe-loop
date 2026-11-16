@@ -1,6 +1,6 @@
 // Server is the source of truth when signed in. Screens update local state optimistically, then `bg()` sends the
 // change; any failure triggers a full re-sync from /bootstrap so the app never shows a state the server rejected.
-import { call, online, useSession, saveToken } from './api';
+import { call, online, useSession, saveAccountToken, activateAccount, forgetAccount } from './api';
 import { useStore } from '../store/useStore';
 import { useSocial } from '../store/useSocial';
 
@@ -33,15 +33,27 @@ export const replaceLoop = (l: any) => useStore.setState(s => ({ loops: s.loops.
 export const replacePost = (p: any) => useSocial.setState(s => ({ posts: s.posts.map(x => (x.id === p.id ? p : x)) }));
 export const replaceChat = (c: any) => useSocial.setState(s => ({ chats: s.chats.map(x => (x.id === c.id ? c : x)) }));
 
-export async function signIn(email: string, password: string) {
-  const r = await call<any>('POST', '/auth/login', { email, password }); await saveToken(r.token);
-  useSession.setState({ mode: 'online', email }); await bootstrap(); return r.user;
+const toAccount = (u: any): import('./api').Account => ({ id: u.id, handle: u.handle, name: u.name, hue: u.hue ?? 280 });
+async function finishLogin(r: any) {
+  useStore.getState().reset(); useSocial.setState(useSocial.getInitialState?.() ?? {});
+  await saveAccountToken(toAccount(r.user), r.token); await bootstrap(); return r.user;
 }
-export async function signUp(email: string, password: string, name: string, handle: string) {
-  const r = await call<any>('POST', '/auth/signup', { email, password, name, handle }); await saveToken(r.token);
-  useSession.setState({ mode: 'online', email }); await bootstrap(); return r.user;
+export type OtpTicket = { sent: boolean; channel: string; to: string; expiresIn: number; demoCode?: string };
+export const requestOtp = (identifier: string) => call<OtpTicket>('POST', '/auth/otp/request', { identifier: identifier.trim() });
+export const register = (handle: string, name: string, email: string) => call<OtpTicket>('POST', '/auth/register', { handle: handle.trim(), name: name.trim(), email: email.trim() });
+export async function verifyOtp(identifier: string, code: string) { return finishLogin(await call<any>('POST', '/auth/otp/verify', { identifier: identifier.trim(), code })); }
+/** Password login (staff / seeded test users). */
+export async function signIn(email: string, password: string) { return finishLogin(await call<any>('POST', '/auth/login', { email, password })); }
+export async function switchAccount(id: string) {
+  await activateAccount(id); useStore.getState().reset(); useSocial.setState(useSocial.getInitialState?.() ?? {}); await bootstrap();
 }
-export async function signOut() { await saveToken(null); useSession.setState({ mode: 'none', email: null }); useStore.getState().reset(); }
+/** Sign out of the active account only; other accounts on the device stay signed in. */
+export async function signOut() {
+  const s = useSession.getState(); if (s.activeId) await forgetAccount(s.activeId);
+  useStore.getState().reset(); const next = useSession.getState().accounts[0]; if (next) await switchAccount(next.id).catch(() => {});
+}
+/** Invalidate every session of the active account on all devices (server bumps token_version). */
+export async function signOutEverywhere() { await call('POST', '/auth/logout-all'); await signOut(); }
 
 /** Publish through the server: get a one-time signed approval token, then spend it. */
 export async function publishOnline(loopId: string, visibility: string, rights: Record<string, boolean>) {

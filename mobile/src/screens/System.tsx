@@ -7,8 +7,9 @@ import { useStore } from '../store/useStore';
 import { ago } from '../lib/util';
 import { online, useSession } from '../lib/api';
 import { bg, signOut, refresh } from '../lib/sync';
+import { switchModule } from '../components/ModuleSwitch';
 
-const KIND: Record<string, { icon: any; tint: string }> = { reaction: { icon: 'chat', tint: C.violet }, approval: { icon: 'fingerprint', tint: C.pink }, earning: { icon: 'cash', tint: '#12A27C' }, system: { icon: 'flag', tint: C.tangerine }, loop: { icon: 'loops', tint: C.violet } };
+const KIND: Record<string, { icon: any; tint: string }> = { friend: { icon: 'users', tint: '#14B88D' }, ping: { icon: 'heart', tint: C.pink }, dm: { icon: 'chat', tint: '#14B88D' }, town: { icon: 'users', tint: C.tangerine }, reaction: { icon: 'chat', tint: C.violet }, approval: { icon: 'fingerprint', tint: C.pink }, earning: { icon: 'cash', tint: '#12A27C' }, system: { icon: 'flag', tint: C.tangerine }, loop: { icon: 'loops', tint: C.violet } };
 export function Notifications({ navigation }: any) {
   const st = useStore();
   const [f, setF] = useState('all');
@@ -18,8 +19,8 @@ export function Notifications({ navigation }: any) {
       <Header title="Notifications" sub={`${st.notices.filter(n => !n.read).length} unread`} right={<Pressable onPress={st.readAll}><Text style={{ color: C.violet, fontWeight: '800' }}>Mark all read</Text></Pressable>} />
       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: S.lg }}>{['all', 'unread', 'reaction', 'approval', 'earning', 'system'].map(k => <Chip key={k} label={k[0].toUpperCase() + k.slice(1)} active={f === k} onPress={() => setF(k)} />)}</View>
       {list.map(n => (
-        <Card key={n.id} style={{ marginBottom: 10, padding: 6, paddingHorizontal: 12, borderColor: n.read ? C.line : C.violet }} onPress={() => { st.readNotice(n.id); if (n.route) navigation.navigate(n.route, n.params); }}>
-          <Row icon={KIND[n.kind].icon} tint={KIND[n.kind].tint} title={n.title} sub={`${n.body} · ${ago(n.at)}`} right={!n.read ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.pink }} /> : <Icon name="chevron" size={16} color={C.inkSoft} />} />
+        <Card key={n.id} style={{ marginBottom: 10, padding: 6, paddingHorizontal: 12, borderColor: n.read ? C.line : C.violet }} onPress={() => { st.readNotice(n.id); const m = (n as any).module; if (m === 'chat') switchModule(navigation, 'chat', n.route ? { screen: n.route, params: n.params } : undefined); else if (n.route) navigation.navigate(n.route, n.params); }}>
+          <Row icon={(KIND[n.kind] ?? KIND.system).icon} tint={(KIND[n.kind] ?? KIND.system).tint} title={n.title} sub={`${(n as any).module === 'chat' ? 'Chat · ' : ''}${n.body} · ${ago(n.at)}`} right={!n.read ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.pink }} /> : <Icon name="chevron" size={16} color={C.inkSoft} />} />
         </Card>
       ))}
     </Screen>

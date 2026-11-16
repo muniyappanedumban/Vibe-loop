@@ -11,73 +11,7 @@ import { useSocial, creator, CREATORS, TRIBES, LIVES, compact } from '../store/u
 import { useStore } from '../store/useStore';
 import { ago } from '../lib/util';
 
-export function Chats({ navigation }: any) {
-  const st = useSocial(); const [tab, setTab] = useState<'all' | 'groups' | 'requests'>('all');
-  const list = st.chats.filter(c => (tab === 'requests' ? c.request : !c.request) && (tab !== 'groups' || c.group)).sort((a, b) => Number(b.pinned) - Number(a.pinned));
-  return (
-    <Screen>
-      <Header title="Messages" sub="Loop Talk · Circle Chat" right={<IconBtn name="search" label="Search messages" onPress={() => navigation.navigate('Search', { q: '' })} />} />
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: S.lg }}>
-        <Chip label="All" active={tab === 'all'} onPress={() => setTab('all')} /><Chip label="Groups" active={tab === 'groups'} onPress={() => setTab('groups')} />
-        <Chip label={`Requests ${st.chats.filter(c => c.request).length}`} icon="shield" active={tab === 'requests'} onPress={() => setTab('requests')} />
-      </View>
-      {list.map(c => { const last = c.msgs[c.msgs.length - 1]; const who = creator(c.members[0]); return (
-        <Card key={c.id} style={{ marginBottom: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }} onPress={() => navigation.navigate('ChatThread', { id: c.id })}>
-          {c.group ? <LinearGradient colors={PRISM as any} style={s.groupAv}><Icon name="users" color="#fff" /></LinearGradient> : <Avatar name={who.name} hue={who.hue} size={50} />}
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={T.h3} numberOfLines={1}>{c.title}</Text>{c.pinned ? <Icon name="pin" size={14} color={C.violet} /> : null}{c.muted ? <Icon name="bell" size={14} color={C.inkSoft} /> : null}
-            </View>
-            <Text style={T.small} numberOfLines={1}>{last?.from === 'me' ? 'You: ' : ''}{last?.text}</Text>
-          </View>
-          <Text style={T.small}>{last ? ago(last.at) : ''}</Text>
-        </Card>); })}
-      {!list.length ? <Text style={T.small}>No conversations.</Text> : null}
-    </Screen>
-  );
-}
-
-export function ChatThread({ navigation, route }: any) {
-  const st = useSocial(); const c = st.chats.find(x => x.id === (route?.params?.id ?? 'c1'));
-  const [txt, setTxt] = useState(''); const [pick, setPick] = useState<string | null>(null);
-  const [theme, setTheme] = useState(0); const themes: [string, string][] = [['#6C3BFF', '#FF3D9A'], ['#14B88D', '#2B7BF0'], ['#FF8A3D', '#FF3D9A'], ['#120F24', '#3A1B9C']];
-  if (!c) return null;
-  return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <Screen bottom={150}>
-        <Header title={c.title} sub={c.group ? `${c.members.length + 1} members` : 'Active recently'} right={<View style={{ flexDirection: 'row', gap: 6 }}>
-          <IconBtn name="pin" label={c.pinned ? 'Unpin' : 'Pin'} onPress={() => st.togglePin(c.id)} />
-          <IconBtn name="palette" label="Chat theme" onPress={() => setTheme((theme + 1) % themes.length)} />
-        </View>} />
-        {c.request ? (
-          <Card style={{ marginBottom: 16 }}>
-            <Text style={T.h3}>Message request</Text><Text style={[T.small, { marginVertical: 6 }]}>This account isn't in your Circle. Safe Inbox holds it until you decide.</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Btn small title="Accept" kind="ink" onPress={() => st.acceptRequest(c.id)} style={{ flex: 1 }} />
-              <Btn small title="Block & report" kind="danger" onPress={() => { st.block(c.members[0]); st.report(c.members[0], 'Spam message request'); st.deleteChat(c.id); navigation.goBack(); }} style={{ flex: 1 }} />
-            </View>
-          </Card>) : null}
-        {c.msgs.map(m => { const me = m.from === 'me'; return (
-          <View key={m.id} style={{ alignItems: me ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
-            {c.group && !me ? <Text style={[T.small, { marginBottom: 2, marginLeft: 6 }]}>{creator(m.from).name}</Text> : null}
-            <Pressable onLongPress={() => setPick(m.id)} onPress={() => setPick(pick === m.id ? null : m.id)}>
-              {me ? <LinearGradient colors={themes[theme]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.bub, s.bubMe]}><Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>{m.text}</Text></LinearGradient>
-                : <View style={[s.bub, s.bubThem]}><Text style={{ fontWeight: '600', fontSize: 15 }}>{m.text}</Text></View>}
-              {m.react ? <View style={[s.reactTag, me ? { left: -8 } : { right: -8 }]}><VibeMoji id={m.react} size={22} /></View> : null}
-            </Pressable>
-            {pick === m.id ? <View style={s.pick}>{useSocial.getState().reactionPack.slice(0, 6).map(id => <Pressable key={id} onPress={() => { st.reactMsg(c.id, m.id, id); setPick(null); }}><VibeMoji id={id} size={30} /></Pressable>)}</View> : null}
-            <Text style={[T.small, { fontSize: 10, marginTop: 3 }]}>{ago(m.at)}</Text>
-          </View>); })}
-        <Row icon="bell" title={c.muted ? 'Muted (Quiet Mode)' : 'Notifications on'} onPress={() => st.toggleMute(c.id)} />
-      </Screen>
-      <View style={s.composer}>
-        <View style={s.mic}><Icon name="mic" size={20} color={C.inkSoft} /></View>
-        <TextInput value={txt} onChangeText={setTxt} placeholder="Message…" placeholderTextColor="#A6A2BC" style={s.input} onSubmitEditing={() => { if (txt.trim()) { st.send(c.id, txt.trim()); setTxt(''); } }} />
-        <Pressable onPress={() => { if (txt.trim()) { st.send(c.id, txt.trim()); setTxt(''); } }} accessibilityLabel="Send"><LinearGradient colors={PRISM as any} style={s.send}><Icon name="send" size={18} color="#fff" /></LinearGradient></Pressable>
-      </View>
-    </View>
-  );
-}
+// (Direct messages live in the Chat module — src/chat/screens. The old Social-side message screens were removed to avoid duplicates.)
 
 export function Search({ navigation, route }: any) {
   const [q, setQ] = useState(route?.params?.q ?? 'chai');
@@ -101,33 +35,11 @@ export function Search({ navigation, route }: any) {
       {r?.creators.length ? <Section title="Creators">{r.creators.map(c => <Row key={c.id} title={c.name} sub={`${c.handle} · ${c.city} · ${compact(c.followers)} followers`} right={<Chip label={st.following.includes(c.id) ? 'Following' : 'Follow'} active={!st.following.includes(c.id)} onPress={() => st.follow(c.id)} />} />)}</Section> : null}
       {r?.loops.length ? <Section title="Your Loops">{r.loops.map(l => <Row key={l.id} icon="loops" title={l.title} sub={l.status} onPress={() => navigation.navigate('LoopDetail', { id: l.id })} />)}</Section> : null}
       {r?.posts.length ? <Section title="Posts">{r.posts.map(p => <Row key={p.id} icon={p.kind === 'motion' ? 'film' : p.kind === 'thought' ? 'text' : 'image'} tint={C.pink} title={p.text} sub={`${creator(p.by).handle} · ${p.mood}`} />)}</Section> : null}
-      {r?.tribes.length ? <Section title="Tribes">{r.tribes.map(t => <Row key={t.id} icon="users" tint="#14B88D" title={t.name} sub={`${compact(t.members)} members`} onPress={() => navigation.navigate('Tribes')} />)}</Section> : null}
-      {r?.msgs.length ? <Section title="Messages">{r.msgs.map(({ c, m }) => <Row key={m.id} icon="chat" title={m.text} sub={c.title} onPress={() => navigation.navigate('ChatThread', { id: c.id })} />)}</Section> : null}
+      {k ? <Row icon="users" title={`Find Hoods matching “${q}”`} sub="Communities live in Hush → Hoods" onPress={() => navigation.navigate('ChatMain', { screen: 'Towns' })} /> : null}
+      {k ? <Row icon="chat" title={`Search messages for “${q}” in Chat`} sub="Opens Find Anything in the Chat module" onPress={() => navigation.navigate('ChatSearch')} /> : null}
       {r?.features.length ? <Section title="Features">{r.features.map(f => <Row key={f.n} icon={f.icon} tint={C.tangerine} title={f.name} sub={f.desc} onPress={() => f.route && navigation.navigate(f.route)} />)}</Section> : null}
       {r?.moji.length ? <Section title="VibeMoji"><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>{r.moji.map(m => <Pressable key={m.id} onPress={() => navigation.navigate('Emoji', { q: m.name })} style={{ alignItems: 'center', width: 70 }}><VibeMoji id={m.id} size={48} /><Text style={{ fontSize: 10, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>{m.name}</Text></Pressable>)}</View></Section> : null}
       {k && !count ? <Text style={[T.small, { marginTop: 24, textAlign: 'center' }]}>No results. Try another word.</Text> : null}
-    </Screen>
-  );
-}
-
-export function Tribes() {
-  const st = useSocial(); const [k, setK] = useState('All');
-  const list = st.tribes.filter(t => k === 'All' || t.kind === k || (k === 'Joined' && st.joined.includes(t.id)));
-  return (
-    <Screen>
-      <Header title="Tribes" sub="Interest, city, campus & fan communities" right={<DemoTag />} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{['All', 'Joined', 'Food', 'City', 'Gaming', 'Creative', 'Student', 'Sports'].map(x => <Chip key={x} label={x} active={k === x} onPress={() => setK(x)} />)}</ScrollView>
-      <View style={{ marginTop: S.lg, gap: 12 }}>
-        {list.map(t => { const on = st.joined.includes(t.id); return (
-          <Card key={t.id} style={{ padding: 0, overflow: 'hidden' }}>
-            <Thumb hue={t.hue} w="100%" h={96} radius={0} />
-            <View style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={{ flex: 1 }}><Tag label={t.kind.toUpperCase()} /><Text style={[T.h3, { marginTop: 6 }]}>{t.name}</Text><Text style={T.small}>{t.desc} · {compact(t.members + (on ? 1 : 0))} members</Text></View>
-              <Btn small title={on ? 'Joined' : 'Join'} kind={on ? 'ghost' : 'prism'} icon={on ? 'check' : 'plus'} onPress={() => st.join(t.id)} />
-            </View>
-          </Card>); })}
-      </View>
-      <NotReady feature="Tribe events, polls & board" why="Community posting needs the backend." />
     </Screen>
   );
 }
