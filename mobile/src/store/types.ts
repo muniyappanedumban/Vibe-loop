@@ -1,0 +1,20 @@
+import type { VibeKind } from '../components/Vibe';
+export type Role = 'creator' | 'editor' | 'analyst' | 'viewer' | 'fan';
+export type Member = { id: string; name: string; hue: number; joinedAt: number };
+export type Reaction = { id: string; memberId: string; version: 'A' | 'B'; kind: VibeKind; text: string; at: number; anonymous?: boolean };
+export type Draft = { version: 'A' | 'B'; title: string; hook: string; caption: string; hue: number; durationSec: number; synthetic: boolean };
+export type LoopStatus = 'draft' | 'testing' | 'locked' | 'released' | 'archived';
+export type Loop = {
+  id: string; title: string; template: string; sizeLimit: number; minScore: number; windowHours: number;
+  members: Member[]; drafts: Draft[]; reactions: Reaction[]; status: LoopStatus; openedAt: number;
+  invite?: { code: string; expiresAt: number; used: boolean }; notes: string[]; silent: boolean; paidOnly: boolean;
+  dna: { mood: string; energy: number; depth: number; pace: number }; failReason?: string; demo?: boolean;
+};
+export type Clip = { id: string; track: 'video' | 'audio' | 'text'; label: string; start: number; len: number; hue: number; speed: number };
+export type Txn = { id: string; kind: 'tip' | 'paid_loop' | 'membership' | 'product' | 'ticket'; from: string; gross: number; fee: number; at: number; demo?: boolean };
+export type Payout = { id: string; amount: number; status: 'pending_review' | 'approved' | 'rejected' | 'paid'; at: number; tokenId: string };
+export type ApprovalToken = { id: string; actor: string; action: 'publish' | 'payout' | 'message'; payloadHash: string; expiresAt: number; used: boolean };
+export type Notice = { id: string; kind: 'loop' | 'reaction' | 'earning' | 'system' | 'approval'; title: string; body: string; at: number; read: boolean; route?: string; params?: any };
+export type Audit = { id: string; at: number; actor: string; action: string; detail: string };
+export type Asset = { id: string; title: string; kind: 'video' | 'audio' | 'image' | 'script'; versions: { v: number; at: number; note: string }[]; hue: number; synthetic: boolean; coreIdentity?: boolean };
+export type Insight = { id: string; text: string; source: string; corrected?: boolean; neverAgain?: boolean; note?: string };
