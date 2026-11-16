@@ -84,9 +84,9 @@ export function Search({ navigation, route }: any) {
   const st = useSocial(); const loops = useStore(s => s.loops);
   const k = q.trim().toLowerCase();
   const r = useMemo(() => k ? {
-    creators: CREATORS.filter(c => (c.name + c.handle + c.city + c.bio).toLowerCase().includes(k)),
+    creators: st.creators.filter(c => (c.name + c.handle + c.city + c.bio).toLowerCase().includes(k)),
     posts: st.posts.filter(p => (p.text + p.mood + p.interest + (p.place ?? '')).toLowerCase().includes(k)),
-    tribes: TRIBES.filter(t => (t.name + t.kind + t.desc).toLowerCase().includes(k)),
+    tribes: st.tribes.filter(t => (t.name + t.kind + t.desc).toLowerCase().includes(k)),
     loops: loops.filter(l => l.title.toLowerCase().includes(k)),
     msgs: st.chats.flatMap(c => c.msgs.filter(m => m.text.toLowerCase().includes(k)).map(m => ({ c, m }))),
     features: ALL_FEATURES.filter(f => (f.name + f.desc).toLowerCase().includes(k)).slice(0, 6),
@@ -112,7 +112,7 @@ export function Search({ navigation, route }: any) {
 
 export function Tribes() {
   const st = useSocial(); const [k, setK] = useState('All');
-  const list = TRIBES.filter(t => k === 'All' || t.kind === k || (k === 'Joined' && st.joined.includes(t.id)));
+  const list = st.tribes.filter(t => k === 'All' || t.kind === k || (k === 'Joined' && st.joined.includes(t.id)));
   return (
     <Screen>
       <Header title="Tribes" sub="Interest, city, campus & fan communities" right={<DemoTag />} />
@@ -145,7 +145,7 @@ export function Live() {
       </LinearGradient>
       <NotReady feature="Live broadcasting" why="Real-time video needs streaming servers, which aren't connected in this build." fallback="schedule a countdown so followers get reminded." />
       <Section title="Upcoming (Live Countdown)">
-        {LIVES.map(l => { const c = creator(l.by); const on = st.reminders.includes(l.id); return (
+        {st.lives.map(l => { const c = creator(l.by); const on = st.reminders.includes(l.id); return (
           <Card key={l.id} style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 }}>
             <Thumb hue={l.hue} w={64} h={84} radius={14} />
             <View style={{ flex: 1 }}><Text style={T.h3}>{l.title}</Text><Text style={T.small}>{c.name} · starts in {left(l.at)}</Text></View>

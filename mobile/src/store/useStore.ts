@@ -6,6 +6,7 @@ import type { Loop, Reaction, Txn, Payout, ApprovalToken, Notice, Audit, Asset, 
 import { SEED_LOOPS, SEED_TXNS, SEED_ASSETS, SEED_NOTICES, SEED_CLIPS, MEMBERS } from './seed';
 import { uid, now, hash, HOUR, DAY } from '../lib/util';
 import { loopScore } from '../lib/score';
+import { bg, replaceLoop } from '../lib/sync';
 
 export const PLATFORM_FEE = 0.08; // shown before every transaction (PRD #163)
 
@@ -65,9 +66,10 @@ export const useStore = create<State & Actions>()(persist(immer((set, get) => ({
       s.loops.unshift({ id, title: p.title, template: p.template, sizeLimit: Math.min(50, Math.max(8, p.sizeLimit)), minScore: p.minScore, windowHours: 24, members: MEMBERS.slice(0, 6), drafts: [p.draft], reactions: [], status: 'testing', openedAt: now(), notes: [], silent: false, paidOnly: !!p.paidOnly, dna: { mood: 'New', energy: 50, depth: 50, pace: 50 } });
       s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'loop.create', detail: p.title });
     });
+    bg('POST', '/loops', { id, title: p.title, template: p.template, sizeLimit: p.sizeLimit, minScore: p.minScore, paidOnly: !!p.paidOnly, draft: p.draft }, replaceLoop);
     return id;
   },
-  addVersionB: (loopId, d) => set(s => { const l = s.loops.find(x => x.id === loopId); if (l && l.drafts.length < 2) l.drafts.push({ ...d, version: 'B' }); }),
+  addVersionB: (loopId, d) => { set(s => { const l = s.loops.find(x => x.id === loopId); if (l && l.drafts.length < 2) l.drafts.push({ ...d, version: 'B' }); }); bg('PATCH', `/loops/${loopId}`, { versionB: d }, replaceLoop); },
   react: (loopId, r) => {
     const l = get().loops.find(x => x.id === loopId);
     if (!l) return { ok: false, reason: 'Loop not found' };
@@ -78,13 +80,14 @@ export const useStore = create<State & Actions>()(persist(immer((set, get) => ({
       L.reactions.push({ ...r, id: uid('r'), at: now() });
       if (!L.silent) s.notices.unshift({ id: uid('n'), kind: 'reaction', title: `New reaction on Version ${r.version}`, body: r.text ? `“${r.text}”` : 'Reaction without text', at: now(), read: false, route: 'LoopDetail', params: { id: loopId } });
     });
+    bg('POST', `/loops/${loopId}/reactions`, r, replaceLoop);
     return { ok: true };
   },
-  makeInvite: loopId => { const code = uid('inv').slice(4, 12).toUpperCase(); set(s => { const l = s.loops.find(x => x.id === loopId); if (l) l.invite = { code, expiresAt: now() + DAY, used: false }; s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'loop.invite', detail: code }); }); return code; },
-  setLoopStatus: (loopId, st, reason) => set(s => { const l = s.loops.find(x => x.id === loopId); if (l) { l.status = st; if (reason) l.failReason = reason; } s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: `loop.${st}`, detail: loopId }); }),
-  toggleLoopFlag: (loopId, k) => set(s => { const l = s.loops.find(x => x.id === loopId); if (l) l[k] = !l[k]; }),
-  addNote: (loopId, n) => set(s => { const l = s.loops.find(x => x.id === loopId); if (l) l.notes.unshift(n); }),
-  cloneLoop: loopId => { const id = uid('loop'); set(s => { const l = s.loops.find(x => x.id === loopId); if (l) s.loops.unshift({ ...JSON.parse(JSON.stringify(l)), id, title: l.title + ' (clone)', reactions: [], status: 'testing', openedAt: now(), failReason: undefined, demo: false }); }); return id; },
+  makeInvite: loopId => { bg('POST', `/loops/${loopId}/invite`, undefined, (inv: any) => set(s => { const l = s.loops.find(x => x.id === loopId); if (l) l.invite = inv; })); const code = uid('inv').slice(4, 12).toUpperCase(); set(s => { const l = s.loops.find(x => x.id === loopId); if (l) l.invite = { code, expiresAt: now() + DAY, used: false }; s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'loop.invite', detail: code }); }); return code; },
+  setLoopStatus: (loopId, st, reason) => { bg('PATCH', `/loops/${loopId}`, { status: st, failReason: reason }, replaceLoop); set(s => { const l = s.loops.find(x => x.id === loopId); if (l) { l.status = st; if (reason) l.failReason = reason; } s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: `loop.${st}`, detail: loopId }); }); },
+  toggleLoopFlag: (loopId, k) => { set(s => { const l = s.loops.find(x => x.id === loopId); if (l) l[k] = !l[k]; }); const l = get().loops.find(x => x.id === loopId); bg('PATCH', `/loops/${loopId}`, { [k]: l?.[k] }, replaceLoop); },
+  addNote: (loopId, n) => { set(s => { const l = s.loops.find(x => x.id === loopId); if (l) l.notes.unshift(n); }); bg('PATCH', `/loops/${loopId}`, { note: n }, replaceLoop); },
+  cloneLoop: loopId => { const id = uid('loop'); bg('POST', `/loops/${loopId}/clone`, { id }, replaceLoop); set(s => { const l = s.loops.find(x => x.id === loopId); if (l) s.loops.unshift({ ...JSON.parse(JSON.stringify(l)), id, title: l.title + ' (clone)', reactions: [], status: 'testing', openedAt: now(), failReason: undefined, demo: false }); }); return id; },
   issueToken: (action, payload) => {
     const tok: ApprovalToken = { id: uid('tok'), actor: get().user.handle, action, payloadHash: hash(payload), expiresAt: now() + 5 * 60_000, used: false };
     set(s => { s.tokens.unshift(tok); s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'token.issue', detail: `${action} · ${tok.id}` }); });
@@ -106,7 +109,7 @@ export const useStore = create<State & Actions>()(persist(immer((set, get) => ({
     set(s => { const L = s.loops.find(x => x.id === loopId)!; L.status = 'released'; s.published.unshift({ loopId, at: now(), visibility, approver: s.user.handle, tokenId }); s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'publish', detail: `${L.title} · ${visibility}` }); });
     return { ok: true };
   },
-  withdraw: loopId => set(s => { const l = s.loops.find(x => x.id === loopId); if (l) l.status = 'locked'; s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'publish.withdraw', detail: loopId }); }),
+  withdraw: loopId => { bg('POST', `/loops/${loopId}/withdraw`, undefined, replaceLoop); set(s => { const l = s.loops.find(x => x.id === loopId); if (l) l.status = 'locked'; s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'publish.withdraw', detail: loopId }); }); },
   requestPayout: (amount, tokenId) => {
     const st = get(); const bal = st.txns.reduce((a, t) => a + t.gross - t.fee, 0) - st.payouts.filter(p => p.status !== 'rejected').reduce((a, p) => a + p.amount, 0);
     if (amount < st.settings.minPayout) return { ok: false, reason: `Minimum payout is ${st.settings.minPayout}` };
@@ -115,16 +118,16 @@ export const useStore = create<State & Actions>()(persist(immer((set, get) => ({
     set(s => { s.payouts.unshift({ id: uid('po'), amount, status: 'pending_review', at: now(), tokenId }); s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'payout.request', detail: String(amount) }); });
     return { ok: true };
   },
-  readNotice: id => set(s => { const n = s.notices.find(x => x.id === id); if (n) n.read = true; }),
-  readAll: () => set(s => { s.notices.forEach(n => (n.read = true)); }),
-  setSetting: (k, v) => set(s => { (s.settings as any)[k] = v; s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'settings.change', detail: `${String(k)}=${String(v)}` }); }),
-  addAssetVersion: (id, note) => set(s => { const a = s.assets.find(x => x.id === id); if (a) a.versions.push({ v: a.versions.length + 1, at: now(), note }); }),
-  toggleCore: id => set(s => { const a = s.assets.find(x => x.id === id); if (a) a.coreIdentity = !a.coreIdentity; }),
+  readNotice: id => { bg('POST', '/notices/read', [id]); set(s => { const n = s.notices.find(x => x.id === id); if (n) n.read = true; }); },
+  readAll: () => { bg('POST', '/notices/read'); set(s => { s.notices.forEach(n => (n.read = true)); }); },
+  setSetting: (k, v) => { bg('PUT', '/settings', { [k]: v }); set(s => { (s.settings as any)[k] = v; s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'settings.change', detail: `${String(k)}=${String(v)}` }); }); },
+  addAssetVersion: (id, note) => { bg('POST', `/assets/${id}/versions`, { note }); set(s => { const a = s.assets.find(x => x.id === id); if (a) a.versions.push({ v: a.versions.length + 1, at: now(), note }); }); },
+  toggleCore: id => { bg('POST', `/assets/${id}/core`); set(s => { const a = s.assets.find(x => x.id === id); if (a) a.coreIdentity = !a.coreIdentity; }); },
   clipOp: (fn, label) => set(s => { s.history.push(JSON.parse(JSON.stringify(s.clips))); s.future = []; s.clips = fn(JSON.parse(JSON.stringify(s.clips))); s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'edit', detail: label }); }),
   undo: () => set(s => { const p = s.history.pop(); if (p) { s.future.push(s.clips); s.clips = p; } }),
   redo: () => set(s => { const f = s.future.pop(); if (f) { s.history.push(s.clips); s.clips = f; } }),
-  correctInsight: (id, text) => set(s => { const i = s.insights.find(x => x.id === id); if (i) { i.text = text; i.corrected = true; } }),
-  noteInsight: (id, note) => set(s => { const i = s.insights.find(x => x.id === id); if (i) i.note = note; }),
+  correctInsight: (id, text) => { bg('PATCH', `/insights/${id}`, { text }); set(s => { const i = s.insights.find(x => x.id === id); if (i) { i.text = text; i.corrected = true; } }); },
+  noteInsight: (id, note) => { bg('PATCH', `/insights/${id}`, { note }); set(s => { const i = s.insights.find(x => x.id === id); if (i) i.note = note; }); },
   neverAgain: idea => set(s => { if (!s.neverIdeas.includes(idea)) s.neverIdeas.unshift(idea); }),
   saveBrief: (brief, out) => set(s => { s.briefs.unshift({ id: uid('b'), brief, at: now(), out }); s.audit.unshift({ id: uid('au'), at: now(), actor: s.user.handle, action: 'copilot.generate', detail: brief.slice(0, 40) }); }),
   reset: () => set(() => initial()),

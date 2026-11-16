@@ -10,6 +10,8 @@ import { loopScore } from '../lib/score';
 import { useSocial, compact } from '../store/useSocial';
 import { VibeMoji } from '../components/VibeMoji';
 import { ago, money, DAY } from '../lib/util';
+import { online } from '../lib/api';
+import { publishOnline, payoutOnline } from '../lib/sync';
 
 /** Hold-to-sign: the explicit human approval step that mints a one-time token. */
 function SignButton({ title, onSigned, disabled }: { title: string; onSigned: () => void; disabled?: boolean }) {
@@ -34,7 +36,8 @@ export function ReleaseGate({ navigation, route }: any) {
   const sc = loopScore(l); const passes = sc !== null && sc >= l.minScore;
   const synth = l.drafts.some(d => d.synthetic);
   const allChecked = checks.rights && checks.music && checks.consent && (!synth || checks.synthetic);
-  const sign = () => {
+  const sign = async () => {
+    if (online()) { try { const p = await publishOnline(l.id, vis, checks); show(`Released · server token ${p.tokenId.slice(0, 12)}… consumed`); } catch (e: any) { show(e.message, 'err'); } return; }
     const tok = st.issueToken('publish', `publish:${l.id}:${vis}`);
     const r = st.publish(l.id, vis, tok.id);
     r.ok ? show(`Released · token ${tok.id.slice(0, 12)}… consumed`) : show(r.reason!, 'err');
@@ -189,7 +192,8 @@ export function Payout({ navigation }: any) {
           <Row icon="shield" title="Review" sub="Admins approve payouts before release" />
         </Card>
         <View style={{ marginTop: S.xl }}>
-          <SignButton title="Hold to sign request" disabled={n <= 0} onSigned={() => {
+          <SignButton title="Hold to sign request" disabled={n <= 0} onSigned={async () => {
+            if (online()) { try { await payoutOnline(n); show('Payout requested · pending admin review'); setTimeout(() => navigation.navigate('Earnings'), 900); } catch (e: any) { show(e.message, 'err'); } return; }
             const tok = st.issueToken('payout', `payout:${n}`); const r = st.requestPayout(n, tok.id);
             if (r.ok) { show('Payout requested · pending admin review'); setTimeout(() => navigation.navigate('Earnings'), 900); } else show(r.reason!, 'err');
           }} />

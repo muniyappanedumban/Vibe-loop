@@ -3,3 +3,11 @@ dist/
 .expo/
 *.log
 .DS_Store
+.venv/
+__pycache__/
+.pytest_cache/
+mobile/android/
+mobile/ios/
+mobile/.env
+build/*.apk.tmp
+build/

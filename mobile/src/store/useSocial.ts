@@ -3,6 +3,7 @@ import { immer } from 'zustand/middleware/immer';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { uid, HOUR, DAY } from '../lib/util';
+import { bg, replacePost, replaceChat } from '../lib/sync';
 
 export type Creator = { id: string; name: string; handle: string; hue: number; city: string; badge?: boolean; bio: string; followers: number };
 export type Post = { id: string; by: string; kind: 'photo' | 'carousel' | 'thought' | 'motion'; text: string; hue: number; slides?: number; mood: string; interest: string; place?: string; at: number; reactions: Record<string, number>; comments: { by: string; text: string }[]; shares: number; views: number; mine?: boolean; bg?: string };
@@ -61,6 +62,7 @@ export const LIVES: LiveEv[] = [
 ];
 
 type S = {
+  creators: Creator[]; tribes: Tribe[]; lives: LiveEv[];
   posts: Post[]; sparks: Spark[]; chats: Chat[]; following: string[]; saved: string[]; myReacts: Record<string, string>; joined: string[];
   blocked: string[]; restricted: string[]; reports: { id: string; target: string; reason: string; at: number }[]; seenSparks: string[]; votes: Record<string, 'a' | 'b'>;
   privacy: { privateAccount: boolean; teenSpace: boolean; hideLikes: boolean; commentGuard: boolean; guardWords: string[]; msgRequests: boolean };
@@ -74,34 +76,36 @@ type A = {
   seeSpark: (id: string) => void; vote: (id: string, v: 'a' | 'b') => void; setPrivacy: (k: keyof S['privacy'], v: any) => void;
   togglePack: (id: number) => void; doneLesson: (id: string) => void; remind: (id: string) => void; setMood: (id: number) => void; setBio: (b: string) => void;
 };
+const prefs = () => { const s = useSocial.getState(); bg('PUT', '/social-prefs', { privacy: s.privacy, reactionPack: s.reactionPack, lessons: s.lessons, profileMood: s.profileMood, bio: s.bio }); };
 export const useSocial = create<S & A>()(persist(immer(set => ({
+  creators: CREATORS, tribes: TRIBES, lives: LIVES,
   posts: SEED_POSTS, sparks: SEED_SPARKS, chats: SEED_CHATS, following: ['u1', 'u3', 'u4'], saved: ['p3'], myReacts: {}, joined: ['t1'], blocked: [], restricted: [], reports: [], seenSparks: [], votes: {},
   privacy: { privateAccount: false, teenSpace: false, hideLikes: false, commentGuard: true, guardWords: ['spam', 'fake followers'], msgRequests: true },
   reactionPack: [7, 42, 118, 203, 77, 311], lessons: [], reminders: [], profileMood: 118, bio: 'Comedy shorts about office chai life · testing everything in Loops first',
-  react: (id, key) => set(s => { const p = s.posts.find(x => x.id === id); if (!p) return; const prev = s.myReacts[id]; if (prev) p.reactions[prev]--; if (prev === key) delete s.myReacts[id]; else { p.reactions[key] = (p.reactions[key] || 0) + 1; s.myReacts[id] = key; } }),
-  save: id => set(s => { s.saved = s.saved.includes(id) ? s.saved.filter(x => x !== id) : [id, ...s.saved]; }),
-  follow: id => set(s => { s.following = s.following.includes(id) ? s.following.filter(x => x !== id) : [...s.following, id]; }),
-  comment: (id, text) => set(s => { const p = s.posts.find(x => x.id === id); if (!p) return; const bad = s.privacy.commentGuard && s.privacy.guardWords.some(w => text.toLowerCase().includes(w.toLowerCase())); if (!bad) p.comments.push({ by: 'me', text }); }),
-  share: id => set(s => { const p = s.posts.find(x => x.id === id); if (p) p.shares++; }),
-  addPost: p => set(s => { s.posts.unshift({ ...p, id: uid('p'), by: 'me', at: Date.now(), reactions: { heart: 0, fire: 0, laugh: 0, touch: 0, clap: 0, boom: 0 }, comments: [], shares: 0, views: 0, mine: true }); }),
-  deletePost: id => set(s => { s.posts = s.posts.filter(p => p.id !== id); }),
-  send: (cid, text) => set(s => { const c = s.chats.find(x => x.id === cid); if (c) c.msgs.push({ id: uid('m'), from: 'me', text, at: Date.now() }); }),
-  reactMsg: (cid, mid, moji) => set(s => { const m = s.chats.find(x => x.id === cid)?.msgs.find(x => x.id === mid); if (m) m.react = m.react === moji ? undefined : moji; }),
-  togglePin: id => set(s => { const c = s.chats.find(x => x.id === id); if (c) c.pinned = !c.pinned; }),
-  toggleMute: id => set(s => { const c = s.chats.find(x => x.id === id); if (c) c.muted = !c.muted; }),
-  acceptRequest: id => set(s => { const c = s.chats.find(x => x.id === id); if (c) c.request = false; }),
+  react: (id, key) => { bg('POST', `/posts/${id}/react`, { key }, replacePost); set(s => { const p = s.posts.find(x => x.id === id); if (!p) return; const prev = s.myReacts[id]; if (prev) p.reactions[prev]--; if (prev === key) delete s.myReacts[id]; else { p.reactions[key] = (p.reactions[key] || 0) + 1; s.myReacts[id] = key; } }); },
+  save: id => { bg('POST', `/edges/save/${id}`); set(s => { s.saved = s.saved.includes(id) ? s.saved.filter(x => x !== id) : [id, ...s.saved]; }); },
+  follow: id => { bg('POST', `/edges/follow/${id}`); set(s => { s.following = s.following.includes(id) ? s.following.filter(x => x !== id) : [...s.following, id]; }); },
+  comment: (id, text) => { bg('POST', `/posts/${id}/comments`, { text }, (r: any) => replacePost(r.post)); set(s => { const p = s.posts.find(x => x.id === id); if (!p) return; const bad = s.privacy.commentGuard && s.privacy.guardWords.some(w => text.toLowerCase().includes(w.toLowerCase())); if (!bad) p.comments.push({ by: 'me', text }); }); },
+  share: id => { bg('POST', `/posts/${id}/share`); set(s => { const p = s.posts.find(x => x.id === id); if (p) p.shares++; }); },
+  addPost: p => { const id = uid('p'); bg('POST', '/posts', { ...p, id }, replacePost); set(s => { s.posts.unshift({ ...p, id, by: 'me', at: Date.now(), reactions: { heart: 0, fire: 0, laugh: 0, touch: 0, clap: 0, boom: 0 }, comments: [], shares: 0, views: 0, mine: true }); }); },
+  deletePost: id => { bg('DELETE', `/posts/${id}`); set(s => { s.posts = s.posts.filter(p => p.id !== id); }); },
+  send: (cid, text) => { bg('POST', `/chats/${cid}/messages`, { text }, replaceChat); set(s => { const c = s.chats.find(x => x.id === cid); if (c) c.msgs.push({ id: uid('m'), from: 'me', text, at: Date.now() }); }); },
+  reactMsg: (cid, mid, moji) => { bg('POST', `/chats/${cid}/messages/${mid}/react`, { moji }, replaceChat); set(s => { const m = s.chats.find(x => x.id === cid)?.msgs.find(x => x.id === mid); if (m) m.react = m.react === moji ? undefined : moji; }); },
+  togglePin: id => { const c0 = useSocial.getState().chats.find(x => x.id === id); bg('PATCH', `/chats/${id}`, { pinned: !c0?.pinned }); set(s => { const c = s.chats.find(x => x.id === id); if (c) c.pinned = !c.pinned; }); },
+  toggleMute: id => { const c0 = useSocial.getState().chats.find(x => x.id === id); bg('PATCH', `/chats/${id}`, { muted: !c0?.muted }); set(s => { const c = s.chats.find(x => x.id === id); if (c) c.muted = !c.muted; }); },
+  acceptRequest: id => { bg('PATCH', `/chats/${id}`, { request: false }); set(s => { const c = s.chats.find(x => x.id === id); if (c) c.request = false; }); },
   deleteChat: id => set(s => { s.chats = s.chats.filter(c => c.id !== id); }),
-  join: id => set(s => { s.joined = s.joined.includes(id) ? s.joined.filter(x => x !== id) : [...s.joined, id]; }),
-  block: id => set(s => { s.blocked = s.blocked.includes(id) ? s.blocked.filter(x => x !== id) : [...s.blocked, id]; }),
-  restrict: id => set(s => { s.restricted = s.restricted.includes(id) ? s.restricted.filter(x => x !== id) : [...s.restricted, id]; }),
-  report: (target, reason) => set(s => { s.reports.unshift({ id: uid('rp'), target, reason, at: Date.now() }); }),
+  join: id => { bg('POST', `/edges/join/${id}`); set(s => { s.joined = s.joined.includes(id) ? s.joined.filter(x => x !== id) : [...s.joined, id]; }); },
+  block: id => { bg('POST', `/edges/block/${id}`); set(s => { s.blocked = s.blocked.includes(id) ? s.blocked.filter(x => x !== id) : [...s.blocked, id]; }); },
+  restrict: id => { bg('POST', `/edges/restrict/${id}`); set(s => { s.restricted = s.restricted.includes(id) ? s.restricted.filter(x => x !== id) : [...s.restricted, id]; }); },
+  report: (target, reason) => { bg('POST', '/reports', { target, reason }); set(s => { s.reports.unshift({ id: uid('rp'), target, reason, at: Date.now() }); }); },
   seeSpark: id => set(s => { if (!s.seenSparks.includes(id)) s.seenSparks.push(id); }),
-  vote: (id, v) => set(s => { const sp = s.sparks.find(x => x.id === id); if (!sp?.poll || s.votes[id]) return; s.votes[id] = v; v === 'a' ? sp.poll.va++ : sp.poll.vb++; }),
-  setPrivacy: (k, v) => set(s => { (s.privacy as any)[k] = v; }),
-  togglePack: id => set(s => { s.reactionPack = s.reactionPack.includes(id) ? s.reactionPack.filter(x => x !== id) : [...s.reactionPack, id].slice(-12); }),
-  doneLesson: id => set(s => { s.lessons = s.lessons.includes(id) ? s.lessons.filter(x => x !== id) : [...s.lessons, id]; }),
-  remind: id => set(s => { s.reminders = s.reminders.includes(id) ? s.reminders.filter(x => x !== id) : [...s.reminders, id]; }),
-  setMood: id => set(s => { s.profileMood = id; }), setBio: b => set(s => { s.bio = b; }),
+  vote: (id, v) => { if (!useSocial.getState().votes[id]) bg('POST', `/sparks/${id}/vote`, { v }); set(s => { const sp = s.sparks.find(x => x.id === id); if (!sp?.poll || s.votes[id]) return; s.votes[id] = v; v === 'a' ? sp.poll.va++ : sp.poll.vb++; }); },
+  setPrivacy: (k, v) => { set(s => { (s.privacy as any)[k] = v; }); prefs(); },
+  togglePack: id => { set(s => { s.reactionPack = s.reactionPack.includes(id) ? s.reactionPack.filter(x => x !== id) : [...s.reactionPack, id].slice(-12); }); prefs(); },
+  doneLesson: id => { set(s => { s.lessons = s.lessons.includes(id) ? s.lessons.filter(x => x !== id) : [...s.lessons, id]; }); prefs(); },
+  remind: id => { bg('POST', `/edges/remind/${id}`); set(s => { s.reminders = s.reminders.includes(id) ? s.reminders.filter(x => x !== id) : [...s.reminders, id]; }); },
+  setMood: id => { set(s => { s.profileMood = id; }); prefs(); }, setBio: b => { set(s => { s.bio = b; }); prefs(); },
 })), { name: 'vibeloop-social-v1', storage: createJSONStorage(() => AsyncStorage) }));
-export const creator = (id: string) => CREATORS.find(c => c.id === id) ?? { id, name: id === 'me' ? 'You' : 'Unknown', handle: id === 'me' ? '@you' : '@unknown', hue: 280, city: '', bio: '', followers: 0 };
+export const creator = (id: string) => useSocial.getState().creators.find(c => c.id === id) ?? CREATORS.find(c => c.id === id) ?? { id, name: id === 'me' ? 'You' : 'Unknown', handle: id === 'me' ? '@you' : '@unknown', hue: 280, city: '', bio: '', followers: 0 };
 export const compact = (n: number) => (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n));

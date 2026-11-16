@@ -1,28 +1,51 @@
 # VibeLoop (branch: feature/vibeloop-app)
+*Your World. Your People. Your Moments.*
 
-- `mobile/` — React Native (Expo SDK 58, TypeScript), React Navigation, Zustand + Immer, persisted state. 42 screenshot views (35 screens + settings sections + feature tabs). Tabs: Home · Explore · Create · Motion · Profile.
-- `admin/` — staff Admin Panel (React + Vite + TypeScript). 17 pages (incl. platform settings ×10 sections, VibeMoji library, feature catalog, global search).
-- `.claude/agents/` — project agents: mobile-ui-builder, admin-builder, screenshot-qa, prd-compliance-reviewer.
-- `docs/DESIGN_SYSTEM.md` — the original "Prism Pulse" design system (own icons + "Vibe" reaction stickers).
-- `screenshots/user/<NN-screen>/{screen,full}.png`, `screenshots/admin/<NN-page>/screen.png`.
+| Part | Stack | Where |
+|---|---|---|
+| Mobile app (iOS / Android / web) | React Native · Expo SDK 58 · TypeScript · React Navigation · Zustand + Immer · SecureStore | `mobile/` |
+| Backend API | Python FastAPI · SQLAlchemy 2 · PostgreSQL 16 · Alembic · PyJWT | `backend/` |
+| Staff admin panel | React + Vite + TypeScript | `admin/` |
+| Screenshots | all user screens in **one folder**, all admin pages in **one folder** | `screenshots/user/*.png`, `screenshots/admin/*.png` |
+| Android APK | release build | `build/VibeLoop-1.0.0.apk` |
 
-## Run
-    cd mobile && npm i && npx expo start        # iOS / Android / web
-    cd admin && npm i && npm run dev
-## Screenshots & tests
-    (cd mobile && npx expo export -p web) && node scripts/shoot-mobile.mjs && node scripts/smoke-mobile.mjs
-    (cd admin && npm run build) && node scripts/shoot-admin.mjs
+## Run everything locally
+```bash
+# 1. database + API (Postgres 16 running locally)
+createdb vibeloop
+cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/alembic upgrade head        # or: .venv/bin/python -m app.seed --reset (creates tables + demo data)
+.venv/bin/python -m app.seed          # labelled demo data
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8787
+# 2. admin panel
+cd admin && npm i && npm run dev       # http://localhost:5173 (VITE_API_URL to override API)
+# 3. mobile
+cd mobile && npm i && npx expo start   # EXPO_PUBLIC_API_URL=http://<your-LAN-IP>:8787
+```
+Demo logins (seed data only — change for any shared environment): creator `riya@vibeloop.app`, staff `admin@vibeloop.app`, password `Vibeloop2026`.
+Production secrets: set `JWT_SECRET`, `APPROVAL_SECRET`, `DATABASE_URL`, `CORS_ORIGINS` as environment variables (never in code).
+
+## APK
+`build/VibeLoop-1.0.0.apk` — install with `adb install build/VibeLoop-1.0.0.apk` or copy to the phone.
+Its default server is the build machine's LAN address (`mobile/.env`); the phone must be on the same Wi-Fi with the API running.
+The server URL can be changed on the Sign-in screen ("Server: …" → Test connection). Offline demo mode works without a server.
+The release APK is signed with the debug keystore — fine for testing, **not for Play Store** (create an upload key / use EAS for that).
+Rebuild: `cd mobile && npx expo prebuild -p android && cd android && ./gradlew assembleRelease`.
+
+## How the app talks to the server
+Signed in: `/bootstrap` loads everything; actions update the screen immediately and are sent to the API; any server rejection re-syncs from the server.
+Publish and payouts are never optimistic: the app asks the server for a one-time signed approval token (5 min, bound to user + action + payload) and spends it.
+Server enforces: roles (owner/creator/fan…), Loop Score ≥ minimum and rights checklist before release, one reaction per member per version, payout minimum and balance, kill switches, comment guard / restrict, message requests. Every significant action is written to the append-only audit log.
+
+## Tests & checks
+```bash
+cd backend && .venv/bin/python -m pytest -q        # API tests (9)
+node scripts/e2e-mobile.mjs                         # UI → API end-to-end (8 checks; reseed first)
+node scripts/smoke-mobile.mjs                       # offline demo mode
+node scripts/verify.mjs                             # catalogs, 500 VibeMoji, routes, navigation, screenshots (18 checks)
+node scripts/shoot-mobile.mjs && node scripts/shoot-admin.mjs   # screenshots against the live API
+```
 
 ## Honest status
-Front-end only. There is no FastAPI/Postgres backend yet: state is on-device (mobile) or in memory (admin).
-Approval tokens are minted and checked on-device (one-time use, 5 min expiry, bound to the action) as a stand-in for server-signed JWTs.
-Real behaviour: Loop Score from reactions (24h window, low-effort filter, needs at least 3 reactions), A/B scores, health, keyword sentiment,
-release gate, payout rules, editor timeline with undo/redo, memory corrections, data export.
-Marked "not ready" in the UI: AI model generation, rendering/export, mic recording, payment rail, external posting.
-Seed data is labelled DEMO DATA.
-
-## Catalogs
-- `mobile/src/data/prd.ts` — the 200 PRD features (PDF §8), each mapped to the screen that implements it, `Admin`, or planned.
-- `mobile/src/data/features.ts` — the 150 social features, renamed for VibeLoop. 13 that are the same capability as a PRD feature link to it (`SAME_AS_PRD`) instead of being built twice → 337 unique capabilities.
-- `mobile/src/lib/vibemoji.ts` — 500 original, procedurally composed emoji (unique designs and names), shared with admin.
-- `node scripts/verify.mjs` double-checks counts, uniqueness, routes and screenshots.
+Not connected yet (shown as "not ready" in the UI): AI model generation, FFmpeg render/export workers, microphone recording, real payment rail & bank payouts, push notifications, live video streaming, external platform posting, SMS/email verification, password change, TOTP enrolment.
+Seed content (posts, sample earnings, creators) is labelled DEMO DATA. ~162 of 337 catalogued capabilities have a working screen; the rest are marked Planned.

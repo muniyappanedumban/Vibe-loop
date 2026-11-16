@@ -11,6 +11,8 @@ import { SECTIONS, ALL_FEATURES } from '../data/features';
 import { PRD, PRD_GROUPS } from '../data/prd';
 import { useSocial, creator, CREATORS, compact } from '../store/useSocial';
 import { useStore } from '../store/useStore';
+import { useSession } from '../lib/api';
+import { signOut, refresh } from '../lib/sync';
 
 export function Emoji({ route }: any) {
   const st = useSocial(); const [cat, setCat] = useState('All'); const [q, setQ] = useState(route?.params?.q ?? ''); const [sel, setSel] = useState<number | null>(null);
@@ -146,7 +148,7 @@ export function Trust() {
           </Card>
         </Section>
         <Section title="Accounts">
-          {CREATORS.slice(0, 4).map(c => (
+          {st.creators.slice(0, 4).map(c => (
             <Card key={c.id} style={{ marginBottom: 8, padding: 10 }}>
               <Row title={c.name} sub={c.handle} right={<View style={{ flexDirection: 'row', gap: 6 }}>
                 <Chip label={st.restricted.includes(c.id) ? 'Restricted' : 'Restrict'} active={st.restricted.includes(c.id)} onPress={() => st.restrict(c.id)} />
@@ -202,6 +204,7 @@ const SET_SECTIONS = [
 export function SettingsHub({ navigation }: any) {
   return (
     <Screen>
+      <SyncCard navigation={navigation} />
       <Header title="Settings" sub="Everything, in one place" />
       <Card>{SET_SECTIONS.map(x => <Row key={x.key} icon={x.icon as any} title={x.t} sub={x.d} onPress={() => navigation.navigate('Settings', { section: x.key })} />)}</Card>
       <Card style={{ marginTop: 12 }}>
@@ -211,6 +214,18 @@ export function SettingsHub({ navigation }: any) {
         <Row icon="library" tint={C.violet} title="All features" sub="The 150-feature roadmap and its status" onPress={() => navigation.navigate('Features')} />
       </Card>
     </Screen>
+  );
+}
+function SyncCard({ navigation }: any) {
+  const ss = useSession(); const on = ss.mode === 'online';
+  return (
+    <Card style={{ marginBottom: S.lg, borderColor: on ? C.mint : C.tangerine }}>
+      <Row icon={on ? 'globe' : 'eye'} tint={on ? '#12A27C' : C.tangerine} title={on ? `Signed in · ${ss.email}` : 'Offline demo mode'} sub={on ? `${ss.apiUrl} · ${ss.lastSync ? 'synced ' + new Date(ss.lastSync).toLocaleTimeString() : 'not synced'}${ss.error ? ' · ' + ss.error : ''}` : 'Data stays on this device. Sign in to sync with the server.'} />
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {on ? <Btn small kind="ghost" icon="undo" title="Sync now" onPress={() => refresh()} style={{ flex: 1 }} /> : null}
+        <Btn small kind={on ? 'danger' : 'prism'} title={on ? 'Sign out' : 'Sign in'} onPress={async () => { if (on) await signOut(); navigation.reset({ index: 0, routes: [{ name: 'SignIn' }] }); }} style={{ flex: 1 }} />
+      </View>
+    </Card>
   );
 }
 export const SETTINGS_SECTIONS = SET_SECTIONS.map(s => s.key);

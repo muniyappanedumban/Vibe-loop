@@ -1,6 +1,7 @@
 // Every screen, in screenshot order. scripts/shoot-mobile.mjs opens /?s=<name>&<query> for each.
 export const SCREENS: { name: string; folder: string; query?: string }[] = [
-  { name: 'Onboarding', folder: '01-onboarding' },
+  { name: 'Onboarding', folder: '00-onboarding' },
+  { name: 'SignIn', folder: '01-sign-in' },
   { name: 'NewLoop', folder: '02-first-loop-wizard' },
   { name: 'Home', folder: '03-home-command-centre' },
   { name: 'Loops', folder: '04-loops' },

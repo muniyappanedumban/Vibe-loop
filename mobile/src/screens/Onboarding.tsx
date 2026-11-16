@@ -44,7 +44,7 @@ export default function Onboarding({ navigation }: any) {
           {[['loops', 'Private Loops of 8–50 real people'], ['graph', 'A Memory Graph that learns what works for you'], ['shield', 'Nothing publishes without your signed approval']].map(([i, t]) => (
             <View key={t} style={s.point}><View style={s.pointIcon}><Icon name={i as any} size={18} color={C.lime} /></View><Text style={{ color: '#fff', fontWeight: '700', flex: 1 }}>{t}</Text></View>
           ))}
-          <Btn title="Get started" icon="spark" onPress={() => setStep(1)} style={{ marginTop: 22 }} />
+          <Btn title="Get started" icon="spark" onPress={() => navigation.navigate('SignIn')} style={{ marginTop: 22 }} />
         </>) : (<>
           <Text style={[s.h, { marginTop: 36, fontSize: 32 }]}>Who's creating?</Text>
           <Text style={s.p}>This is how your Loop members will see you.</Text>

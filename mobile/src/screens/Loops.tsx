@@ -8,6 +8,8 @@ import { Vibe, VIBE_META, VibeKind } from '../components/Vibe';
 import { useStore } from '../store/useStore';
 import { loopScore, breakdown, loopHealth, sentiment, counted } from '../lib/score';
 import { ago, HOUR } from '../lib/util';
+import { online } from '../lib/api';
+import { must, replaceLoop } from '../lib/sync';
 
 const STATUS: Record<string, { label: string; color: string; bg: string }> = {
   testing: { label: 'TESTING', color: C.violet, bg: C.violetSoft }, locked: { label: 'LOCKED', color: C.inkSoft, bg: '#ECE9F5' },
@@ -212,13 +214,13 @@ export function FanReact({ navigation, route }: any) {
   if (!l) return null;
   const d = l.drafts.find(x => x.version === ver) ?? l.drafts[0];
   const memberPool = st.loops.flatMap(x => x.members);
-  const submit = () => {
+  const submit = async () => {
     if (!kind) return show('Pick a Vibe first', 'err');
     let m = l.members[as % l.members.length];
     // try each member until one hasn't reacted to this version (testing as several fans on one device)
     for (let i = 0; i < l.members.length; i++) { const c = l.members[(as + i) % l.members.length]; if (!l.reactions.some(r => r.memberId === c.id && r.version === ver)) { m = c; break; } }
-    const r = st.react(l.id, { memberId: m.id, version: ver, kind, text, anonymous: anon });
-    if (!r.ok) return show(r.reason!, 'err');
+    if (online()) { try { replaceLoop(await must('POST', `/loops/${l.id}/reactions`, { memberId: m.id, version: ver, kind, text, anonymous: anon })); } catch (e: any) { return show(e.message, 'err'); } }
+    else { const r = st.react(l.id, { memberId: m.id, version: ver, kind, text, anonymous: anon }); if (!r.ok) return show(r.reason!, 'err'); }
     setAs(as + 1); setKind(null); setText(''); show(`Reaction sent as ${anon ? 'Anonymous' : m.name}`);
   };
   return (
@@ -251,7 +253,7 @@ export function FanReact({ navigation, route }: any) {
           <Toggle value={anon} onChange={setAnon} label="Anonymous" /><Text style={{ color: '#fff', fontWeight: '700' }}>Send anonymously</Text>
         </View>
         <Btn title="Send reaction" icon="send" kind="lime" onPress={submit} />
-        <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 10, textAlign: 'center' }}>Testing mode: reactions are recorded as Loop members on this device. Low-effort replies (1–2 characters) do not count toward the score.</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 10, textAlign: 'center' }}>Testing mode: you're recording reactions on behalf of Loop members (server-verified when signed in). Low-effort replies (1–2 characters) do not count toward the score.</Text>
       </Screen>
       {toast}
     </View>

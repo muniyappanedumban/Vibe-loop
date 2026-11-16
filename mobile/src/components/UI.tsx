@@ -165,16 +165,16 @@ export function Field(p: TextInputProps & { label?: string }) {
 }
 
 export function Row({ icon, title, sub, right, onPress, tint = C.violet }: { icon?: IconName; title: string; sub?: string; right?: React.ReactNode; onPress?: () => void; tint?: string }) {
-  return (
-    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [st.row, pressed && { opacity: 0.7 }]}>
+  const inner = (<>
       {icon ? <View style={[st.rowIcon, { backgroundColor: tint + '1A' }]}><Icon name={icon} size={19} color={tint} /></View> : null}
       <View style={{ flex: 1 }}>
         <Text style={{ fontWeight: '700', fontSize: 15, color: C.ink }}>{title}</Text>
         {sub ? <Text style={[T.small, { marginTop: 2 }]} numberOfLines={2}>{sub}</Text> : null}
       </View>
       {right ?? (onPress ? <Icon name="chevron" size={18} color={C.inkSoft} /> : null)}
-    </Pressable>
-  );
+  </>);
+  // Rows without an action are plain Views, so controls inside them (toggles, chips) stay interactive on every platform.
+  return onPress ? <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [st.row, pressed && { opacity: 0.7 }]}>{inner}</Pressable> : <View style={st.row}>{inner}</View>;
 }
 
 export function Toast({ msg, kind = 'ok' }: { msg: string | null; kind?: 'ok' | 'err' }) {

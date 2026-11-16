@@ -180,3 +180,24 @@ input[type=range] { accent-color: var(--pink); flex: 1; }
 .sres { display: flex; gap: 12px; align-items: center; padding: 11px 6px; border-bottom: 1px solid #F1EEF8; border-radius: 8px; } .sres:hover { background: #FBFAFE; } .sres:last-child { border-bottom: 0; } .sres > svg { color: var(--violet); flex-shrink: 0; }
 @media (max-width: 1100px) { .setgrid { grid-template-columns: 1fr; } .subnav { position: static; } .swatches, .reacts { grid-template-columns: repeat(3, 1fr); } }
 .samepill { border: 0; cursor: pointer; text-transform: none; } .samepill:hover { background: #E2D9FF; }
+
+/* ---------- login & API states ---------- */
+.login { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; background: var(--bg, #F4F2FA); }
+.login-art { background: var(--ink); color: #fff; padding: 56px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
+.login-art::after { content: ''; position: absolute; width: 520px; height: 520px; right: -160px; bottom: -180px; border-radius: 50%; background: linear-gradient(135deg, #6C3BFF, #FF3D9A 60%, #FF8A3D); opacity: .85; filter: blur(4px); }
+.login-art h2 { font-size: 40px; font-weight: 800; line-height: 1.1; max-width: 460px; position: relative; z-index: 1; }
+.login-art p { color: #a49fc2; max-width: 420px; margin-top: 14px; position: relative; z-index: 1; }
+.login-art .brand { position: relative; z-index: 1; }
+.login-form { display: flex; align-items: center; justify-content: center; padding: 40px; }
+.login-form form { width: 100%; max-width: 380px; display: flex; flex-direction: column; }
+.login-form h1 { font-size: 28px; font-weight: 800; }
+.login-form input { width: 100%; }
+.login-form .btn { justify-content: center; margin-top: 18px; padding: 12px; }
+.errbox { background: #FFE6E9; color: #c21f33; border: 1px solid #ffc9d0; padding: 12px 16px; border-radius: var(--r1); font-size: 13px; font-weight: 600; margin-top: 12px; line-height: 1.45; }
+.apierr { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.apierr b { font-size: 16px; }
+.env.live { background: #E3FBF3; color: #11865f; border-color: #B5F0DC; }
+.env.down { background: #FFE6E9; color: #c21f33; border-color: #ffc9d0; }
+.loading { color: #8a84a8; font-size: 13px; padding: 10px 0; }
+@media (max-width: 860px) { .login { grid-template-columns: 1fr; } .login-art { display: none; } }
+.toast.bad { background: #c21f33; }

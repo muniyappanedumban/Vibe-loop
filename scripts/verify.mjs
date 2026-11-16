@@ -21,6 +21,18 @@ const refs = new Set([...PRD, ...ALL_FEATURES].map(f => f.route).filter(r => r &
 const missing = [...refs].filter(r => !registered.has(r)); ok(!missing.length, `Every feature route is a registered screen (${refs.size} routes)${missing.length ? ' — missing: ' + missing : ''}`);
 const routes = fs.readFileSync(path.join(root, 'mobile/src/navigation/routes.ts'), 'utf8'); const shots = [...routes.matchAll(/name: '(\w+)', folder: '([\w-]+)'/g)];
 const unshot = [...registered].filter(r => r !== 'Main' && !shots.some(m => m[1] === r)); ok(!unshot.length, `Every registered screen is in the screenshot list${unshot.length ? ' — missing: ' + unshot : ''}`);
-const noPng = shots.filter(m => !fs.existsSync(path.join(root, 'screenshots/user', m[2], 'screen.png'))); ok(!noPng.length, `${shots.length} user screenshots exist${noPng.length ? ' — missing: ' + noPng.map(m => m[2]) : ''}`);
-const adminDirs = fs.readdirSync(path.join(root, 'screenshots/admin')).length; ok(adminDirs >= 17, `${adminDirs} admin screenshot folders`);
+const noPng = shots.filter(m => !fs.existsSync(path.join(root, 'screenshots/user', m[2] + '.png'))); ok(!noPng.length, `${shots.length} user screenshots exist${noPng.length ? ' — missing: ' + noPng.map(m => m[2]) : ''}`);
+const adminPngs = fs.readdirSync(path.join(root, 'screenshots/admin')); ok(adminPngs.length >= 29 && adminPngs.every(f => f.endsWith('.png')), `${adminPngs.length} admin screenshots, all in one flat folder`);
+ok(fs.readdirSync(path.join(root, 'screenshots/user')).every(f => f.endsWith('.png')), 'user screenshots are all in one flat folder');
+// Navigation: every navigate/replace/reset/route target in the app source must be a registered screen or tab.
+const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+const srcFiles = [path.join(root, 'mobile/App.tsx'), ...walk(path.join(root, 'mobile/src')).filter(f => f.endsWith('.tsx') || f.endsWith('.ts'))];
+const tabs = ['Home', 'Explore', 'Create', 'Motion', 'Profile'];
+const targets = new Map();
+for (const f of srcFiles) { const t = fs.readFileSync(f, 'utf8');
+  for (const m of t.matchAll(/(?:navigation|nav|navRef)\.(?:navigate|replace)\(\s*'(\w+)'/g)) targets.set(m[1], path.relative(root, f));
+  for (const m of t.matchAll(/name: '(\w+)'(?=[^}]*\})/g)) if (/routes: \[/.test(t.slice(Math.max(0, m.index - 60), m.index))) targets.set(m[1], path.relative(root, f));
+  for (const m of t.matchAll(/route: '(\w+)'/g)) targets.set(m[1], path.relative(root, f)); }
+const bad = [...targets].filter(([n]) => !registered.has(n) && !tabs.includes(n));
+ok(!bad.length, `All ${targets.size} navigation targets resolve to real screens${bad.length ? ' — broken: ' + bad.map(([n, f]) => n + ' in ' + f) : ''}`);
 process.exit(fail ? 1 : 0);

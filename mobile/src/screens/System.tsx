@@ -5,6 +5,8 @@ import { Screen, Header, Card, Chip, Row, Toggle, Section, Btn, useToast, Tag } 
 import { Icon } from '../components/Icon';
 import { useStore } from '../store/useStore';
 import { ago } from '../lib/util';
+import { online, useSession } from '../lib/api';
+import { bg, signOut, refresh } from '../lib/sync';
 
 const KIND: Record<string, { icon: any; tint: string }> = { reaction: { icon: 'chat', tint: C.violet }, approval: { icon: 'fingerprint', tint: C.pink }, earning: { icon: 'cash', tint: '#12A27C' }, system: { icon: 'flag', tint: C.tangerine }, loop: { icon: 'loops', tint: C.violet } };
 export function Notifications({ navigation }: any) {
@@ -59,7 +61,7 @@ export function Settings({ route }: any) {
             <Row icon="download" title="Download my data" onPress={exportData} />
             <Row icon="check" title="Consent records" sub="Terms v1 · Loop reactions research: off" />
             <Row icon="clock" title="Retention preference" sub="Keep deleted drafts 30 days" />
-            <Row icon="trash" title="Request account deletion" tint={C.danger} onPress={() => { st.log('privacy.deletion_request', st.user.handle); show('Deletion request logged for admin review'); }} />
+            <Row icon="trash" title="Request account deletion" tint={C.danger} onPress={() => { st.log('privacy.deletion_request', st.user.handle); bg('POST', '/privacy/deletion'); show(online() ? 'Deletion request sent to the VibeLoop team' : 'Offline demo: request logged on this device only'); }} />
           </Card>
         </Section> : null}
         {show_('notifications') ? <Section title="Notifications">

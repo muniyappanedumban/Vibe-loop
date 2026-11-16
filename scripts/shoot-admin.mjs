@@ -1,4 +1,6 @@
-// Screenshots every admin page. Usage: node scripts/shoot-admin.mjs (after `npm run build` in admin/)
+// Screenshots every admin page against the live backend (default http://localhost:8787, baked in at build time via VITE_API_URL).
+// Usage: node scripts/shoot-admin.mjs (after `npm run build` in admin/). Logs in through the real login page first.
+// All PNGs land flat in screenshots/admin/<NN>-<name>.png
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,40 +26,55 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(p).pipe(res);
 }).listen(PORT);
 
+const EMAIL = process.env.ADMIN_EMAIL ?? 'admin@vibeloop.app';
+const PASSWORD = process.env.ADMIN_PASSWORD ?? 'Vibeloop2026';
+fs.mkdirSync(out, { recursive: true });
+
 const browser = await chromium.launch({ channel: 'chrome' });
 const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })).newPage();
 const errors = [];
 page.on('console', m => { if (m.type() === 'error') errors.push(`[${page.url()}] ${m.text()}`); });
 page.on('pageerror', e => errors.push(`[${page.url()}] ${e.message}`));
 
-for (const [i, slug] of SLUGS.entries()) {
-  const dir = path.join(out, `${String(i + 1).padStart(2, '0')}-${slug}`);
-  fs.mkdirSync(dir, { recursive: true });
-  await page.goto(`http://localhost:${PORT}/#/${slug}`, { waitUntil: 'networkidle' });
-  await page.waitForSelector('.content');
-  await page.waitForTimeout(250);
-  await page.screenshot({ path: path.join(dir, 'screen.png') });
-  console.log('saved', path.relative(root, path.join(dir, 'screen.png')));
+let n = 0;
+const file = name => path.join(out, `${String(n++).padStart(2, '0')}-${name}.png`);
+async function snap(name) {
+  const f = file(name);
+  await page.screenshot({ path: f });
+  console.log('saved', path.relative(root, f));
 }
-async function shot(hash, file) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+async function settle() {
+  await page.waitForSelector('.content');
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(300);
+}
+async function shot(hash, name) {
   await page.goto(`http://localhost:${PORT}/#/${hash}`, { waitUntil: 'networkidle' });
-  await page.reload({ waitUntil: 'networkidle' }); // hash-only goto doesn't remount; reload gives fresh state
-  await page.waitForSelector('.content');
-  await page.waitForTimeout(250);
-  await page.screenshot({ path: file });
-  console.log('saved', path.relative(root, file));
+  await page.reload({ waitUntil: 'networkidle' }); // hash-only goto doesn't remount; reload gives fresh state (session token survives)
+  await settle();
+  await snap(name);
 }
-for (const [i, sec] of SETTINGS.entries()) await shot(`settings/${sec}`, path.join(out, '14-settings', `${String(i + 1).padStart(2, '0')}-${sec}`, 'screen.png'));
-await shot('emoji', path.join(out, '15-emoji', 'screen.png'));
+
+// 00 — real login page
+await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
+await page.waitForSelector('.login');
+await page.fill('#em', EMAIL);
+await page.fill('#pw', PASSWORD);
+await snap('login');
+await page.click('.login-form button.btn');
+await page.waitForSelector('.app', { timeout: 10000 });
+
+for (const slug of SLUGS) await shot(slug, slug);
+for (const sec of SETTINGS) await shot(`settings/${sec}`, `settings-${sec}`);
+await shot('emoji', 'emoji');
 await page.click('.mcell:nth-child(12)');
 await page.waitForSelector('.mdetail');
 await page.waitForTimeout(200);
-await page.screenshot({ path: path.join(out, '15-emoji', 'detail.png') });
-console.log('saved screenshots/admin/15-emoji/detail.png');
-await shot('features', path.join(out, '16-features', 'screen.png'));
-await shot('features?tab=social', path.join(out, '16-features', 'social.png'));
-await shot('search?q=riya', path.join(out, '17-search', 'screen.png'));
+await snap('emoji-detail');
+await shot('features', 'features-prd');
+await shot('features?tab=social', 'features-social');
+await shot('search?q=riya', 'search');
 await browser.close();
 server.close();
 if (errors.length) { console.error('Console errors:\n' + errors.join('\n')); process.exitCode = 1; } else console.log('No console errors.');
