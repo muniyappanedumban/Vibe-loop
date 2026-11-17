@@ -153,3 +153,15 @@ def test_incident_lifecycle(client, admin, riya):
     assert i["resolvedAt"] and len(i["timeline"]) == 3
     assert not any(x["id"] == i["id"] for x in client.get("/admin/incidents", headers=admin).json())
     assert client.get("/admin/incidents", headers=riya).status_code == 403
+
+# ---------- server-driven feed tabs ----------
+def test_feed_modes_and_switch(client, admin, riya):
+    for m in ("foryou", "circle", "trending", "fresh"):
+        r = client.get(f"/feed?mode={m}", headers=riya); assert r.status_code == 200, (m, r.text)
+    client.post("/posts", headers=riya, json={"kind": "thought", "text": "calm day", "mood": "Relaxing"})
+    items = client.get("/feed?mode=mood&tag=Relaxing", headers=riya).json()["items"]
+    assert items and all(p["mood"] == "Relaxing" for p in items)
+    assert client.get("/feed?mode=mood", headers=riya).status_code == 400
+    cfg(client, admin, {"defaults": {"glow": {"feedTabs": ["forYou", "fresh"]}}})
+    assert client.get("/feed?mode=trending", headers=riya).status_code == 403
+    assert client.get("/feed?mode=fresh", headers=riya).status_code == 200

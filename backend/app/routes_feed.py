@@ -1,7 +1,7 @@
 """v4 paged feed + comments (paged list, delete, like). /bootstrap stays as is."""
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.orm import Session
 from .db import get_db
 from . import models as M
@@ -44,7 +44,11 @@ def viewable_post(db: Session, pid: str, me: M.User) -> M.Post:
     return p
 
 @router.get("/feed")
-def feed(mode: Literal["foryou", "circle", "trending", "fresh"] = "foryou", cursor: int = Query(0, ge=0), u: M.User = Depends(current_user), db: Session = Depends(get_db)):
+def feed(mode: Literal["foryou", "circle", "trending", "fresh", "mood", "interests"] = "foryou", cursor: int = Query(0, ge=0),
+         tag: str | None = Query(None, max_length=30), u: M.User = Depends(current_user), db: Session = Depends(get_db)):
+    from .user_app import setting, LEGACY_TABS
+    tabs = {LEGACY_TABS.get(t, t).lower() for t in (setting(db, "defaults.glow.feedTabs", u) or [])}
+    if tabs and mode not in tabs: raise HTTPException(403, "This feed is turned off")
     blocked = set(db.scalars(select(M.Edge.target).where(M.Edge.user_id == u.id, M.Edge.kind == "block")))
     circles = my_circles(db, u)
     from .routes_v6 import hidden_private
@@ -54,8 +58,18 @@ def feed(mode: Literal["foryou", "circle", "trending", "fresh"] = "foryou", curs
     if mode == "circle":
         mine = set(db.scalars(select(M.Edge.target).where(M.Edge.user_id == u.id, M.Edge.kind == "follow"))) | set(db.scalars(select(M.Friend.friend_id).where(M.Friend.user_id == u.id)))
         q = q.where(M.Post.author_id.in_(mine | {u.id}))
-    if mode == "trending":
+    if mode in ("mood", "interests"):
+        if not tag: raise HTTPException(400, "Pick a mood or interest")
+        q = q.where(func.lower(M.Post.mood if mode == "mood" else M.Post.interest) == tag.lower()).order_by(M.Post.at.desc(), M.Post.id)
+    elif mode == "trending":
         q = q.where(M.Post.at > M.now_ms() - 7 * 86_400_000).order_by((M.Post.shares * 20 + M.Post.views).desc(), M.Post.at.desc(), M.Post.id)
+    elif mode == "foryou":
+        # For You: engagement with time decay (Hacker-News style) + a boost for people you follow / are friends with.
+        follows = set(db.scalars(select(M.Edge.target).where(M.Edge.user_id == u.id, M.Edge.kind == "follow"))) | set(db.scalars(select(M.Friend.friend_id).where(M.Friend.user_id == u.id)))
+        age_h = (M.now_ms() - M.Post.at) / 3_600_000.0
+        score = (M.Post.shares * 20 + M.Post.views + 1) / func.power(age_h + 2, 1.5)
+        if follows: score = score + case((M.Post.author_id.in_(follows), 3.0), else_=0.0)
+        q = q.where(M.Post.at > M.now_ms() - 30 * 86_400_000).order_by(score.desc(), M.Post.at.desc(), M.Post.id)
     else: q = q.order_by(M.Post.at.desc(), M.Post.id)
     out, off, more = [], cursor, False
     while True:  # skip posts the caller may not see, keep pages full

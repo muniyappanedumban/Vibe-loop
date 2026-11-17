@@ -90,3 +90,7 @@ def test_admin_switches_off(client, admin):
     kinds = [e["kind"] for e in client.get("/me/security-events", headers=H(v["token"])).json()["items"]]
     assert "new_device" not in kinds
     assert client.get("/app-config").json()["security"]["twoFactor"] is False
+
+def test_cors_allows_device_headers(client):
+    r = client.options("/auth/otp/request", headers={"Origin": "http://localhost:4175", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type,x-app-version,x-device-id,x-device-name"})
+    assert r.status_code == 200, r.text

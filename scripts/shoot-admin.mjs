@@ -13,7 +13,10 @@ const out = path.join(root, 'screenshots', 'admin');
 // playwright is a devDependency of admin/, resolve it from there
 const { chromium } = createRequire(path.join(root, 'admin', 'package.json'))('playwright');
 
-const SLUGS = ['dashboard', 'users', 'moderation', 'payouts', 'health', 'costs', 'flags', 'audit', 'privacy', 'abuse', 'revenue', 'announcements', 'roles'];
+// Every page in the admin nav (read from App.tsx PAGES) so new pages are never missed.
+const PAGES_SRC = fs.readFileSync(path.join(root, 'admin/src/App.tsx'), 'utf8').split('export const PAGES = [')[1].split('] as const')[0];
+const SLUGS = [...PAGES_SRC.matchAll(/\['([a-z0-9-]+)', '([^']+)'\]/g)].map(m => m[1]);
+const LABELS = Object.fromEntries([...PAGES_SRC.matchAll(/\['([a-z0-9-]+)', '([^']+)'\]/g)].map(m => [m[1], m[2].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')]));
 const NAMES = { dashboard: 'mission-control', users: 'members', moderation: 'mod-queue', payouts: 'cashouts', health: 'vitals', costs: 'burn-rate', flags: 'switchboard', audit: 'paper-trail', privacy: 'privacy-desk', abuse: 'spam-shield', revenue: 'revenue-pulse', announcements: 'megaphone', roles: 'role-matrix' };
 const SETTINGS = ['general', 'security', 'moderation', 'monetisation', 'notifications', 'content', 'privacy', 'integrations', 'branding', 'admins'];
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
@@ -69,7 +72,7 @@ await page.click('.login-form button.btn');
 await page.waitForSelector('.app', { timeout: 10000 });
 
 for (const slug of SLUGS) {
-  await shot(slug, NAMES[slug] ?? slug);
+  await shot(slug, NAMES[slug] ?? LABELS[slug] ?? slug);
   if (slug === 'users') { // member detail drawer (avatar/initials, last seen, profile fields)
     await go('users?open=usr_riya'); await page.waitForSelector('.drawer .mhead'); await page.waitForTimeout(200); await snap('members-drawer');
   }
@@ -161,35 +164,41 @@ await go('promos?edit=promo_kovai'); await page.locator('.peditor .ptarget').scr
 await shotAt('promos?pc=IN&ps=TN', 'promo-preview-IN-TN', '.card:has-text("Preview as")');
 await shotAt('promos?pc=US&ps=', 'promo-preview-US', '.card:has-text("Preview as")');
 await shot('uploads', 'uploads');
+// Interactive demo steps change data; on re-runs a button may already be disabled (state already applied) — skip it then.
+async function tryClick(sel) {
+  const l = page.locator(sel).first();
+  if (!(await l.count()) || !(await l.isEnabled())) { console.log('  (skip, already applied)', sel); return; }
+  await l.click();
+}
 // ---- Content & trust ----
 await shot('pages', 'page-studio-list');
 await shotAt('pages?edit=help-hub', 'page-studio-editor-faq-help-hub', '.pgeditor');
 await shotAt('pages?edit=get-the-apps', 'page-studio-editor-links-get-the-apps', '.pgeditor');
 await shotAt('pages?edit=house-rules', 'page-studio-editor-house-rules', '.pgeditor');
 // edit House Rules through the UI → a new version appears in the history
-await page.fill('[aria-label="summary"]', 'Terms of use (draft) — the deal for using VibeLoop.');
+await page.fill('[aria-label="summary"]', `Terms of use — the deal for using VibeLoop (rev ${Date.now() % 100000}).`);  // unique so Save is enabled on re-runs
 await page.fill('[aria-label="change note"]', 'Tightened the summary');
-await page.click('.pgeditor .btn.prism');
+await tryClick('.pgeditor .btn.prism');
 await page.waitForSelector('.vhist td:has-text("Tightened the summary")');
 await page.locator('.vhist').scrollIntoViewIfNeeded(); await page.waitForTimeout(250);
 await snap('page-studio-version-history');
 await shot('blog', 'loopdown-fresh-wire-list');
 await shotAt('blog?edit=loopdown-loops-101', 'loopdown-editor-preview', '.pgeditor');
 await shot('reviews', 'reviews-desk');
-await page.click('tr:has-text("Super responsive") button:has-text("Hide")');
+if (await page.locator('tr:has-text("Super responsive") button:has-text("Hide")').count()) await tryClick('tr:has-text("Super responsive") button:has-text("Hide")');  // already hidden on re-runs
 await page.waitForSelector('tr.dim:has-text("Super responsive")');
 await page.waitForTimeout(200);
 await snap('reviews-desk-hidden-vouch');
 await shot('speakup', 'speak-up-desk-queue');
 await shot('speakup?open=su_demo_urgent', 'speak-up-desk-urgent-ticket-detail');
-await page.click('.sudetail button:has-text("Reviewing")');
+await tryClick('.sudetail button:has-text("Reviewing")');
 await page.waitForSelector('.sudetail .suhist li:has-text("real human")');
 await page.waitForTimeout(250);
 await snap('speak-up-desk-urgent-reviewing');
 // ---- Platform ----
 for (const sec of SETTINGS) await shot(`settings/${sec}`, `control-room-${sec}`);
 await shot('emoji', 'vibemoji-vault');
-await page.click('.mcell:nth-child(12)');
+await tryClick('.mcell:nth-child(12)');
 await page.waitForSelector('.mdetail');
 await page.waitForTimeout(200);
 await snap('vibemoji-vault-detail');

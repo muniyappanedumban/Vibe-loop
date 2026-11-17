@@ -12,7 +12,7 @@ import { REACTIONS } from '../lib/vibemoji';
 import { useSocial, creator, compact, Post, followLabel } from '../store/useSocial';
 import { useStore } from '../store/useStore';
 import { ago } from '../lib/util';
-import { useFeature, useT } from '../lib/config';
+import { useFeature, useT, useConfig } from '../lib/config';
 import { Media } from '../components/Lens';
 import { VideoClip } from '../components/VideoClip';
 import { isVideoUrl } from '../lib/uploads';
@@ -133,10 +133,29 @@ export function Home({ navigation }: any) {
   const [more, setMore] = useState<number | null>(0);
   const loadMore = () => { const at = more ?? 0; setMore(-1); apiCall<any>('GET', `/feed?mode=fresh&cursor=${Math.max(at, st.posts.length)}`).then(r => {
     useSocial.setState(x => ({ posts: [...x.posts, ...r.items.filter((p: any) => !x.posts.some(q => q.id === p.id))] })); setMore(r.nextCursor ?? null); }).catch(() => setMore(at)); };
+  // Server-driven tabs: each tab is its own ranked page from /feed?mode=… (admin decides which tabs exist).
+  const MODE: Record<string, string> = { 'For You': 'foryou', Circle: 'circle', Trending: 'trending', Fresh: 'fresh', Mood: 'mood', Interests: 'interests' };
+  const LEGACY: Record<string, string> = { following: 'circle', nearby: 'trending' };
+  const allowed = useConfig(c => c.cfg.defaults?.glow?.feedTabs);
+  const tabs = FEEDS.filter(f => !allowed?.length || allowed.map(t => (LEGACY[t] ?? t).toLowerCase()).includes(MODE[f]));
+  useEffect(() => { if (tabs.length && !tabs.includes(feed)) setFeed(tabs[0]); }, [tabs.join()]);
+  const [srv, setSrv] = useState<{ key: string; items: Post[]; next: number | null; loading: boolean; err?: string }>({ key: '', items: [], next: null, loading: false });
+  const tag = feed === 'Mood' ? mood : feed === 'Interests' ? interest : '';
+  const key = `${feed}|${tag}`;
+  const fetchTab = (cursor = 0) => {
+    const q = `/feed?mode=${MODE[feed]}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}&cursor=${cursor}`;
+    setSrv(x => ({ ...x, key, loading: true, err: undefined, ...(cursor ? {} : { items: [] }) }));
+    apiCall<any>('GET', q).then(r => setSrv(x => x.key !== key ? x : { key, items: cursor ? [...x.items, ...r.items.filter((p: any) => !x.items.some(q2 => q2.id === p.id))] : r.items, next: r.nextCursor ?? null, loading: false }))
+      .catch(e => setSrv(x => x.key !== key ? x : { ...x, loading: false, err: e.message }));
+  };
+  useEffect(() => { if (online()) fetchTab(0); }, [key]);
   const score = (p: Post) => Object.values(p.reactions).reduce((a, b) => a + b, 0) + p.shares * 3;
-  const list = feed === 'Circle' ? visible.filter(p => st.following.includes(p.by) || p.by === 'me') : feed === 'Trending' ? [...visible].sort((a, b) => score(b) - score(a))
+  const local = feed === 'Circle' ? visible.filter(p => st.following.includes(p.by) || p.by === 'me') : feed === 'Trending' ? [...visible].sort((a, b) => score(b) - score(a))
     : feed === 'Fresh' ? [...visible].sort((a, b) => b.at - a.at) : feed === 'Mood' ? visible.filter(p => p.mood === mood) : feed === 'Interests' ? visible.filter(p => p.interest === interest)
     : [...visible].sort((a, b) => (st.following.includes(b.by) ? 1 : 0) - (st.following.includes(a.by) ? 1 : 0) || b.at - a.at);
+  const live = online() && srv.key === key && !srv.err;
+  // live posts carry the same shape as /bootstrap posts; re-read from the store when present so likes/saves stay in sync
+  const list = live ? srv.items.map(p => st.posts.find(q => q.id === p.id) ?? p).filter(p => !st.blocked.includes(p.by)) : local;
   return (
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: S.md }}>
@@ -149,7 +168,7 @@ export function Home({ navigation }: any) {
       <OutboxBanner onPress={() => navigation.navigate('Outbox')} />
       <PromoSlot placement="home_banner" />
       <SparkRow navigation={navigation} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: S.lg }}>{FEEDS.map(f => <Chip key={f} label={f} active={feed === f} onPress={() => setFeed(f)} />)}</ScrollView>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: S.lg }}>{tabs.map(f => <Chip key={f} label={f} active={feed === f} onPress={() => setFeed(f)} />)}</ScrollView>
       {feed === 'Mood' ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 8 }}>{MOODS.map(m => <Chip key={m} label={m} icon="smile" active={mood === m} onPress={() => setMood(m)} />)}</ScrollView> : null}
       {feed === 'Interests' ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 8 }}>{['Food', 'Travel', 'Finance', 'Art', 'Sports'].map(m => <Chip key={m} label={m} icon="hash" active={interest === m} onPress={() => setInterest(m)} />)}</ScrollView> : null}
       <LinearGradient colors={[C.violetSoft, C.bg]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.oneQ}>
@@ -158,8 +177,11 @@ export function Home({ navigation }: any) {
       </LinearGradient>
       <View style={{ height: S.lg }} />
       {list.map((p, i) => <React.Fragment key={p.id}><PostCard p={p} navigation={navigation} />{i === 0 ? <PromoSlot placement="feed" /> : null}{i === 2 ? <AdSlot place="feed" /> : null}</React.Fragment>)}
-      {!list.length ? <Text style={[T.small, { textAlign: 'center', marginTop: 30 }]}>Nothing here yet — follow creators to fill your Circle.</Text> : null}
-      {online() && more !== null ? <Btn small kind="ghost" title={more === -1 ? 'Loading…' : 'Load older Drops'} icon="clock" disabled={more === -1} onPress={loadMore} style={{ marginTop: 8 }} /> : null}
+      {live && srv.loading && !list.length ? <Text style={[T.small, { textAlign: 'center', marginTop: 30 }]}>Loading {feed}…</Text>
+        : !list.length ? <Text style={[T.small, { textAlign: 'center', marginTop: 30 }]}>{feed === 'Circle' ? 'Nothing here yet — follow creators to fill your Circle.' : `No Drops in ${feed}${tag ? ` · ${tag}` : ''} yet.`}</Text> : null}
+      {srv.err && online() ? <Btn small kind="ghost" title={`Couldn't load ${feed} — retry`} icon="clock" onPress={() => fetchTab(0)} style={{ marginTop: 8 }} /> : null}
+      {live && srv.next !== null ? <Btn small kind="ghost" title={srv.loading ? 'Loading…' : 'Load more'} icon="clock" disabled={srv.loading} onPress={() => fetchTab(srv.next!)} style={{ marginTop: 8 }} />
+        : !live && online() && more !== null ? <Btn small kind="ghost" title={more === -1 ? 'Loading…' : 'Load older Drops'} icon="clock" disabled={more === -1} onPress={loadMore} style={{ marginTop: 8 }} /> : null}
     </Screen>
   );
 }

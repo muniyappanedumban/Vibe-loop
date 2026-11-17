@@ -5,7 +5,8 @@ import copy
 from fastapi import HTTPException
 from .v2common import LENS_KEYS
 
-FEED_TABS = ["forYou", "following", "nearby", "fresh"]
+FEED_TABS = ["forYou", "circle", "trending", "fresh", "mood", "interests"]
+LEGACY_TABS = {"following": "circle", "nearby": "trending"}  # names saved by older admin builds
 REACTIONS = ["heart", "fire", "laugh", "wow", "sad", "clap", "hundred", "sparkle"]
 LENSES = sorted(LENS_KEYS)
 AUD3 = ["everyone", "friends", "nobody"]

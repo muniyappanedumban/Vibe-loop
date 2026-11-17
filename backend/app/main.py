@@ -60,7 +60,7 @@ async def lifespan(_app):
 app = FastAPI(title="VibeLoop API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-                   allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Country", "If-None-Match", "Accept-Language", "X-App-Version"],
+                   allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Country", "If-None-Match", "Accept-Language", "X-App-Version", "X-Device-Id", "X-Device-Name"],
                    expose_headers=["X-Request-ID", "ETag", "Retry-After"], max_age=600)
 from .middleware import RequestContextMiddleware, JsonGZipMiddleware
 from .middleware import TimeoutMiddleware
