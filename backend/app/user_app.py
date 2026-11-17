@@ -78,6 +78,10 @@ SETTINGS = [
     _s("access.forceUpdate", "global", "Force update", "bool", False, True),
     _s("limits.autoHideReports", "global", "Auto-hide a post after N reports (0 = off)", "int", 5, True, min=0, max=1000),
 ]
+import importlib as _il
+for _n in range(2, 10):  # add-on batches contribute their own switches
+    try: SETTINGS += _il.import_module(f".addon_settings_b{_n}", __package__).SETTINGS
+    except ModuleNotFoundError: pass
 BY_PATH = {s["path"]: s for s in SETTINGS}
 OWNED_TOP = ("defaults", "access", "security", "privacy", "safety", "spam", "addons")  # top-level keys this module owns entirely; "limits" is shared (fees etc. stay elsewhere)
 LEGACY_LIMITS = {"maxAccounts", "maxGroupSize", "statusHours", "editWindowMin", "undoWindowMin"}
