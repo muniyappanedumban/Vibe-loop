@@ -45,13 +45,23 @@ async def lifespan(_app):
     n = cleanup_abandoned()  # abandoned resumable uploads (> 24 h)
     if n: import logging; logging.getLogger("vibeloop").warning("removed %d abandoned upload sessions", n)
     yield
+    # Graceful shutdown (SIGTERM from gunicorn/k8s): the server has stopped accepting and drained in-flight requests by now.
+    # Let queued push sends finish (bounded), then close pooled DB connections so PgBouncer/Postgres free them at once.
+    import threading as _th
+    from . import push as _push
+    from .db import dispose_engines
+    t = _th.Thread(target=_push.POOL.shutdown, kwargs={"wait": True}, daemon=True); t.start(); t.join(timeout=10)
+    if t.is_alive(): _lg.getLogger("vibeloop").warning("shutdown: push queue not drained within 10 s — remaining sends dropped")
+    dispose_engines()
 app = FastAPI(title="VibeLoop API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-                   allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Country", "If-None-Match", "Accept-Language"],
+                   allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Country", "If-None-Match", "Accept-Language", "X-App-Version"],
                    expose_headers=["X-Request-ID", "ETag", "Retry-After"], max_age=600)
 from .middleware import RequestContextMiddleware, JsonGZipMiddleware
+from .middleware import TimeoutMiddleware
 app.add_middleware(JsonGZipMiddleware)
+app.add_middleware(TimeoutMiddleware)  # REQUEST_TIMEOUT_SEC; inside the request logger so 504s are logged
 app.add_middleware(RequestContextMiddleware)
 from .routes_media import router as media_router
 app.include_router(media_router)
@@ -66,9 +76,11 @@ from . import routes_pages, routes_reviews, routes_speakup
 for _r in (routes_pages, routes_reviews, routes_speakup): app.include_router(_r.router)
 from . import realtime, push, calls, routes_v6  # v6 realtime parity
 for _r in (realtime, push, calls, routes_v6): app.include_router(_r.router)
+from . import routes_hush_settings; app.include_router(routes_hush_settings.router)  # Hush Control Room
 STAFF = ("owner",)
 
 @app.get("/health")
+@app.get("/health/live")
 def health():
     """Liveness: the process is up and serving. No dependencies — a DB outage must not get healthy pods killed."""
     return {"ok": True, "version": app.version}
@@ -84,9 +96,13 @@ def health_ready():
     try: db.execute(select(1))
     except Exception: out.update(ok=False, db="down")
     finally: db.close()
-    if limiter.name == "redis":
-        try: limiter.r.ping(); out["redis"] = "up"
-        except Exception: out.update(ok=False, redis="down")
+    from .config import REDIS_URL
+    if REDIS_URL:  # shared limiter, realtime fan-out/presence and config cache all depend on it
+        from .cache import cache
+        # Redis down is *degraded*, not unready: every Redis user fails open (limiter allows, fan-out delivers locally,
+        # cache computes). Failing readiness here would pull every replica out of the LB at once — a total outage.
+        try: cache.ping(); out["redis"] = "up"
+        except Exception: out.update(redis="down", degraded=True)
     return JSONResponse(out, status_code=200 if out["ok"] else 503)
 
 # ---------- auth ----------
@@ -98,6 +114,8 @@ def signup(b: SignUp, db: Session = Depends(get_db)):
     if err := password_ok(b.password): raise HTTPException(400, err)
     h = b.handle if b.handle.startswith("@") else "@" + b.handle
     if db.scalar(select(M.User).where(or_(M.User.email == b.email.lower(), M.User.handle == h))): raise HTTPException(409, "Email or handle already taken")
+    from .user_app import setting as ua_setting
+    if not ua_setting(db, "access.signupOpen"): raise HTTPException(403, "Sign-ups are closed right now")
     u = M.User(email=b.email.lower(), handle=h, name=b.name, password_hash=hash_password(b.password), role="creator")
     db.add(u); db.flush(); audit(db, u.handle, "auth.signup"); db.commit()
     return {"token": make_access(u), "user": user_admin_json(u)}
@@ -321,6 +339,12 @@ def create_post(b: PostIn, u: M.User = Depends(write_limit("post")), db: Session
         return post_json(db, ex, u)
     if b.kind not in ("photo", "carousel", "thought", "motion"): raise HTTPException(400, "Unknown post type")
     if b.lens and b.lens not in LENS_KEYS: raise HTTPException(400, 'Unknown lens')
+    from .user_app import get as ua_get
+    from .config_resolver import resolve as _resolve
+    ucfg = _resolve(db, u)
+    if b.lens and b.lens != "none" and b.lens not in ua_get(ucfg, "defaults.glow.lenses"): raise HTTPException(400, 'This lens is turned off')
+    if b.slides and b.slides > (mp := ua_get(ucfg, "limits.maxPhotosPerPost")): raise HTTPException(400, f'Posts can have at most {mp} photos')
+    if not ua_get(ucfg, "defaults.glow.hashtags"): b.tags = []
     if b.audience not in ('public', 'circle', 'quiet'): raise HTTPException(400, 'Audience must be public, circle or quiet')
     mf = db.get(M.MediaFile, b.mediaUrl.split('/')[-1].split('.')[0]) if b.mediaUrl else None
     if b.mediaUrl and not mf: raise HTTPException(400, 'Upload the media first')
@@ -331,7 +355,7 @@ def create_post(b: PostIn, u: M.User = Depends(write_limit("post")), db: Session
     data = b.model_dump(); data['media_url'] = data.pop('mediaUrl'); data['tags'] = [t.strip()[:40] for t in data['tags'] if t.strip()]; data['id'] = data['id'] or M.nid('p')
     data['media_kind'] = mf.kind if mf else None
     from .routes_uploads import check_video_length
-    check_video_length(mf)
+    check_video_length(mf, ua_get(ucfg, "limits.postVideoMaxSec"))
     if b.poll:
         if any(not o.strip() or len(o) > 60 for o in b.poll.options): raise HTTPException(400, 'Poll options are 1–60 characters')
         data['poll'] = {"q": b.poll.q.strip(), "options": [{"text": o.strip(), "votes": 0} for o in b.poll.options], "voters": {}}
@@ -394,7 +418,12 @@ def toggle_edge(kind: str, target: str, u: M.User = Depends(current_user), db: S
 @app.post("/reports")
 def report(b: dict, u: M.User = Depends(write_limit("report")), db: Session = Depends(get_db)):
     r = M.Report(reporter_id=u.id, target=text_field(str(b.get("target", "")), "target", 80, True), reason=str(b.get("reason", ""))[:120]); db.add(r)
-    audit(db, u.handle, "report.create", f"{r.target} · {r.reason}"); db.commit(); return {"id": r.id, "status": r.status}
+    audit(db, u.handle, "report.create", f"{r.target} · {r.reason}"); db.flush()
+    from .user_app import setting as ua_setting
+    if (n := ua_setting(db, "limits.autoHideReports")) > 0 and (p := db.get(M.Post, r.target)) and not p.hidden:
+        if db.scalar(select(func.count(func.distinct(M.Report.reporter_id))).where(M.Report.target == r.target)) >= n:
+            p.hidden = True; audit(db, "system", "moderation.auto_hide", f"{p.id} after {n} reports")
+    db.commit(); return {"id": r.id, "status": r.status}
 @app.post("/chats/{cid}/messages")
 def send(cid: str, b: dict, u: M.User = Depends(write_limit("message")), db: Session = Depends(get_db)):
     c = db.get(M.Chat, cid); text = (b.get("text") or "").strip()
@@ -533,3 +562,4 @@ def admin_search(q: str = Query(min_length=1, max_length=100), a: M.User = Depen
             "audit": [{"id": x.id, "action": x.action, "detail": x.detail} for x in db.scalars(select(M.Audit).where(or_(M.Audit.action.ilike(like), M.Audit.detail.ilike(like))).limit(20))],
             "promos": [{"id": x.id, "title": x.title, "active": x.active, "placement": x.placement} for x in db.scalars(select(M.Promo).where(or_(M.Promo.title.ilike(like), M.Promo.body.ilike(like), M.Promo.id.ilike(like))).limit(20))],
             "uploads": [{"id": m.id, "name": m.name, "kind": m.kind, "mime": m.mime, "size": m.size} for m in db.scalars(select(M.MediaFile).where(or_(M.MediaFile.name.ilike(like), M.MediaFile.id.ilike(like))).limit(20))]}
+from . import routes_user_app; app.include_router(routes_user_app.router)  # User App Settings schema

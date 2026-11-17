@@ -84,6 +84,8 @@ class UploadIn(BaseModel):
 @router.post("/uploads")
 def start(b: UploadIn, u: M.User = Depends(write_limit("upload_init")), db: Session = Depends(get_db)):
     if b.size > MAX_UPLOAD: raise HTTPException(413, "Files must be 1 GB or smaller")
+    from .user_app import setting as ua_setting
+    if b.size > (mb := ua_setting(db, "limits.uploadMaxMB", u)) * 1024 * 1024: raise HTTPException(413, f"Files must be {mb} MB or smaller")
     open_n = db.scalar(select(func.count()).select_from(M.UploadSession).where(M.UploadSession.owner_id == u.id, M.UploadSession.done == False))  # noqa: E712
     if open_n >= MAX_OPEN_SESSIONS: raise HTTPException(429, "Too many unfinished uploads — finish or wait for them to expire", headers={"Retry-After": "3600"})
     ext = ext_of(b.filename)
@@ -139,10 +141,10 @@ def complete(sid: str, u: M.User = Depends(current_user), db: Session = Depends(
 def media_out(mf: M.MediaFile, ext: str) -> dict:
     return {"url": f"/media/{mf.id}.{ext}", "kind": mf.kind, "mime": mf.mime, "size": mf.size, "name": mf.name, "durationSec": mf.duration_sec}
 
-def check_video_length(mf: M.MediaFile | None):
+def check_video_length(mf: M.MediaFile | None, limit: int = MAX_VIDEO_SEC):
     """Posts/Blinks: videos must be ≤ 60 s (ffprobe when installed, else client-declared duration)."""
-    if mf and mf.kind == "video" and mf.duration_sec and mf.duration_sec > MAX_VIDEO_SEC + 0.5:
-        raise HTTPException(400, f"Videos for posts and Blinks must be {MAX_VIDEO_SEC} seconds or shorter")
+    if mf and mf.kind == "video" and mf.duration_sec and mf.duration_sec > limit + 0.5:
+        raise HTTPException(400, f"Videos for posts and Blinks must be {limit} seconds or shorter")
 
 def media_for(db: Session, url: str | None) -> M.MediaFile | None:
     if not url or not url.startswith("/media/"): return None

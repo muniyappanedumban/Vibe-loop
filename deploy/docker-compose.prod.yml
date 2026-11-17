@@ -1,0 +1,131 @@
+# Production-shaped single-host stack (also a faithful local rehearsal of the k8s topology).
+#   cp deploy/.env.prod.example deploy/.env.prod   # fill every secret
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod build
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod run --rm migrate
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod up -d
+# Topology: nginx (LB) -> api x3 (gunicorn+uvicorn) -> pgbouncer (txn pooling)  -> Postgres primary
+#                                                  -> pgbouncer-ro             -> Postgres streaming replica
+#                                       api <-> redis (rate limits, WS fan-out, presence, config cache)
+# One host is still one failure domain - for real HA run deploy/k8s with managed Postgres/Redis.
+name: vibeloop
+
+x-api-env: &api-env
+  ENV: prod
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}
+  DATABASE_READ_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer-ro:5432/${POSTGRES_DB}
+  PGBOUNCER: "1"
+  POOL_SIZE: ${POOL_SIZE:-5}
+  MAX_OVERFLOW: ${MAX_OVERFLOW:-5}
+  REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+  TRUST_PROXY: "1"
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+  APPROVAL_SECRET: ${APPROVAL_SECRET:?set APPROVAL_SECRET}
+  OTP_SECRET: ${OTP_SECRET:?set OTP_SECRET}
+  MASTER_KEY: ${MASTER_KEY:?set MASTER_KEY}
+  CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS}
+  DEMO_OTP: "0"
+  WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+  REQUEST_TIMEOUT_SEC: "30"
+  MEDIA_DIR: /var/lib/vibeloop/media
+
+services:
+  lb:
+    image: nginx:1.27-alpine
+    ports: ["${HTTP_PORT:-80}:80"]
+    volumes: ["./nginx/nginx.conf:/etc/nginx/nginx.conf:ro"]
+    depends_on: { api: { condition: service_healthy } }
+    restart: unless-stopped
+
+  api:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    image: vibeloop-api:latest
+    environment: *api-env
+    # Shared media volume so every replica on this host sees every upload. Across machines, move media to S3-compatible
+    # object storage behind a CDN (docs/SCALING.md) - a shared POSIX volume does not scale out.
+    volumes: ["media:/var/lib/vibeloop/media"]
+    deploy: { replicas: 3, resources: { limits: { cpus: "2", memory: 1g } } }
+    stop_grace_period: 30s
+    depends_on:
+      pgbouncer: { condition: service_started }
+      pgbouncer-ro: { condition: service_started }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  migrate:   # one-off: alembic straight to the primary (DDL should not go through transaction pooling)
+    image: vibeloop-api:latest
+    profiles: ["tools"]
+    environment:
+      <<: *api-env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db-primary:5432/${POSTGRES_DB}
+      PGBOUNCER: "0"
+    command: ["alembic", "upgrade", "head"]
+    depends_on: { db-primary: { condition: service_healthy } }
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.23.1-p3
+    environment: &pgb
+      DB_HOST: db-primary
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "5000"
+      DEFAULT_POOL_SIZE: "40"
+      RESERVE_POOL_SIZE: "10"
+    depends_on: { db-primary: { condition: service_healthy } }
+    restart: unless-stopped
+
+  pgbouncer-ro:
+    image: edoburu/pgbouncer:v1.23.1-p3
+    environment:
+      <<: *pgb
+      DB_HOST: db-replica
+    depends_on: { db-replica: { condition: service_healthy } }
+    restart: unless-stopped
+
+  db-primary:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-vibeloop}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?set REPLICATION_PASSWORD}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    command: >
+      postgres -c max_connections=300 -c shared_buffers=1GB -c effective_cache_size=3GB -c work_mem=16MB
+               -c wal_level=replica -c max_wal_senders=10 -c wal_keep_size=1GB
+               -c log_min_duration_statement=500 -c idle_in_transaction_session_timeout=60s
+    volumes:
+      - pg-primary:/var/lib/postgresql/data
+      - ./postgres/primary-init.sh:/docker-entrypoint-initdb.d/10-replication.sh:ro
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"], interval: 5s, retries: 20 }
+    shm_size: 1g
+    restart: unless-stopped
+
+  db-replica:
+    image: postgres:16-alpine
+    user: postgres
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+    entrypoint: ["/replica-entrypoint.sh"]
+    volumes:
+      - pg-replica:/var/lib/postgresql/data
+      - ./postgres/replica-entrypoint.sh:/replica-entrypoint.sh:ro
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"], interval: 5s, retries: 30 }
+    depends_on: { db-primary: { condition: service_healthy } }
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --maxmemory 1gb --maxmemory-policy volatile-lru --appendonly no"]
+    environment: { REDIS_PASSWORD: "${REDIS_PASSWORD:?set REDIS_PASSWORD}" }
+    healthcheck: { test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"], interval: 5s, retries: 20 }
+    restart: unless-stopped
+
+volumes:
+  media:
+  pg-primary:
+  pg-replica:

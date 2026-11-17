@@ -1,3 +1,4 @@
+import { useLiveSync } from '../lib/sync';
 import { SparkExtras } from '../chat/screens/Parity';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, FlatList, useWindowDimensions, TextInput } from 'react-native';
@@ -8,12 +9,13 @@ import { Screen, Header, Card, Btn, Chip, Tag, DemoTag, Thumb, Avatar, Section, 
 import { Icon } from '../components/Icon';
 import { VibeMoji } from '../components/VibeMoji';
 import { REACTIONS } from '../lib/vibemoji';
-import { useSocial, creator, compact, Post } from '../store/useSocial';
+import { useSocial, creator, compact, Post, followLabel } from '../store/useSocial';
 import { useStore } from '../store/useStore';
 import { ago } from '../lib/util';
 import { useFeature, useT } from '../lib/config';
 import { Media } from '../components/Lens';
 import { VideoClip } from '../components/VideoClip';
+import { isVideoUrl } from '../lib/uploads';
 import { ReactionSheet } from '../components/ReactionSheet';
 import { AdSlot } from './Money2';
 import { PromoSlot } from '../components/PromoSlot';
@@ -58,7 +60,7 @@ export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
           <Text style={{ fontWeight: '800' }} onPress={() => p.by !== 'me' && navigation.navigate('CreatorProfile', { id: p.by })}>{c.name} {'badge' in c && c.badge ? <Icon name="shield" size={13} color={C.violet} /> : null}</Text>
           <Text style={T.small}>{p.place ? `${p.place} · ` : ''}{ago(p.at)} · {p.mood}</Text>
         </View>
-        {p.by !== 'me' ? <Chip label={following ? 'Following' : 'Follow'} active={!following} onPress={() => st.follow(p.by)} /> : <Pressable onPress={() => apiCall('POST', `/posts/${p.id}/pin`).then(() => {}).catch(() => {})} accessibilityLabel="Pin to profile (Pin 3)"><Tag label={(p as any).pinned ? 'PINNED' : 'PIN'} /></Pressable>}
+        {p.by !== 'me' ? <Chip label={followLabel(st, p.by)} active={followLabel(st, p.by) === 'Follow'} onPress={() => st.follow(p.by)} /> : <Pressable onPress={() => apiCall('POST', `/posts/${p.id}/pin`).then(() => {}).catch(() => {})} accessibilityLabel="Pin to profile (Pin 3)"><Tag label={(p as any).pinned ? 'PINNED' : 'PIN'} /></Pressable>}
       </View>
       {p.kind === 'thought' ? (
         <View style={[s.thought, { backgroundColor: p.bg ?? C.violet }]}><Text style={s.thoughtT}>{p.text}</Text></View>
@@ -122,10 +124,15 @@ export function PostCard({ p, navigation }: { p: Post; navigation: any }) {
 const FEEDS = ['For You', 'Circle', 'Trending', 'Fresh', 'Mood', 'Interests'] as const;
 const MOODS = ['Funny', 'Inspiring', 'Relaxing', 'Emotional', 'Happy'];
 export function Home({ navigation }: any) {
+  useLiveSync();
   const st = useSocial(); const tr = useT();
   const [feed, setFeed] = useState<(typeof FEEDS)[number]>('For You');
   const [mood, setMood] = useState('Funny'); const [interest, setInterest] = useState('Food');
   const visible = st.posts.filter(p => !st.blocked.includes(p.by));
+  // Older Drops page in from the server (/feed?mode=fresh) beyond what /bootstrap carries. null = no more pages, -1 = loading.
+  const [more, setMore] = useState<number | null>(0);
+  const loadMore = () => { const at = more ?? 0; setMore(-1); apiCall<any>('GET', `/feed?mode=fresh&cursor=${Math.max(at, st.posts.length)}`).then(r => {
+    useSocial.setState(x => ({ posts: [...x.posts, ...r.items.filter((p: any) => !x.posts.some(q => q.id === p.id))] })); setMore(r.nextCursor ?? null); }).catch(() => setMore(at)); };
   const score = (p: Post) => Object.values(p.reactions).reduce((a, b) => a + b, 0) + p.shares * 3;
   const list = feed === 'Circle' ? visible.filter(p => st.following.includes(p.by) || p.by === 'me') : feed === 'Trending' ? [...visible].sort((a, b) => score(b) - score(a))
     : feed === 'Fresh' ? [...visible].sort((a, b) => b.at - a.at) : feed === 'Mood' ? visible.filter(p => p.mood === mood) : feed === 'Interests' ? visible.filter(p => p.interest === interest)
@@ -152,11 +159,13 @@ export function Home({ navigation }: any) {
       <View style={{ height: S.lg }} />
       {list.map((p, i) => <React.Fragment key={p.id}><PostCard p={p} navigation={navigation} />{i === 0 ? <PromoSlot placement="feed" /> : null}{i === 2 ? <AdSlot place="feed" /> : null}</React.Fragment>)}
       {!list.length ? <Text style={[T.small, { textAlign: 'center', marginTop: 30 }]}>Nothing here yet — follow creators to fill your Circle.</Text> : null}
+      {online() && more !== null ? <Btn small kind="ghost" title={more === -1 ? 'Loading…' : 'Load older Drops'} icon="clock" disabled={more === -1} onPress={loadMore} style={{ marginTop: 8 }} /> : null}
     </Screen>
   );
 }
 
 export function Motion({ navigation }: any) {
+  useLiveSync();
   const tr = useT();
   const { height, width } = useWindowDimensions(); const ins = useSafeAreaInsets();
   const st = useSocial(); const reels = st.posts.filter(p => (p.kind === 'motion' || (p as any).mediaKind === 'video') && !st.blocked.includes(p.by));
@@ -184,7 +193,7 @@ export function Motion({ navigation }: any) {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Avatar name={c.name} hue={c.hue} size={38} ring />
                 <Text style={{ color: '#fff', fontWeight: '900' }}>{c.handle}</Text>
-                <Pressable onPress={() => st.follow(p.by)} style={s.followBtn}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{st.following.includes(p.by) ? 'Following' : 'Follow'}</Text></Pressable>
+                <Pressable onPress={() => st.follow(p.by)} style={s.followBtn}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{followLabel(st, p.by)}</Text></Pressable>
               </View>
               <Text style={{ color: '#fff', fontWeight: '600', marginTop: 10, fontSize: 15, lineHeight: 21 }}>{p.text}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}><Icon name="music" size={14} color="#fff" /><Text style={{ color: 'rgba(255,255,255,0.8)', fontWeight: '600', fontSize: 12 }}>Original audio · {c.name}</Text></View>
@@ -204,7 +213,7 @@ export function Sparks({ navigation, route }: any) {
   const vote = st.votes[sp.id];
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
-      <View style={StyleSheet.absoluteFill}><Media uri={mediaUri(sp.mediaUrl)} hue={sp.hue} lens={sp.lens} city={sp.place} h={2000} /></View>
+      <View style={StyleSheet.absoluteFill}>{isVideoUrl(sp.mediaUrl) ? <VideoClip key={sp.id} uri={mediaUri(sp.mediaUrl)!} lens={sp.lens} city={sp.place} h={2000} /> : <Media uri={mediaUri(sp.mediaUrl)} hue={sp.hue} lens={sp.lens} city={sp.place} h={2000} />}</View>
       <Pressable style={StyleSheet.absoluteFill} onPress={e => { const x = (e.nativeEvent as any).locationX ?? 300; x < 120 ? setI(Math.max(0, i - 1)) : i < st.sparks.length - 1 ? setI(i + 1) : navigation.goBack(); }} />
       <View style={{ position: 'absolute', top: ins.top + 8, left: 12, right: 12 }} pointerEvents="box-none">
         <View style={{ flexDirection: 'row', gap: 4 }}>{st.sparks.map((_, j) => <View key={j} style={s.progBg}><View style={[s.progFg, { width: `${j < i ? 100 : j === i ? Math.min(100, prog * 100) : 0}%` }]} /></View>)}</View>

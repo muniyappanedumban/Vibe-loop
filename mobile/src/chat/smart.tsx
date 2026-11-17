@@ -9,10 +9,10 @@ import { CC } from './theme';
 import { ChatIcon } from './ChatIcon';
 
 // ---------- rich text: *bold* _italic_ ~strike~ `code` ||spoiler|| @mention ----------
-export function RichText({ text, me, onMention }: { text: string; me: boolean; onMention?: (h: string) => void }) {
+export function RichText({ text, me, onMention, scale = 1 }: { text: string; me: boolean; onMention?: (h: string) => void; scale?: number }) {
   const [shown, setShown] = useState<Record<number, boolean>>({});
   const parts = text.split(/(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`|\|\|[^|\n]+\|\||@[a-z0-9._]{3,20})/gi).filter(Boolean);
-  const base = { fontSize: 15, fontWeight: '500' as const, color: me ? '#fff' : CC.ink, lineHeight: 21 };
+  const base = { fontSize: 15 * scale, fontWeight: '500' as const, color: me ? '#fff' : CC.ink, lineHeight: 21 * scale };
   return (
     <Text style={base}>{parts.map((p, i) => {
       if (/^\*[^*]+\*$/.test(p)) return <Text key={i} style={{ fontWeight: '900' }}>{p.slice(1, -1)}</Text>;

@@ -129,7 +129,12 @@ def create_spark(b: SparkIn, u: M.User = Depends(current_user), db: Session = De
         return spark_out(ex)
     if b.hours not in (1, 6, 12, 24): raise HTTPException(400, "Story timer must be 1, 6, 12 or 24 hours")
     if b.lens and b.lens not in LENS_KEYS: raise HTTPException(400, "Unknown lens")
-    check_video_length(media_for(db, b.mediaUrl))
+    from .user_app import get as ua_get
+    from .config_resolver import resolve as _resolve
+    ucfg = _resolve(db, u)
+    if b.hours > (bh := ua_get(ucfg, "limits.blinkHours")): raise HTTPException(400, f"Blinks last at most {bh} hours")
+    if b.lens and b.lens != "none" and b.lens not in ua_get(ucfg, "defaults.glow.lenses"): raise HTTPException(400, "This lens is turned off")
+    check_video_length(media_for(db, b.mediaUrl), ua_get(ucfg, "limits.blinkVideoMaxSec"))
     mark_public(db, b.mediaUrl, u)
     s = M.Spark(id=b.id or M.nid("s"), author_id=u.id, hue=b.hue, text=b.text, lens=b.lens, media_url=b.mediaUrl, place=b.place, close=b.close, expires_at=M.now_ms() + b.hours * 3_600_000)
     db.add(s); audit(db, u.handle, "spark.create", f"{b.hours}h"); db.commit()

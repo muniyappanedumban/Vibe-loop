@@ -1,3 +1,4 @@
+import { useLiveSync } from '../lib/sync';
 // Drift — discovery grid (Explore): search, trending tags, a 3-column grid of Drops & Flicks, Hoods to join.
 import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
@@ -11,6 +12,7 @@ import { useT } from '../lib/config';
 import { PromoSlot } from '../components/PromoSlot';
 
 export function Explore({ navigation }: any) {
+  useLiveSync();
   const so = useSocial(); const tr = useT(); const [tag, setTag] = useState<string | null>(null);
   const tags = useMemo(() => { const c: Record<string, number> = {}; so.posts.forEach(p => [...(p.tags ?? []), '#' + p.interest.toLowerCase()].forEach(t => t.startsWith('#') && (c[t] = (c[t] || 0) + 1))); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 10).map(x => x[0]); }, [so.posts]);
   const grid = so.posts.filter(p => !so.blocked.includes(p.by) && p.kind !== 'thought' && (!tag || (p.tags ?? []).includes(tag) || '#' + p.interest.toLowerCase() === tag));

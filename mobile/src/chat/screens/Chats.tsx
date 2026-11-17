@@ -7,6 +7,7 @@ import { Linking } from 'react-native';
 import { useOutbox } from '../../lib/outbox';
 import { MAX_UPLOAD } from '../../lib/uploads';
 import { useSession } from '../../lib/api';
+import { useLimit, useDefaults } from '../../lib/config';
 import { CC, AQUA, BUBBLE_THEMES } from '../theme';
 import { ChatIcon } from '../ChatIcon';
 import { BubbleMoji } from '../BubbleMojiView';
@@ -29,6 +30,9 @@ import { online } from '../../lib/api';
 import { useRealtime, typingIn } from '../../lib/realtime';
 import { watchConv } from '../useChat';
 import { useVoiceRecorder, VoicePlayer } from '../VoiceNote';
+import { pickMedia, ChatMediaBubble, isMediaAtt, mediaKind, useMediaViewer } from '../media';
+import { useNetInfo } from '@react-native-community/netinfo';
+import { useHushPrefs, FONT_SCALE } from '../hushPrefs';
 
 export function SignInNeeded({ navigation }: any) {
   return (
@@ -42,11 +46,14 @@ export function SignInNeeded({ navigation }: any) {
   );
 }
 
-const FOLDERS = [['all', 'All'], ['friends', 'Friends'], ['family', 'Family'], ['work', 'Work'], ['groups', 'Groups'], ['requests', 'Requests'], ['archived', 'Archived']] as const;
+const FOLDERS = [['all', 'All'], ['friends', 'Friends'], ['family', 'Family'], ['work', 'Work'], ['groups', 'Groups'], ['requests', 'Requests']] as const;
 export function ChatList({ navigation }: any) {
-  const st = useChat(); const tr = useT(); const [f, setF] = useState<string>('all'); const prefs = useChatPrefs();
+  const st = useChat(); const tr = useT(); const [f, setF] = useState<string>('all'); const prefs = useChatPrefs(); const [showArch, setShowArch] = useState(false);
+  // one-time migration: chats archived locally (old useChatPrefs) move to the server-side archive
+  useEffect(() => { if (!online() || !prefs.archived.length || !st.convs.length) return; const ids = prefs.archived.filter(id => st.convs.some(c => c.id === id && !c.archived)); useChatPrefs.setState({ archived: [] }); ids.forEach(id => chat.archive(id, true).catch(() => {})); }, [st.convs.length]);
   if (!online()) return <SignInNeeded navigation={navigation} />;
-  const list = st.convs.filter(c => (f === 'archived' ? prefs.archived.includes(c.id) : !prefs.archived.includes(c.id)) && (f === 'requests' ? c.request : !c.request) && (f === 'all' || f === 'archived' || f === 'requests' || c.folder === f || (f === 'groups' && c.group)))
+  const archived = st.convs.filter(c => c.archived);
+  const list = st.convs.filter(c => (showArch ? !!c.archived : !c.archived) && (f === 'requests' ? c.request : !c.request) && (showArch || f === 'all' || f === 'requests' || c.folder === f || (f === 'groups' && c.group)))
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || (b.last?.at ?? 0) - (a.last?.at ?? 0));
   const reqs = st.convs.filter(c => c.request).length;
   return (
@@ -66,7 +73,8 @@ export function ChatList({ navigation }: any) {
         </ScrollView>
         <PromoSlot placement="chat_list" />
         {st.error ? <Text style={[ct.small, { color: CC.coral, marginBottom: 8 }]}>{st.error}</Text> : null}
-        {list.map(c => <ConvRow key={c.id} c={c} marked={prefs.unread.includes(c.id)} onLong={() => prefs.toggleArchive(c.id)} onPress={() => navigation.navigate('ChatRoom', { id: c.id })} />)}
+        {archived.length || showArch ? <CCard onPress={() => setShowArch(!showArch)} style={{ marginBottom: 8, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}><ChatIcon name="folder" size={18} color={CC.teal} /><Text style={[ct.h3, { flex: 1 }]}>{showArch ? '← Back to chats' : `Archived (${archived.length})`}</Text></CCard> : null}
+        {list.map(c => <ConvRow key={c.id} c={c} marked={prefs.unread.includes(c.id)} onLong={() => chat.archive(c.id, !c.archived).catch(() => {})} onPress={() => navigation.navigate('ChatRoom', { id: c.id })} />)}
         {!list.length ? <CCard style={{ alignItems: 'center', gap: 6 }}><BubbleMoji id={120} size={56} /><Text style={ct.h3}>{f === 'requests' ? 'No message requests' : 'No chats here yet'}</Text><Text style={ct.small}>Find friends by their exact @ID.</Text></CCard> : null}
         <LiveFooter />
       </CScreen>
@@ -77,7 +85,7 @@ export function ChatList({ navigation }: any) {
 function ConvRow({ c, onPress, marked, onLong }: { c: Conv; onPress: () => void; marked?: boolean; onLong?: () => void }) {
   const other = c.members[0];
   return (
-    <Pressable onLongPress={onLong} delayLongPress={450} accessibilityHint="Long-press to archive"><CCard onPress={onPress} style={{ marginBottom: 8, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+    <Pressable onLongPress={onLong} delayLongPress={450} accessibilityHint={c.archived ? 'Long-press to unarchive' : 'Long-press to archive'}><CCard onPress={onPress} style={{ marginBottom: 8, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       {c.group ? <LinearGradient colors={AQUA as any} style={{ width: 50, height: 50, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}><ChatIcon name="friends" color="#fff" fill="rgba(255,255,255,.3)" /></LinearGradient> : <CAvatar name={other?.name ?? c.title} h={other?.hue ?? 180} size={50} uri={other?.avatar} online={!!other?.lastSeen && Date.now() - other.lastSeen < 120_000} />}
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -103,7 +111,13 @@ export function ChatRoom({ navigation, route }: any) {
   const copyOn = useFlag('chatCopy'); const chipsOn = useFlag('smartChips'); const slashOn = useFlag('slashCommands'); const polishOn = useFlag('quickPolish'); const phraseOn = useFlag('phrasebook');
   useEffect(() => { if (id) prefs.toggleUnread(id, false); }, [id]); const [settings, setSettings] = useState(false); const [fwd, setFwd] = useState<Msg | null>(null);
   const { toast, show } = useCToast(); const scroll = useRef<any>(null); const insTop = 50; const lockOn = useFeature('chatLock');
-  const rt = useRealtime(s => s.status); const typers = useRealtime(s => s.typing[id]); const callsOn = useFlag('calls'); const voiceOn = useFlag('voiceNotes'); const snapsOn = useFlag('snaps'); const e2eeOn = useFlag('e2ee');
+  const rt = useRealtime(s => s.status); const typers = useRealtime(s => s.typing[id]); const callsOn = useFlag('calls'); const voiceOn = useFlag('voiceNotes'); const snapsOn = useFlag('snaps'); const e2eeOn = useFlag('e2ee'); const mediaOn = useFlag('chatMedia'); const viewer = useMediaViewer();
+  const callTypes = useDefaults()?.hush?.callTypes; const audioOk = !Array.isArray(callTypes) || callTypes.includes('audio'); const videoOk = !Array.isArray(callTypes) || callTypes.includes('video');
+  const editMin = useLimit('editWindowMin', 15); const undoMin = useLimit('undoWindowMin', 60); const fileMB = Math.min(MAX_UPLOAD / 1048576, useLimit('fileMaxMB', MAX_UPLOAD / 1048576));
+  const hp = useHushPrefs(s => s.prefs); const net = useNetInfo(); const [loadedMedia, setLoadedMedia] = useState<Record<string, boolean>>({});
+  useEffect(() => { useHushPrefs.getState().load(); }, []);
+  const autoDl = net.type === 'cellular' ? hp.autoDownload.cellular : net.type === 'wifi' || net.type === 'ethernet' ? hp.autoDownload.wifi : hp.autoDownload.wifi && hp.autoDownload.cellular;
+  const fs = FONT_SCALE[hp.fontSize] ?? 1;
   const typingNow = Object.entries(typers ?? {}).some(([, t]) => t && Date.now() - t < 6000); void typingIn;
   const typingT = useRef<any>(null); const onType = (v: string) => { setTxt(v); if (!id) return; if (!typingT.current) chat.typing(id, true); clearTimeout(typingT.current); typingT.current = setTimeout(() => { chat.typing(id, false); typingT.current = null; }, 2500); };
   const voice = useVoiceRecorder(f => run(() => chat.send(id, { text: `Voice note · ${f.durationSec}s`, kind: 'voice', durationSec: Math.max(1, f.durationSec) }, { uri: f.uri, name: `voice-${Date.now()}.m4a`, mime: 'audio/m4a', size: 1 }).then(() => show('Voice note sent'))), m => show(m, true));
@@ -111,7 +125,7 @@ export function ChatRoom({ navigation, route }: any) {
   useEffect(() => { setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 50); }, [msgs.length]);
   if (!c) return <CScreen><CHeader title="Hush" /><Text style={ct.small}>Loading…</Text></CScreen>;
   if (c.locked && lockOn && !unlocked) return <LockGate onOpen={() => setUnlocked(true)} title={c.title} />;
-  const theme = BUBBLE_THEMES[c.theme ?? 'aqua'] ?? BUBBLE_THEMES.aqua;
+  const theme = BUBBLE_THEMES[c.theme ?? hp.bubbleTheme] ?? BUBBLE_THEMES.aqua;
   const run = async (fn: () => Promise<any>, ok?: string) => { try { await fn(); if (ok) show(ok); } catch (e: any) { show(e.message, true); } };
   const send = () => run(async () => {
     if (slashOn && txt.trim().startsWith('/')) { const r = runSlash(txt, 'I'); if (!r) throw new Error('Unknown or incomplete command'); if (r.kind === 'poll') await chat.send(id, { text: r.q, kind: 'poll', poll: { q: r.q, options: r.options } }); else await chat.send(id, { text: r.text, sendAt: r.sendAt }); setTxt(''); return; }
@@ -122,12 +136,17 @@ export function ChatRoom({ navigation, route }: any) {
     await chat.send(id, { text: txt.trim(), replyTo: reply?.id, viewOnce: mode === 'viewonce', sendAt: mode === 'later' ? Date.now() + 3600_000 : undefined });
     setTxt(''); setReply(null); if (mode !== 'text') { show(mode === 'later' ? 'Scheduled for 1 hour from now' : 'Sent as view-once'); setMode('text'); }
   });
+  const sendMedia = (source: 'gallery' | 'camera', allow: 'all' | 'images' | 'videos' = 'all') => { setAttach(false); run(async () => {
+    const f = await pickMedia(source, allow); if (!f) return;
+    await chat.send(id, { text: txt.trim(), kind: 'file', replyTo: reply?.id }, { uri: f.uri, name: f.name, mime: f.mime, size: f.size });
+    setTxt(''); setReply(null); show(netOn ? `${f.kind === 'video' ? 'Video' : 'Photo'} uploading — keep chatting` : 'Saved offline — sends when you reconnect');
+  }); };
   const nameOf = (from: string) => (from === 'me' ? 'You' : c.members.find(m => m.id === from)?.name ?? 'Member');
   return (
     <View style={{ flex: 1, backgroundColor: CC.bg }}>
       <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insTop, paddingHorizontal: 18, paddingBottom: 170 }}>
         <CHeader title={c.title} sub={typingNow ? 'typing…' : c.group ? `${c.members.length + 1} members` : c.request ? 'Message request' : c.members[0]?.lastSeen ? (Date.now() - c.members[0].lastSeen < 120_000 ? 'online' : `last seen ${when(c.members[0].lastSeen)}`) : c.fadeSec ? `Fade Chat · ${c.fadeSec / 3600}h` : 'last seen hidden'} right={<View style={{ flexDirection: 'row', gap: 6 }}>
-          {callsOn && !c.group && !c.request ? <><CIconBtn name="phone" label="Voice call" onPress={() => navigation.navigate('Call', { peer: c.members[0], media: 'audio' })} /><CIconBtn name="video" label="Video call" onPress={() => navigation.navigate('Call', { peer: c.members[0], media: 'video' })} /></> : null}
+          {callsOn && !c.group && !c.request ? <>{audioOk ? <CIconBtn name="phone" label="Voice call" onPress={() => navigation.navigate('Call', { peer: c.members[0], media: 'audio' })} /> : null}{videoOk ? <CIconBtn name="video" label="Video call" onPress={() => navigation.navigate('Call', { peer: c.members[0], media: 'video' })} /> : null}</> : null}
           <CIconBtn name="more" label="Chat settings" onPress={() => setSettings(!settings)} /></View>} />
         {settings ? <ConvSettings c={c} onDone={() => setSettings(false)} show={show} /> : null}
         {c.request ? (
@@ -140,8 +159,9 @@ export function ChatRoom({ navigation, route }: any) {
           </CCard>) : null}
         {msgs.some(m => m.pinned) ? <View style={{ backgroundColor: CC.surface, borderRadius: 14, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: CC.line }}><Text style={ct.tiny}>PINNED</Text>{msgs.filter(m => m.pinned).slice(-3).map(m => <Text key={m.id} numberOfLines={1} style={{ fontWeight: '700', marginTop: 4 }}>• {parseToken(m.text) ? 'Special card' : m.text}</Text>)}</View> : null}
         {!netOn ? <View style={{ backgroundColor: CC.sunSoft, padding: 10, borderRadius: 12, marginBottom: 10 }}><Text style={{ fontWeight: '800', color: CC.ink }}>You're offline — reading saved chats. New messages send automatically when you're back.</Text></View> : null}
-        {msgs.map(m => <Bubble key={m.id} m={m} me={m.from === 'me'} theme={theme} name={c.group && m.from !== 'me' ? nameOf(m.from) : undefined} onLong={() => setSel(m)}
+        {msgs.map(m =>  <Bubble key={m.id} m={m} me={m.from === 'me'} theme={theme} fs={fs} hold={m.from !== 'me' && !autoDl && !loadedMedia[m.id]} onLoadMedia={() => setLoadedMedia(x => ({ ...x, [m.id]: true }))} name={c.group && m.from !== 'me' ? nameOf(m.from) : undefined} onLong={() => setSel(m)}
           onVote={(i: number) => run(() => chat.msgAction(id, m.id, 'vote', { option: i }))} onOpen={() => run(async () => { const r = await chat.msgAction(id, m.id, 'open'); show(r?.text ? `"${r.text}" — gone after this view` : 'Opened'); })}
+          onMedia={() => m.attachment?.url && viewer.open({ uri: m.attachment.url, kind: mediaKind(m.attachment), caption: m.text || undefined })}
           onSnap={() => run(async () => { const r = await chat.openSnap(id, m.id); navigation.navigate('SnapView', { url: r.mediaUrl, kind: r.message?.attachment?.kind ?? m.attachment?.kind, msgId: m.id }); })}
           onRef={() => m.ref && switchModule(navigation, 'social', m.ref.type === 'loop' ? { screen: 'LoopDetail', params: { id: m.ref.id } } : { screen: 'Main' })}
           onId={(h: string) => chat.lookup(h).then(u => chat.newConv([u.id])).then(cv => navigation.navigate('ChatRoom', { id: cv.id })).catch(e => show(e.message, true))} />)}
@@ -158,8 +178,8 @@ export function ChatRoom({ navigation, route }: any) {
             {copyOn && !sel.deleted ? <CChip icon="share" label="Copy" onPress={() => { Clipboard.setStringAsync(sel.text).then(() => show('Copied')); setSel(null); }} /> : null}
             {phraseOn && sel.kind === 'text' ? <CChip icon="globe" label="Phrasebook" onPress={() => { const hi = phrasebook(sel.text, 'hi'), ta = phrasebook(sel.text, 'ta'), en = phrasebook(sel.text, 'en'); setTr({ text: sel.text, out: [hi && `हिन्दी: ${hi}`, ta && `தமிழ்: ${ta}`, en && `English: ${en}`].filter(Boolean).join('\n') || null }); setSel(null); }} /> : null}
             <CChip icon="clock" label="Info" onPress={() => { show(`${sel.from === 'me' ? 'Sent' : 'Received'} ${new Date(sel.at).toLocaleString()}${sel.edited ? ' · edited' : ''}${sel.expiresAt ? ' · fades' : ''}`); setSel(null); }} />
-            {sel.from === 'me' && sel.kind === 'text' && !sel.deleted ? <CChip icon="edit" label="Edit (15 min)" onPress={() => { setEditing(sel); setTxt(sel.text); setSel(null); }} /> : null}
-            {sel.from === 'me' && !sel.deleted ? <CChip icon="undo" label="Undo send (60 min)" onPress={() => { run(() => chat.undo(id, sel.id), 'Message unsent'); setSel(null); }} /> : null}
+            {sel.from === 'me' && sel.kind === 'text' && !sel.deleted ? <CChip icon="edit" label={`Edit (${editMin} min)`} onPress={() => { setEditing(sel); setTxt(sel.text); setSel(null); }} /> : null}
+            {sel.from === 'me' && !sel.deleted ? <CChip icon="undo" label={`Undo send (${undoMin} min)`} onPress={() => { run(() => chat.undo(id, sel.id), 'Message unsent'); setSel(null); }} /> : null}
             <CChip icon="close" label="Close" onPress={() => setSel(null)} />
           </View>
         </View>) : null}
@@ -186,21 +206,24 @@ export function ChatRoom({ navigation, route }: any) {
             <CChip icon="clock" label="Together Timer · 1h" onPress={() => { setAttach(false); run(() => chat.send(id, { text: tok.timer(Date.now() + 3600_000, txt.trim() || 'Starts in') })).then(() => setTxt('')); }} />
             <CChip icon="poll" label="Decision Tap" onPress={() => { setAttach(false); if (!txt.trim()) return show('Type the question first', true); run(() => chat.send(id, { text: txt.trim(), kind: 'poll', poll: { q: txt.trim(), options: ['Yes', 'No'] } })).then(() => setTxt('')); }} />
             {[['Tonight 9pm', () => { const d = new Date(); d.setHours(21, 0, 0, 0); return d.getTime() > Date.now() ? d.getTime() : d.getTime() + 86400_000; }], ['Tomorrow 9am', () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d.getTime(); }], ['In a week', () => Date.now() + 7 * 86400_000]].map(([l, f]: any) => <CChip key={l} icon="clock" label={`Future Drop · ${l}`} onPress={() => { setAttach(false); if (!txt.trim()) return show('Type the message first', true); run(() => chat.send(id, { text: txt.trim(), sendAt: f() })).then(() => { setTxt(''); show(`Scheduled · ${l}`); }); }} />)}
-            <CChip icon="clip" label="File (up to 1 GB)" onPress={async () => { setAttach(false); const r = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false }); const a = !r.canceled ? r.assets[0] : null; if (!a) return; if ((a.size ?? 0) > MAX_UPLOAD) return show('Files can be up to 1 GB', true); await chat.send(id, { text: a.name, kind: 'file' }, { uri: a.uri, name: a.name, mime: a.mimeType ?? 'application/octet-stream', size: a.size ?? 0 }); show(netOn ? 'Uploading — you can keep chatting' : 'Saved offline — sends when you reconnect'); }} />
+            {mediaOn ? <CChip icon="camera" label="Photo / Video" onPress={() => sendMedia('gallery')} /> : null}
+            {mediaOn && Platform.OS !== 'web' ? <CChip icon="camera" label="Camera · photo" onPress={() => sendMedia('camera', 'images')} /> : null}
+            {mediaOn && Platform.OS !== 'web' ? <CChip icon="video" label="Camera · video (60 s)" onPress={() => sendMedia('camera', 'videos')} /> : null}
+            <CChip icon="clip" label={`File (up to ${fileMB >= 1024 ? '1 GB' : fileMB + ' MB'})`} onPress={async () => { setAttach(false); const r = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false }); const a = !r.canceled ? r.assets[0] : null; if (!a) return; if ((a.size ?? 0) > fileMB * 1048576) return show(`Files can be up to ${fileMB} MB`, true); await chat.send(id, { text: a.name, kind: 'file' }, { uri: a.uri, name: a.name, mime: a.mimeType ?? 'application/octet-stream', size: a.size ?? 0 }); show(netOn ? 'Uploading — you can keep chatting' : 'Saved offline — sends when you reconnect'); }} />
           </View>) : null}
         <View style={s.composer}>
           <Pressable onPress={() => setAttach(!attach)} style={s.round} accessibilityLabel="Attach"><ChatIcon name="plus" size={20} color={CC.ink} /></Pressable>
-          {mode !== 'poll' ? <TextInput value={txt} onChangeText={onType} placeholder={voice.on ? 'Recording… release to send' : e2eeOn && c.e2ee ? 'Encrypted message' : c.request && msgs.some(m => m.from === 'me') ? 'Waiting for them to accept…' : 'Message'} placeholderTextColor="#94A9AD" style={s.input} multiline accessibilityLabel="Message" /> : <View style={{ flex: 1 }} />}
+          {mode !== 'poll' ? <TextInput value={txt} onChangeText={onType} placeholder={voice.on ? 'Recording… release to send' : e2eeOn && c.e2ee ? 'Encrypted message' : c.request && msgs.some(m => m.from === 'me') ? 'Waiting for them to accept…' : 'Message'} placeholderTextColor="#94A9AD" style={[s.input, { fontSize: 15 * fs }]} multiline={!hp.enterToSend} returnKeyType={hp.enterToSend ? 'send' : 'default'} blurOnSubmit={false} onSubmitEditing={hp.enterToSend ? () => { if (txt.trim()) send(); } : undefined} accessibilityLabel="Message" /> : <View style={{ flex: 1 }} />}
           {copyOn && !txt ? <Pressable onPress={() => Clipboard.getStringAsync().then(t => t && setTxt(t.slice(0, 4000)))} style={s.round} accessibilityLabel="Paste"><ChatIcon name="clip" size={18} color={CC.ink} /></Pressable> : null}
           {polishOn && txt.trim().length > 3 ? <Pressable onPress={() => { const p = polish(txt); if (!p.changes) show('Looks good already'); else { setTxt(p.text); show(`Polished · ${p.changes} fix${p.changes > 1 ? 'es' : ''}`); } }} style={s.round} accessibilityLabel="Quick Polish"><ChatIcon name="spark" size={18} color={CC.teal} /></Pressable> : null}
           <Pressable onPress={txt.trim() || mode === 'poll' || !voiceOn ? send : () => show('Hold to record a voice note')} onLongPress={!txt.trim() && mode !== 'poll' && voiceOn && Platform.OS !== 'web' ? voice.start : undefined} onPressOut={() => voice.on && voice.stop(true)} delayLongPress={250} accessibilityLabel={txt.trim() ? 'Send' : 'Send or hold for voice note'} accessibilityRole="button"><LinearGradient colors={voice.on ? ['#E5484D', '#E5484D'] as any : theme} style={s.send}><ChatIcon name={txt.trim() || mode === 'poll' ? 'send' : 'mic'} size={20} color="#fff" fill="rgba(255,255,255,.3)" /></LinearGradient></Pressable>
         </View>
       </View>
-      {toast}
+      {toast}{viewer.viewer}
     </View>
   );
 }
-function Bubble({ m, me, theme, name, onLong, onVote, onOpen, onRef, onId, onSnap }: any) {
+function Bubble({ m, me, theme, name, onLong, onVote, onOpen, onRef, onId, onSnap, onMedia, fs = 1, hold, onLoadMedia }: any) {
   const msg: Msg = m;
   const body = msg.deleted ? <Text style={{ fontStyle: 'italic', color: me ? 'rgba(255,255,255,.8)' : CC.inkSoft }}>Message unsent</Text>
     : msg.kind === 'poll' && msg.poll ? (
@@ -222,6 +245,7 @@ function Bubble({ m, me, theme, name, onLong, onVote, onOpen, onRef, onId, onSna
         {msg.text ? <Text style={{ color: me ? 'rgba(255,255,255,.85)' : CC.inkSoft, marginTop: 2 }}>{msg.text}</Text> : null}
         <Text style={{ color: me ? CC.sun : CC.teal, fontWeight: '800', marginTop: 4, fontSize: 12 }}>Open in Glow →</Text>
       </Pressable>)
+    : msg.kind === 'file' && msg.attachment && isMediaAtt(msg.attachment) ? <ChatMediaBubble att={msg.attachment} caption={msg.text && msg.text !== msg.attachment.name ? msg.text : undefined} me={me} pending={msg.pending} progress={msg.progress} failed={msg.failed} onOpen={onMedia} hold={hold} onLoad={onLoadMedia} />
     : msg.kind === 'file' ? (
       <Pressable onPress={() => msg.attachment?.url && !msg.pending && Linking.openURL(msg.attachment.url.startsWith('/') ? useSession.getState().apiUrl + msg.attachment.url : msg.attachment.url)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 200 }} accessibilityRole="button">
         <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: me ? 'rgba(255,255,255,.18)' : CC.tealSoft, alignItems: 'center', justifyContent: 'center' }}><ChatIcon name="clip" size={20} color={me ? '#fff' : CC.teal} /></View>
@@ -232,11 +256,11 @@ function Bubble({ m, me, theme, name, onLong, onVote, onOpen, onRef, onId, onSna
     : msg.kind === 'snap' ? (
       <Pressable onPress={me ? undefined : onSnap} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }} accessibilityLabel="Open snap"><View style={{ width: 14, height: 14, borderRadius: 4, backgroundColor: msg.opened ? 'transparent' : (me ? '#fff' : '#E5484D'), borderWidth: 2, borderColor: me ? '#fff' : '#E5484D' }} /><Text style={{ fontWeight: '800', color: me ? '#fff' : CC.ink }}>{msg.pending ? 'Snap · sending' : msg.opened ? 'Snap opened' : me ? 'Snap delivered' : 'Tap to view Snap'}</Text></Pressable>)
     : msg.kind === 'call' ? <Text style={{ fontWeight: '800', color: me ? '#fff' : CC.ink }}>📞 {msg.text}</Text>
-    : msg.enc ? <View><Text style={{ fontSize: 10, fontWeight: '800', color: me ? 'rgba(255,255,255,.8)' : CC.teal }}>🔒 END-TO-END</Text><RichText text={msg.plain ?? 'Decrypting…'} me={me} onMention={onId} /></View>
+    : msg.enc ? <View><Text style={{ fontSize: 10, fontWeight: '800', color: me ? 'rgba(255,255,255,.8)' : CC.teal }}>🔒 END-TO-END</Text><RichText text={msg.plain ?? 'Decrypting…'} me={me} onMention={onId} scale={fs} /></View>
     : msg.kind === 'ping' ? <Text style={{ fontWeight: '800', color: me ? '#fff' : CC.ink }}>{msg.text}</Text>
     : parseSticker(msg.text) ? <BubbleMoji id={parseSticker(msg.text)!.id} size={84} />
     : parseToken(msg.text) ? <TokenCard tk={parseToken(msg.text)!} me={me} onOpenId={onId} />
-    : <RichText text={msg.text} me={me} onMention={onId} />;
+    : <RichText text={msg.text} me={me} onMention={onId} scale={fs} />;
   const reacts = msg.reactions.reduce<Record<number, number>>((a, r) => ((a[r.moji] = (a[r.moji] || 0) + 1), a), {});
   return (
     <View style={{ alignItems: me ? 'flex-end' : 'flex-start', marginBottom: Object.keys(reacts).length ? 18 : 8 }}>
@@ -270,14 +294,14 @@ function ConvSettings({ c, onDone, show }: { c: Conv; onDone: () => void; show: 
       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginVertical: 8 }}>
         <CChip icon="share" label="Export chat" onPress={() => { const ms = useChat.getState().msgs[c.id] ?? []; Share.share({ message: ms.map(m => `[${new Date(m.at).toLocaleString()}] ${m.from === 'me' ? 'Me' : c.members.find(x => x.id === m.from)?.name ?? m.from}: ${m.text}`).join('\n') }).catch(() => {}); }} />
         <CChip icon="mic" label="Read aloud" onPress={() => { const last = (useChat.getState().msgs[c.id] ?? []).filter(m => m.kind === 'text').slice(-1)[0]; if (last) Speech.speak(last.text); else show('Nothing to read', true); }} />
-        <CChip icon="folder" label={useChatPrefs.getState().archived.includes(c.id) ? 'Unarchive' : 'Archive'} onPress={() => { useChatPrefs.getState().toggleArchive(c.id); show('Updated'); }} />
+        <CChip icon="folder" label={c.archived ? 'Unarchive' : 'Archive'} onPress={() => chat.archive(c.id, !c.archived).then(() => show(c.archived ? 'Moved back to Chats' : 'Archived')).catch(e => show(e.message, true))} />
         <CChip icon="bell" label="Mark unread" onPress={() => { useChatPrefs.getState().toggleUnread(c.id, true); show('Marked unread'); }} />
       </View>
       <CBtn small kind="ghost" title="Done" onPress={onDone} />
     </CCard>
   );
 }
-function LockGate({ onOpen, title }: { onOpen: () => void; title: string }) {
+export function LockGate({ onOpen, title }: { onOpen: () => void; title: string }) {
   const [msg, setMsg] = useState<string | null>(null);
   const unlock = async () => {
     if (Platform.OS === 'web' || !(await LocalAuthentication.hasHardwareAsync()) || !(await LocalAuthentication.isEnrolledAsync())) { setMsg('This device has no screen lock / biometrics set up, so the lock cannot be enforced here.'); onOpen(); return; }
@@ -293,9 +317,9 @@ function LockGate({ onOpen, title }: { onOpen: () => void; title: string }) {
 
 export function NewChat({ navigation }: any) {
   useEffect(() => { chat.ensure(); }, []);
-  const st = useChat(); const [h, setH] = useState(''); const [found, setFound] = useState<any>(null); const [pick, setPick] = useState<string[]>([]); const [title, setTitle] = useState('');
+  const st = useChat(); const [h, setH] = useState(''); const [found, setFound] = useState<any>(null); const [pick, setPick] = useState<string[]>([]); const [title, setTitle] = useState(''); const maxGroup = useLimit('maxGroupSize', 50);
   const { toast, show } = useCToast();
-  const find = async () => { setFound(null); try { setFound(await chat.lookup(h.startsWith('@') ? h : '@' + h)); } catch (e: any) { show(e.message, true); } };
+  const find = async () => { setFound(null); const v = h.trim().replace(/^@+/, ''); if (v.length < 2) { show('Type their @ID first', true); return; } try { setFound(await chat.lookup(h.startsWith('@') ? h : '@' + h)); } catch (e: any) { show(e.message, true); } };
   const open = async (members: string[], t?: string) => { try { const c = await chat.newConv(members, t); navigation.replace('ChatRoom', { id: c.id }); } catch (e: any) { show(e.message, true); } };
   const isFriend = found && st.friends.some(f => f.id === found.id);
   return (
@@ -312,7 +336,7 @@ export function NewChat({ navigation }: any) {
           {!isFriend ? <Text style={[ct.small, { marginTop: 8 }]}>Not friends yet: your first message lands in their Request Gate.</Text> : null}
         </CCard>) : null}
       <Text style={[ct.tiny, { marginBottom: 8 }]}>NEW GROUP · PICK FRIENDS</Text>
-      {st.friends.map(f => <CRow key={f.id} title={f.name} sub={f.handle} right={<CToggle value={pick.includes(f.id)} onChange={v => setPick(v ? [...pick, f.id] : pick.filter(x => x !== f.id))} label={`Add ${f.name}`} />} />)}
+      {st.friends.map(f => <CRow key={f.id} title={f.name} sub={f.handle} right={<CToggle value={pick.includes(f.id)} onChange={v => { if (v && pick.length + 1 >= maxGroup) return show(`Groups can have up to ${maxGroup} people`, true); setPick(v ? [...pick, f.id] : pick.filter(x => x !== f.id)); }} label={`Add ${f.name}`} />} />)}
       {pick.length >= 2 ? (<><CInput label="Group name" value={title} onChangeText={setTitle} placeholder="Weekend plan" /><CBtn title={`Create group (${pick.length + 1})`} icon="friends" onPress={() => open(pick, title || 'New group')} /><CBtn kind="ghost" style={{ marginTop: 8 }} title="Party Chat · vanishes in 24h" icon="fade" onPress={async () => { try { const cv = await chat.newConv(pick, title || 'Party Chat'); await chat.patchConv(cv.id, { fadeSec: 86400 }); navigation.replace('ChatRoom', { id: cv.id }); } catch (e: any) { show(e.message, true); } }} /></>) : <Text style={ct.small}>Pick 2+ friends to start a group.</Text>}
     </CScreen>{toast}</View>
   );

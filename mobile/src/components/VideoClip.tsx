@@ -18,6 +18,8 @@ export function VideoClip({ uri, edit, lens, city, h = 420, autoPlay = true, mut
   const e: VideoEdit = edit ?? { trimStart: 0, trimEnd: 0, speed: 1, captions: [] };
   const player = useVideoPlayer(uri, p => { p.loop = true; p.muted = muted; p.playbackRate = e.speed || 1; if (e.trimStart) p.currentTime = e.trimStart; if (autoPlay) p.play(); });
   const [t, setT] = useState(e.trimStart || 0);
+  // Web: expo-video's play() inside the setup runs before the <video> element mounts (no-op) → start it after mount.
+  useEffect(() => { if (!autoPlay) return; const h = setTimeout(() => { try { player.muted = muted; player.play(); } catch {} }, 50); return () => clearTimeout(h); }, [player, autoPlay]);
   useEffect(() => {
     const i = setInterval(() => {
       const ct = player.currentTime ?? 0; setT(ct);

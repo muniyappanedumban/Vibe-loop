@@ -100,3 +100,40 @@ def like_comment(cid: str, u: M.User = Depends(current_user), db: Session = Depe
     viewable_post(db, c.post_id, u)
     lb = list(c.liked_by or [])
     c.liked_by = [x for x in lb if x != u.id] if u.id in lb else lb + [u.id]; db.commit(); return comment_json(db, c, u)
+
+# ---------- Glow: profile grids + server search ----------
+def _follow_state(db: Session, me: M.User, t: M.User) -> str:
+    if db.get(M.Edge, (me.id, "follow", t.id)): return "following"
+    pend = db.scalar(select(M.FollowRequest.id).where(M.FollowRequest.from_id == me.id, M.FollowRequest.to_id == t.id, M.FollowRequest.status == "pending").limit(1))
+    return "requested" if pend else "none"
+
+@router.get("/users/{uid}/posts")
+def user_posts(uid: str, cursor: int = Query(0, ge=0), u: M.User = Depends(current_user), db: Session = Depends(get_db)):
+    """A person's Drops grid (own profile with uid=me, or a creator profile). Private/blocked rules as in /feed."""
+    from .serial import creator_json
+    t = u if uid == "me" else db.get(M.User, uid[:40])
+    if not t or t.suspended or (t.id != u.id and t.id in blocked_ids(db, u)): raise HTTPException(404, "User not found")
+    followers = db.scalar(select(func.count()).select_from(M.Edge).where(M.Edge.kind == "follow", M.Edge.target == t.id)) or 0
+    following = db.scalar(select(func.count()).select_from(M.Edge).where(M.Edge.kind == "follow", M.Edge.user_id == t.id)) or 0
+    q = select(M.Post).where(M.Post.author_id == t.id, M.Post.hidden == False).order_by(M.Post.at.desc(), M.Post.id)  # noqa: E712
+    rows = db.scalars(q.offset(cursor).limit(PAGE + 1)).all()
+    more = len(rows) > PAGE; rows = rows[:PAGE]
+    vis = [p for p in rows if can_see(db, p, u)]
+    total = db.scalar(select(func.count()).select_from(M.Post).where(M.Post.author_id == t.id, M.Post.hidden == False)) or 0  # noqa: E712
+    locked = t.id != u.id and bool(rows) and not vis
+    return {"user": {**creator_json(t, followers), "following": following, "posts": total, "followState": "self" if t.id == u.id else _follow_state(db, u, t)},
+            "items": posts_json(db, vis, u), "locked": locked, "nextCursor": cursor + PAGE if more else None}
+
+@router.get("/search")
+def search(q: str = Query(..., min_length=1, max_length=60), u: M.User = Depends(current_user), db: Session = Depends(get_db)):
+    """Glow Seek: people (name/handle/city/bio) and Drops (caption/mood/interest/place/tags) the caller may see."""
+    from .serial import creator_json
+    like = f"%{q.strip().lower()}%"; hide = blocked_ids(db, u)
+    users = db.scalars(select(M.User).where(M.User.suspended == False, M.User.id != u.id,  # noqa: E712
+        func.lower(M.User.name).like(like) | func.lower(M.User.handle).like(like) | func.lower(func.coalesce(M.User.city, "")).like(like) | func.lower(func.coalesce(M.User.bio, "")).like(like)).limit(20)).all()
+    users = [x for x in users if x.id not in hide]
+    fol = dict(db.execute(select(M.Edge.target, func.count()).where(M.Edge.kind == "follow", M.Edge.target.in_([x.id for x in users])).group_by(M.Edge.target)).all()) if users else {}
+    posts = db.scalars(select(M.Post).where(M.Post.hidden == False, M.Post.author_id.not_in(hide or {""}),  # noqa: E712
+        func.lower(M.Post.text).like(like) | func.lower(M.Post.mood).like(like) | func.lower(M.Post.interest).like(like) | func.lower(func.coalesce(M.Post.place, "")).like(like)).order_by(M.Post.at.desc()).limit(40)).all()
+    posts = [p for p in posts if can_see(db, p, u)][:20]
+    return {"q": q, "people": [{**creator_json(x, fol.get(x.id, 0)), "followState": _follow_state(db, u, x)} for x in users], "posts": posts_json(db, posts, u)}

@@ -53,3 +53,13 @@ REDIS_URL = os.environ.get("REDIS_URL", "").strip() or None
 TRUST_PROXY = os.environ.get("TRUST_PROXY", "0") == "1"
 # Signed links for private chat attachments (opened outside the app, without the bearer header).
 MEDIA_LINK_TTL_SEC = int(os.environ.get("MEDIA_LINK_TTL_SEC", "86400"))
+
+# Optional read replica (streaming replica / PgBouncer pool pointing at it). Unset → reads use the primary.
+# Only endpoints that explicitly depend on get_read_db use it; replicas lag, so never read-your-own-writes paths.
+DATABASE_READ_URL = os.environ.get("DATABASE_READ_URL", "").strip() or None
+# Set to 1 when DATABASE_URL points at PgBouncer in *transaction* pooling mode (disables psycopg server-side prepared statements).
+PGBOUNCER = os.environ.get("PGBOUNCER", "0") == "1"
+# Seconds the resolved app-config (and its layer inputs) is cached (Redis when REDIS_URL is set, else per process). 0 disables.
+CONFIG_CACHE_TTL_SEC = float(os.environ.get("CONFIG_CACHE_TTL_SEC", "5"))
+# Wall-clock cap for one HTTP request (uploads, media and WebSockets excluded). 0 disables. Returns 504 if no response started yet.
+REQUEST_TIMEOUT_SEC = float(os.environ.get("REQUEST_TIMEOUT_SEC", "30"))

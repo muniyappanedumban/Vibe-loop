@@ -10,3 +10,4 @@ python-multipart>=0.0.9
 cryptography>=42
 
 redis>=5.0  # optional at runtime: used for shared rate limits when REDIS_URL is set
+gunicorn>=22.0  # production process manager (deploy/Dockerfile): N uvicorn workers per container

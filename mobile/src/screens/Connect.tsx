@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { call, online } from '../lib/api';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, PRISM, R, S, T } from '../theme/tokens';
@@ -6,7 +7,7 @@ import { Screen, Header, Card, Btn, Chip, Tag, DemoTag, Thumb, Avatar, Section, 
 import { Icon } from '../components/Icon';
 import { VibeMoji } from '../components/VibeMoji';
 import { VIBEMOJI } from '../lib/vibemoji';
-import { useSocial, creator, CREATORS, TRIBES, LIVES, compact } from '../store/useSocial';
+import { useSocial, creator, CREATORS, TRIBES, LIVES, compact, followLabel } from '../store/useSocial';
 import { useStore } from '../store/useStore';
 import { ago } from '../lib/util';
 
@@ -16,21 +17,24 @@ export function Search({ navigation, route }: any) {
   const [q, setQ] = useState(route?.params?.q ?? 'chai');
   const st = useSocial(); const loops = useStore(s => s.loops);
   const k = q.trim().toLowerCase();
+  // Signed in: people & Drops come from the server (/search) so results aren't limited to the cached feed.
+  const [srv, setSrv] = useState<{ q: string; people: any[]; posts: any[] } | null>(null);
+  useEffect(() => { if (!online() || !k) { setSrv(null); return; } const t = setTimeout(() => call<any>('GET', `/search?q=${encodeURIComponent(k)}`).then(setSrv).catch(() => setSrv(null)), 250); return () => clearTimeout(t); }, [k]);
   const r = useMemo(() => k ? {
-    creators: st.creators.filter(c => (c.name + c.handle + c.city + c.bio).toLowerCase().includes(k)),
-    posts: st.posts.filter(p => (p.text + p.mood + p.interest + (p.place ?? '')).toLowerCase().includes(k)),
+    creators: srv ? srv.people : st.creators.filter(c => (c.name + c.handle + c.city + c.bio).toLowerCase().includes(k)),
+    posts: srv ? srv.posts : st.posts.filter(p => (p.text + p.mood + p.interest + (p.place ?? '')).toLowerCase().includes(k)),
     tribes: st.tribes.filter(t => (t.name + t.kind + t.desc).toLowerCase().includes(k)),
     msgs: st.chats.flatMap(c => c.msgs.filter(m => m.text.toLowerCase().includes(k)).map(m => ({ c, m }))),
     moji: VIBEMOJI.filter(m => (m.name + m.category).toLowerCase().includes(k)).slice(0, 12),
-  } : null, [k, st.posts, st.chats]);
+  } : null, [k, st.posts, st.chats, srv]);
   const count = r ? Object.values(r).reduce((a, x) => a + x.length, 0) : 0;
   return (
     <Screen>
       <Header title="Seek" sub={k ? `${count} results for “${q}”` : 'People, Drops, Hoods, messages, VibeMoji'} />
       <View style={s.searchBox}><Icon name="search" size={18} color={C.inkSoft} /><TextInput autoFocus value={q} onChangeText={setQ} placeholder="Search VibeLoop" placeholderTextColor="#A6A2BC" style={{ flex: 1, fontSize: 16, fontWeight: '600', color: C.ink }} />{q ? <Pressable onPress={() => setQ('')}><Icon name="close" size={18} color={C.inkSoft} /></Pressable> : null}</View>
       {!k ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>{['chai', 'food', 'Mumbai', 'money', 'cricket', 'Sunny', 'Live'].map(x => <Chip key={x} label={x} icon="search" onPress={() => setQ(x)} />)}</View> : null}
-      {r?.creators.length ? <Section title="Creators">{r.creators.map(c => <Row key={c.id} title={c.name} sub={`${c.handle} · ${c.city} · ${compact(c.followers)} followers`} right={<Chip label={st.following.includes(c.id) ? 'Following' : 'Follow'} active={!st.following.includes(c.id)} onPress={() => st.follow(c.id)} />} />)}</Section> : null}
-      {r?.posts.length ? <Section title="Posts">{r.posts.map(p => <Row key={p.id} icon={p.kind === 'motion' ? 'film' : p.kind === 'thought' ? 'text' : 'image'} tint={C.pink} title={p.text} sub={`${creator(p.by).handle} · ${p.mood}`} />)}</Section> : null}
+      {r?.creators.length ? <Section title="Creators">{r.creators.map(c => <Row key={c.id} title={c.name} sub={`${c.handle} · ${c.city} · ${compact(c.followers)} followers`} onPress={() => navigation.navigate('CreatorProfile', { id: c.id })} right={<Chip label={followLabel(st, c.id)} active={followLabel(st, c.id) === 'Follow'} onPress={() => st.follow(c.id)} />} />)}</Section> : null}
+      {r?.posts.length ? <Section title="Posts">{r.posts.map(p => <Row key={p.id} icon={p.kind === 'motion' ? 'film' : p.kind === 'thought' ? 'text' : 'image'} tint={C.pink} title={p.text} sub={`${(p as any).user?.handle ?? creator(p.by).handle} · ${p.mood}`} onPress={online() ? () => navigation.navigate('Comments', { id: p.id }) : undefined} />)}</Section> : null}
       {k ? <Row icon="users" title={`Find Hoods matching “${q}”`} sub="Communities live in Hush → Hoods" onPress={() => navigation.navigate('ChatMain', { screen: 'Towns' })} /> : null}
       {k ? <Row icon="chat" title={`Search messages for “${q}” in Hush`} sub="Opens Find Anything in Hush" onPress={() => navigation.navigate('ChatSearch')} /> : null}
       {r?.moji.length ? <Section title="VibeMoji"><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>{r.moji.map(m => <Pressable key={m.id} onPress={() => navigation.navigate('Emoji', { q: m.name })} style={{ alignItems: 'center', width: 70 }}><VibeMoji id={m.id} size={48} /><Text style={{ fontSize: 10, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>{m.name}</Text></Pressable>)}</View></Section> : null}

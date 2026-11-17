@@ -12,8 +12,19 @@ export type AppConfig = {
   version: number; resolvedFor: { country: string; zone: string; slab: string; lang: string };
   modules: { social: boolean; chat: boolean }; nav: { social: NavItem[]; chat: NavItem[] };
   screens: Record<string, boolean>; features: Record<string, boolean>; limits: Record<string, number>; fees: { platformFee: number };
+  /** User App Settings (admin → User App Settings). Optional so older cached configs still type-check. */
+  defaults?: UserAppDefaults; access?: UserAppAccess;
   languages: { default: string; available: string[]; strings: Record<string, string> }; theme?: import('../theme/applyTheme').Theme; banner: { id: string; text: string; tone?: string; suggestLang?: string } | string | null;
 };
+export type Aud3 = 'everyone' | 'friends' | 'nobody';
+export type UserAppDefaults = {
+  glow: { privateProfile: boolean; whoCanComment: 'everyone' | 'followers' | 'nobody'; lenses: string[]; feedTabs: string[]; reactions: string[]; hashtags: boolean; mentions: boolean };
+  hush: { whoCanMessage: Aud3; readReceipts: boolean; lastSeen: Aud3; typing: boolean; fadeTimer: 'off' | '1h' | '24h' | '7d'; callTypes: ('audio' | 'video')[] };
+};
+export type UserAppAccess = { signupOpen: boolean; maintenance: boolean; maintenanceMessage: string; minAppVersion: string; forceUpdate: boolean };
+/** Numeric keys in cfg.limits (all optional on the client; server defaults in backend/app/user_app.py). */
+export type LimitKey = 'maxAccounts' | 'maxGroupSize' | 'statusHours' | 'editWindowMin' | 'undoWindowMin' | 'blinkHours' | 'postVideoMaxSec' | 'blinkVideoMaxSec'
+  | 'maxPhotosPerPost' | 'uploadMaxMB' | 'fileMaxMB' | 'voiceNoteMaxSec' | 'chatVideoMaxSec' | 'otpResendSec' | 'autoHideReports';
 const nav = (keys: [string, string, string][]) => keys.map(([key, label, icon], i) => ({ key, label, icon, enabled: true, order: i + 1 }));
 export const DEFAULT_CONFIG: AppConfig = {
   version: 0, resolvedFor: { country: 'IN', zone: 'IN', slab: 'starter', lang: 'en' }, modules: { social: true, chat: true },
@@ -39,3 +50,10 @@ export const feature = (key: string) => useConfig.getState().cfg.features[key] !
 export const useScreenOn = (key: string) => useConfig(s => s.cfg.screens[key] !== false);
 export const navItems = (cfg: AppConfig, m: 'social' | 'chat') => [...cfg.nav[m]].filter(n => n.enabled).sort((a, b) => a.order - b.order);
 export const _session = useSession; // keep import used (config refetch happens after sign-in)
+/** Numeric limit from /app-config with a local fallback (missing / non-numeric → fallback). */
+export const limit = (key: LimitKey, fallback: number) => { const v = useConfig.getState().cfg.limits?.[key]; return typeof v === 'number' && isFinite(v) ? v : fallback; };
+export const useLimit = (key: LimitKey, fallback: number) => useConfig(s => { const v = s.cfg.limits?.[key]; return typeof v === 'number' && isFinite(v) ? v : fallback; });
+export const useAccess = () => useConfig(s => s.cfg.access);
+export const useDefaults = () => useConfig(s => s.cfg.defaults);
+/** Semver-ish compare: true when a < b. */
+export const versionLt = (a: string, b: string) => { const p = (v: string) => String(v).split('.').map(n => parseInt(n, 10) || 0); const x = p(a), y = p(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0); } return false; };

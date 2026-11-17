@@ -14,7 +14,10 @@ CALL_ID = re.compile(r"^[\w-]{3,40}$")
 
 def can_call(db: Session, a: M.User, b: M.User) -> bool:
     if a.id == b.id or b.suspended or blocked_between(db, a.id, b.id): return False
+    who = (((b.settings or {}).get("hush") or {}).get("whoCanCall")) or "friends"  # Hush Control Room
+    if who == "nobody": return False
     if are_friends(db, a.id, b.id): return True
+    if who != "everyone": return False
     if prof(b)["who_can_message"] != "everyone": return False
     for c in db.scalars(select(M.Conv).where(M.Conv.group == False, M.has_member(M.Conv.members, a.id), M.has_member(M.Conv.members, b.id))):  # noqa: E712
         if sorted(c.members) == sorted([a.id, b.id]) and not any((s or {}).get("request") for s in (c.state or {}).values()): return True
@@ -36,6 +39,8 @@ def handle(db: Session, u: M.User, t: str, msg: dict) -> dict | None:
     if t == "call.invite":
         to = db.get(M.User, str(msg.get("to", ""))[:40]); media = msg.get("media")
         if media not in ("audio", "video"): return err("bad_request", "media must be audio or video", t)
+        from .user_app import setting as ua_setting
+        if media not in ua_setting(db, "defaults.hush.callTypes", u): return err("disabled", f"{media.capitalize()} calls are turned off", t)
         if not to or not can_call(db, u, to): return err("call_not_allowed", "You can't call this person", t)
         cid = str(msg.get("callId") or M.nid("call"))
         if not CALL_ID.match(cid) or db.get(M.Call, cid): return err("bad_request", "callId invalid or in use", t)

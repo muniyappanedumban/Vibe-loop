@@ -77,11 +77,13 @@ class RegisterIn(BaseModel):
 def register(b: RegisterIn, req: Request, db: Session = Depends(get_db)):
     from .v2common import kill_on
     if kill_on(db, "signups"): raise HTTPException(503, "Sign-ups are paused by the platform (kill switch)")
+    from .user_app import setting as ua_setting
+    if not ua_setting(db, "access.signupOpen"): raise HTTPException(403, "Sign-ups are closed right now")
     email = b.email.strip().lower()
     if not EMAIL_RE.match(email): raise HTTPException(400, "Enter a valid email")
     if err := handle_problem(db, b.handle): raise HTTPException(*err)
-    if db.scalar(select(func.count()).select_from(M.User).where(M.User.email == email)) >= MAX_ACCOUNTS_PER_EMAIL:
-        raise HTTPException(409, "This email already has 5 accounts")
+    if db.scalar(select(func.count()).select_from(M.User).where(M.User.email == email)) >= (mx := ua_setting(db, "limits.maxAccounts")):
+        raise HTTPException(409, f"This email already has {mx} accounts")
     ip = client_ip(req)
     try: enforce("register", email, ip)
     except HTTPException: log_limited(db, email, ip); raise
@@ -96,6 +98,11 @@ def otp_request(b: OtpReqIn, req: Request, db: Session = Depends(get_db)):
     ident, ip = b.identifier.strip(), client_ip(req)
     try: enforce("otp_request", ident.lower(), ip)
     except HTTPException: log_limited(db, ident, ip); raise
+    from .user_app import setting as ua_setting
+    if (cd := ua_setting(db, "limits.otpResendSec")) > 0:
+        last = db.scalar(select(func.max(M.OtpRequest.expires_at)).where(M.OtpRequest.identifier == ident[:200], M.OtpRequest.expires_at > 0))
+        if last and (wait := last - OTP_TTL_MS + cd * 1000 - M.now_ms()) > 0:
+            raise HTTPException(429, f"Wait {wait // 1000 + 1} s before asking for a new code", headers={"Retry-After": str(wait // 1000 + 1)})
     return issue_otp(db, resolve(db, ident), ident, ip)
 
 class OtpVerifyIn(BaseModel): identifier: str = Field(min_length=3, max_length=200); code: str = Field(min_length=1, max_length=10)

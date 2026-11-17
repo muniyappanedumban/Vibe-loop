@@ -118,3 +118,12 @@ Upload audio with `/uploads` (m4a/mp3/ogg/wav → `kind: audio`), then `POST /co
 
 ## Admin
 `GET /admin/realtime` · `GET /admin/calls?status=&media=&q=` · `GET /admin/push/stats` · `POST /admin/push/test {userId}` · `GET /admin/e2ee`. Plugs gains `turn` {urls, username, credential*, sharedSecret*} and `expo` {accessToken*} (* encrypted).
+
+## Hush Control Room enforcement (`/me/hush-settings`, stored in `User.settings.hush`)
+- `typingVisible=false` → server silently drops the user's `typing` frames (no relay).
+- `photoVisibility` (`everyone|friends|nobody`) → serialized users hide the chat photo (`avatar` null in chat, social photo elsewhere) from viewers not allowed.
+- `whoCanCall` (default `friends`; `everyone` keeps the old accepted-DM rule; `nobody`) → `call.invite` fails with `call_not_allowed`.
+- `notif.{messages,groups,calls,moods}` → matching pushes are dropped; `notif.previews=false` → message/mention push body is `"New message"`.
+- `defaultFadeSec` → applied to convs newly created by that user via `POST /conv`.
+- `GET /conv` items carry `archived: bool`; toggle with `POST /conv/{cid}/archive {archived}`.
+- Mood photo/video (`Status.media`) is private: the file is granted to a member-less vault conv (`mv-<userId>`), so `/media` serves it only to the owner or via the signed expiring link that `GET /status` hands to viewers the audience allows. Moods posted before this change keep their already-public files.

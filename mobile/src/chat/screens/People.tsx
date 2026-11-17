@@ -9,7 +9,10 @@ import { BUBBLEMOJI, BUBBLE_CATEGORIES } from '../bubblemoji';
 import { CScreen, CTop, CHeader, CIconBtn, CAvatar, CCard, CBtn, CChip, CRow, CInput, CToggle, CNotReady, useCToast, ct, when, hue } from '../ui';
 import { useChat, chat, Status } from '../useChat';
 import { useSession, online } from '../../lib/api';
-import { useT } from '../../lib/config';
+import { useT, useFeature, useLimit } from '../../lib/config';
+import { useOutbox } from '../../lib/outbox';
+import { pickMedia, PickedMedia, MoodThumb, MoodVideo, absUrl } from '../media';
+import { Image, Platform } from 'react-native';
 import { SignInNeeded } from './Chats';
 
 export function Friends({ navigation }: any) {
@@ -21,7 +24,7 @@ export function Friends({ navigation }: any) {
     <View style={{ flex: 1 }}><CScreen>
       <CTop title={tr('nav.Friends', 'Squad')} right={<CIconBtn name="qr" label="My code" onPress={() => navigation.navigate('MyCode')} />} />
       <View style={{ flexDirection: 'row', gap: 8 }}><View style={{ flex: 1 }}><CInput placeholder="Add by exact @ID" value={h} onChangeText={t => setH(t.trim().toLowerCase())} autoCapitalize="none" /></View>
-        <CBtn title="Add" icon="plus" onPress={() => run(chat.friendRequest(h.startsWith('@') ? h : '@' + h), 'Friend request sent').then(() => setH(''))} /></View>
+        <CBtn title="Add" icon="plus" onPress={() => { const v = h.trim().replace(/^@+/, ''); if (v.length < 2) { run(Promise.reject(new Error('Type their @ID first')), ''); return; } run(chat.friendRequest('@' + v), 'Friend request sent').then(() => setH('')); }} /></View>
       {besties.length ? (<><Text style={[ct.tiny, { marginBottom: 8 }]}>BESTIES</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }} style={{ marginBottom: 14 }}>
           {besties.map(f => <Pressable key={f.id} onPress={() => chat.newConv([f.id]).then(c => navigation.navigate('ChatRoom', { id: c.id }))} style={{ alignItems: 'center', width: 64 }}><CAvatar name={f.name} h={f.hue} size={54} ring online /><Text style={[ct.small, { marginTop: 4 }]} numberOfLines={1}>{f.name.split(' ')[0]}</Text></Pressable>)}
@@ -76,7 +79,7 @@ export function MyCode() {
 
 const BGS = ['#00B39B', '#14A8E6', '#FF6B5A', '#0B1F24', '#7B5CFF', '#FFC93C'];
 export function Vibes({ navigation }: any) {
-  const st = useChat(); const tr = useT(); const sess = useSession();
+  const st = useChat(); const tr = useT(); const sess = useSession(); useOutbox(s => s.items); const pend = chat.pendingStatuses(); const mediaOn = useFeature('moodMedia'); const statusH = useLimit('statusHours', 24);
   if (!online()) return <SignInNeeded navigation={navigation} />;
   const mine = st.statuses.filter(x => typeof x.by === 'string' || (x.by as any).id === sess.activeId); const others = st.statuses.filter(x => !mine.includes(x));
   return (
@@ -84,10 +87,11 @@ export function Vibes({ navigation }: any) {
       <CTop title={tr('nav.Vibes', 'Moods')} />
       <CCard onPress={() => navigation.navigate('StatusCompose')} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
         <LinearGradient colors={AQUA as any} style={{ width: 52, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}><ChatIcon name="plus" color="#fff" /></LinearGradient>
-        <View style={{ flex: 1 }}><Text style={ct.h3}>{mine.length ? `Your Vibe · ${mine.length} active` : 'Share a Mood'}</Text><Text style={ct.small}>Text or mood · disappears after 24 hours</Text></View>
+        <View style={{ flex: 1 }}><Text style={ct.h3}>{mine.length ? `Your Vibe · ${mine.length} active` : 'Share a Mood'}</Text><Text style={ct.small}>{mediaOn ? 'Photo, video, text or mood' : 'Text or mood'} · disappears after {statusH} hours</Text></View>
       </CCard>
       <Text style={[ct.tiny, { marginBottom: 8 }]}>RECENT · {others.length}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+        {pend.map(v => <StatusTile key={v.id} v={v} onPress={() => {}} />)}
         {[...mine, ...others].map(v => <StatusTile key={v.id} v={v} onPress={() => navigation.navigate('StatusView', { id: v.id })} />)}
       </View>
       {!st.statuses.length ? <Text style={ct.small}>No Moods from your Squad right now.</Text> : null}
@@ -100,41 +104,58 @@ function StatusTile({ v, onPress }: { v: Status; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={{ width: '48%' }}>
       <View style={[s.tile, { backgroundColor: v.bg ?? CC.teal }]}>
-        {v.kind === 'mood' && v.moji ? <BubbleMoji id={v.moji} size={70} /> : <Text style={{ color: '#fff', fontWeight: '900', fontSize: 17 }} numberOfLines={5}>{v.text}</Text>}
+        {v.media ? <MoodThumb uri={v.media.url} kind={v.media.kind} /> : null}
+        {v.pending ? <View style={{ position: 'absolute', top: 10, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,.55)', borderRadius: 10, padding: 6 }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }}>{v.failed ? `Failed · ${v.failed}` : v.progress ? `Uploading ${Math.round(v.progress * 100)}%` : 'Waiting to post…'}</Text></View> : null}
+        {v.media ? (v.text ? <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13, position: 'absolute', left: 10, right: 10, bottom: 40, textShadowColor: '#000', textShadowRadius: 6 }} numberOfLines={2}>{v.text}</Text> : null) : v.kind === 'mood' && v.moji ? <BubbleMoji id={v.moji} size={70} /> : <Text style={{ color: '#fff', fontWeight: '900', fontSize: 17 }} numberOfLines={5}>{v.text}</Text>}
         <View style={{ position: 'absolute', left: 10, bottom: 10, right: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}><CAvatar name={by.name} h={by.hue} size={24} /><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12, flex: 1 }} numberOfLines={1}>{by.name}</Text><Text style={{ color: 'rgba(255,255,255,.8)', fontSize: 10, fontWeight: '800' }}>{left}h · {v.audience}</Text></View>
       </View>
     </Pressable>
   );
 }
 export function StatusCompose({ navigation }: any) {
-  const [kind, setKind] = useState<'text' | 'mood'>('text'); const [text, setText] = useState(''); const [bg, setBg] = useState(BGS[0]); const [moji, setMoji] = useState(17); const [aud, setAud] = useState('friends'); const [cat, setCat] = useState('Chatty');
+  const mediaOn = useFeature('moodMedia'); const statusH = useLimit('statusHours', 24); const [file, setFile] = useState<PickedMedia | null>(null);
+  const pick = (src: 'gallery' | 'camera', allow: 'all' | 'images' | 'videos' = 'all') => pickMedia(src, allow).then(f => { if (f) { setFile(f); setKind(f.kind === 'video' ? 'video' : 'photo'); } }).catch(e => show(e.message, true));
+  const [kind, setKind] = useState<'text' | 'mood' | 'photo' | 'video'>('text'); const [text, setText] = useState(''); const [bg, setBg] = useState(BGS[0]); const [moji, setMoji] = useState(17); const [aud, setAud] = useState('friends'); const [cat, setCat] = useState('Chatty');
   const { toast, show } = useCToast();
   return (
     <View style={{ flex: 1 }}><CScreen>
-      <CHeader title="New Mood" sub="24 hours · you choose who sees it" />
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}><CChip label="Text Mood" icon="edit" active={kind === 'text'} onPress={() => setKind('text')} /><CChip label="Emoji Mood" icon="spark" active={kind === 'mood'} onPress={() => setKind('mood')} /></View>
+      <CHeader title="New Mood" sub={`${statusH} hours · you choose who sees it`} />
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}><CChip label="Text Mood" icon="edit" active={kind === 'text'} onPress={() => setKind('text')} /><CChip label="Emoji Mood" icon="spark" active={kind === 'mood'} onPress={() => setKind('mood')} />{mediaOn ? <CChip label="Photo / Video" icon="camera" active={kind === 'photo' || kind === 'video'} onPress={() => (file ? setKind(file.kind === 'video' ? 'video' : 'photo') : pick('gallery'))} /> : null}</View>
+      {(kind === 'photo' || kind === 'video') ? (<>
+        <View style={[s.preview, { backgroundColor: '#000', padding: 0, overflow: 'hidden' }]}>{file ? (file.kind === 'image' ? <Image source={{ uri: file.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" /> : <MoodVideo uri={file.uri} h={240} />) : <Text style={{ color: '#fff', fontWeight: '800' }}>Pick a photo or video</Text>}</View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 }}>
+          <CChip label="Gallery" icon="folder" onPress={() => pick('gallery')} />
+          {Platform.OS !== 'web' ? <CChip label="Take photo" icon="camera" onPress={() => pick('camera', 'images')} /> : null}
+          {Platform.OS !== 'web' ? <CChip label="Record video (60 s)" icon="video" onPress={() => pick('camera', 'videos')} /> : null}
+        </View>
+        <CInput value={text} onChangeText={setText} placeholder="Add a caption (optional)" maxLength={300} />
+      </>) : (<>
       <View style={[s.preview, { backgroundColor: bg }]}>{kind === 'mood' ? <BubbleMoji id={moji} size={120} /> : <Text style={{ color: '#fff', fontWeight: '900', fontSize: 24, textAlign: 'center' }}>{text || 'Type your Vibe…'}</Text>}</View>
       <View style={{ flexDirection: 'row', gap: 8, marginVertical: 12 }}>{BGS.map(b => <Pressable key={b} onPress={() => setBg(b)} accessibilityLabel={`Background ${b}`} style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: b, borderWidth: bg === b ? 3 : 0, borderColor: CC.sun }} />)}</View>
       {kind === 'text' ? <CInput value={text} onChangeText={setText} placeholder="What's the vibe?" multiline maxLength={200} /> : (<>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>{BUBBLE_CATEGORIES.map(c => <CChip key={c} label={c} active={cat === c} onPress={() => setCat(c)} />)}</ScrollView>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 10 }}>{BUBBLEMOJI.filter(b => b.category === cat).slice(0, 30).map(b => <Pressable key={b.id} onPress={() => setMoji(b.id)} style={[s.moji, moji === b.id && { borderColor: CC.teal }]} accessibilityLabel={b.name}><BubbleMoji id={b.id} size={36} /></Pressable>)}</View>
       </>)}
+      </>)}
       <Text style={[ct.tiny, { marginBottom: 8 }]}>WHO CAN SEE IT</Text>
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>{[['close', 'Inner Circle', 'shield'], ['friends', 'Friends', 'friends'], ['public', 'Everyone', 'globe']].map(([k, l, i]) => <CChip key={k} label={l} icon={i as any} active={aud === k} onPress={() => setAud(k)} />)}</View>
-      <CBtn title="Share Mood" icon="send" onPress={() => { if (kind === 'text' && !text.trim()) return show('Write something first', true); chat.postStatus({ kind, text: text.trim(), moji: kind === 'mood' ? moji : undefined, bg, audience: aud }).then(() => { show('Mood shared for 24h'); setTimeout(() => navigation.goBack(), 600); }).catch(e => show(e.message, true)); }} />
+      <CBtn title="Share Mood" icon="send" onPress={() => { if (kind === 'text' && !text.trim()) return show('Write something first', true); const media = kind === 'photo' || kind === 'video'; if (media && !file) return show('Pick a photo or video first', true); chat.postStatus({ kind, text: text.trim(), moji: kind === 'mood' ? moji : undefined, bg, audience: aud }, media && file ? { uri: file.uri, name: file.name, mime: file.mime, size: file.size } : undefined).then(() => { show(`Mood shared for ${statusH}h`); setTimeout(() => navigation.goBack(), 600); }).catch(e => show(e.message, true)); }} />
     </CScreen>{toast}</View>
   );
 }
 export function StatusView({ navigation, route }: any) {
   useEffect(() => { chat.ensure(); }, []);
-  const st = useChat(); const v = st.statuses.find(x => x.id === route?.params?.id); const [r, setR] = useState(''); const { toast, show } = useCToast();
+  const st = useChat(); const v = st.statuses.find(x => x.id === route?.params?.id); const [r, setR] = useState(''); const [full, setFull] = useState(false); const { toast, show } = useCToast();
   if (!v) return <CScreen><CHeader title="Vibe" /><Text style={ct.small}>This Mood has expired.</Text></CScreen>;
   const mine = typeof v.by === 'string'; const by = mine ? { name: 'You', hue: 180 } : (v.by as any);
   return (
-    <View style={{ flex: 1, backgroundColor: v.bg ?? CC.teal }}>
+    <View style={{ flex: 1, backgroundColor: v.media ? '#000' : v.bg ?? CC.teal }}>
       <CScreen>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><CIconBtn name="back" label="Back" onPress={() => navigation.goBack()} /><CAvatar name={by.name} h={by.hue} size={38} /><View style={{ flex: 1 }}><Text style={[ct.h3, { color: '#fff' }]}>{by.name}</Text><Text style={{ color: 'rgba(255,255,255,.8)', fontSize: 12, fontWeight: '700' }}>{when(v.at)} · {v.audience}</Text></View></View>
-        <View style={{ alignItems: 'center', justifyContent: 'center', minHeight: 420 }}>{v.kind === 'mood' && v.moji ? <BubbleMoji id={v.moji} size={180} /> : <Text style={{ color: '#fff', fontWeight: '900', fontSize: 30, textAlign: 'center' }}>{v.text}</Text>}</View>
+        <View style={{ alignItems: 'center', justifyContent: 'center', minHeight: 420 }}>{v.media ? (<View style={{ width: '100%' }}>
+          {v.media.kind === 'image' ? <Pressable onPress={() => setFull(!full)} accessibilityLabel="Photo Mood"><Image source={{ uri: absUrl(v.media.url) }} style={{ width: '100%', height: full ? 560 : 440, borderRadius: 22 }} resizeMode="contain" /></Pressable> : <MoodVideo uri={v.media.url} h={440} />}
+          {v.text ? <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18, textAlign: 'center', marginTop: 10 }}>{v.text}</Text> : null}
+        </View>) : v.kind === 'mood' && v.moji ? <BubbleMoji id={v.moji} size={180} /> : <Text style={{ color: '#fff', fontWeight: '900', fontSize: 30, textAlign: 'center' }}>{v.text}</Text>}</View>
         {mine ? <CBtn kind="ghost" title="Delete Mood" icon="close" onPress={() => chat.deleteStatus(v.id).then(() => navigation.goBack()).catch(e => show(e.message, true))} />
           : <View style={{ flexDirection: 'row', gap: 8 }}><View style={{ flex: 1 }}><CInput placeholder={`Reply privately to ${by.name.split(' ')[0]}`} value={r} onChangeText={setR} /></View><CBtn title="Send" icon="send" onPress={() => r.trim() && chat.replyStatus(v.id, r.trim()).then(() => { setR(''); show('Reply sent to chat'); }).catch(e => show(e.message, true))} /></View>}
       </CScreen>{toast}

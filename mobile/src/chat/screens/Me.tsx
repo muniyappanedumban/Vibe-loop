@@ -5,7 +5,7 @@ import { CC, AQUA } from '../theme';
 import { ChatIcon } from '../ChatIcon';
 import { BubbleMoji } from '../BubbleMojiView';
 import { BUBBLEMOJI, BUBBLE_CATEGORIES } from '../bubblemoji';
-import { CScreen, CTop, CHeader, CAvatar, CCard, CBtn, CChip, CRow, CInput, CToggle, useCToast, ct } from '../ui';
+import { CScreen, CTop, CHeader, CAvatar, CCard, CBtn, CChip, CRow, CInput, CToggle, useCToast, ct, CIconBtn } from '../ui';
 import { useChat, chat } from '../useChat';
 import { useSession, online, MAX_ACCOUNTS, forgetAccount } from '../../lib/api';
 import { switchAccount, signOut, signOutEverywhere } from '../../lib/sync';
@@ -23,7 +23,7 @@ export function ChatMe({ navigation }: any) {
   const save = (b: any, ok = 'Saved') => chat.saveProfile(b).then(() => show(ok)).catch(e => show(e.message, true));
   return (
     <View style={{ flex: 1 }}><CScreen>
-      <CTop title={tr('nav.ChatMe', 'Me')} />
+      <CTop title={tr('nav.ChatMe', 'Me')} right={feats.hushSettings !== false ? <CIconBtn name="gear" label="Hush settings" onPress={() => navigation.navigate('HushSettings')} /> : undefined} />
       <LinearGradient colors={AQUA as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.idCard}>
         <Pressable onPress={() => navigation.navigate('EditProfile', { module: 'chat' })} accessibilityLabel="Edit profile"><CAvatar name={me?.name ?? ''} h={me?.hue ?? 180} size={60} uri={p?.avatar_chat ?? p?.avatar_social} /></Pressable>
         <View style={{ flex: 1 }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>{p?.name ?? me?.name}</Text><Text style={{ color: 'rgba(255,255,255,.9)', fontWeight: '800' }}>{p?.handle ?? me?.handle}</Text><Text style={{ color: 'rgba(255,255,255,.8)', fontSize: 12, marginTop: 2 }}>No phone number linked · ever</Text></View>
@@ -72,6 +72,7 @@ export function ChatMe({ navigation }: any) {
         <CRow icon="globe" title="Region & Lingo" sub={`${LANG_NAMES[useConfig.getState().cfg.resolvedFor.lang] ?? 'English'} · ${useConfig.getState().cfg.resolvedFor.country}`} onPress={() => navigation.navigate('LanguageRegion')} />
         <CRow icon="spark" title="BubbleMoji" sub="1000 chat emoji" onPress={() => navigation.navigate('BubbleMojiGallery')} />
         <CRow icon="star" title="Star Box" onPress={() => navigation.navigate('Starred')} />
+        {feats.hushSettings !== false ? <CRow icon="gear" title="Hush Control Room" sub="All Hush settings: privacy, pings, chats, calls, security" onPress={() => navigation.navigate('HushSettings')} /> : null}
         <CRow icon="shield" title="Lockdown" sub="Sessions, encryption status" onPress={() => navigation.navigate('ChatSecurity')} />
         <CRow icon="board" title="Help & Support" sub="Help Hub, House Rules, Privacy Promise, SOS Lane" onPress={() => navigation.navigate('ContentHub')} />
         <CRow icon="shield" title="Speak Up" sub="Report harassment or a problem" onPress={() => navigation.navigate('SpeakUp')} />

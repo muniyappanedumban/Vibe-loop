@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { call } from '../lib/api';
+import { isVideoUrl } from '../lib/uploads';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Rect } from 'react-native-svg';
@@ -17,7 +20,7 @@ import { useConfig } from '../lib/config';
 import { Media } from '../components/Lens';
 import { mediaUri } from './Studio';
 import { useChat } from '../chat/useChat';
-import { Image } from 'react-native';
+import { Image, Linking } from 'react-native';
 import { useSession as useSess } from '../lib/api';
 import { publishOnline, payoutOnline } from '../lib/sync';
 
@@ -37,12 +40,16 @@ function SignButton({ title, onSigned, disabled }: { title: string; onSigned: ()
 export function Profile({ navigation }: any) {
   const st = useStore(); const so = useSocial(); const moneyOn = useMoney(); const prof = useChat(s => s.profile); const base = useSess(s => s.apiUrl); const screensCfg = useConfig(s => s.cfg.screens); const scr = (k: string) => screensCfg[k] !== false; const feats = useConfig(s => s.cfg.features);
   const released = st.loops.filter(l => l.status === 'released').length;
-  const mine = so.posts.filter(p => p.mine);
-  const grid = mine;
+  // Signed in: the Drops grid + counts come from the server (/users/me/posts), not the local feed cache.
+  const [srv, setSrv] = useState<{ items: any[]; user: any } | null>(null);
+  useFocusEffect(React.useCallback(() => { if (online()) call<any>('GET', '/users/me/posts').then(setSrv).catch(() => {}); }, [so.posts.length]));
+  const local = so.posts.filter(p => p.mine);
+  const mine = srv ? srv.items : local;
+  const grid = mine; const dropCount = srv?.user?.posts ?? mine.length;
   return (
     <Screen pad={false}>
       <LinearGradient colors={PRISM as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.cover}>
-        {prof?.cover ? <Image source={{ uri: base + prof.cover }} style={StyleSheet.absoluteFill} /> : null}
+        {(prof?.cover ?? srv?.user?.cover) ? <Image source={{ uri: base + (prof?.cover ?? srv?.user?.cover) }} style={StyleSheet.absoluteFill} /> : null}
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
           <IconBtn dark name="search" label="Search" onPress={() => navigation.navigate('Search')} />
           <IconBtn dark name="gear" label="Settings" onPress={() => navigation.navigate('SettingsHub')} />
@@ -50,16 +57,18 @@ export function Profile({ navigation }: any) {
       </LinearGradient>
       <View style={{ paddingHorizontal: 20, marginTop: -52 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
-          <View><Avatar name={st.user.name} hue={280} size={100} ring uri={prof?.avatar_social} /><View style={s.mood}><VibeMoji id={so.profileMood} size={34} /></View></View>
+          <View><Avatar name={st.user.name} hue={280} size={100} ring uri={prof?.avatar_social ?? srv?.user?.avatar} /><View style={s.mood}><VibeMoji id={so.profileMood} size={34} /></View></View>
           <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 6 }}>
-            {[[mine.length, 'Drops'], [so.saved.length, 'Saved'], [so.following.length, 'Following']].map(([n, t]) => (
+            {[[dropCount, 'Drops'], ...(srv ? [[srv.user.followers, 'Followers']] : [[so.saved.length, 'Saved']]), [srv?.user?.following ?? so.following.length, 'Following']].map(([n, t]) => (
               <View key={t as string} style={{ alignItems: 'center' }}><Text style={{ fontWeight: '900', fontSize: 20 }}>{n}</Text><Text style={T.small}>{t}</Text></View>))}
           </View>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 }}><Text style={T.h2}>{st.user.name}</Text><Tag label="CREATOR" /></View>
         <Text style={T.small}>{st.user.handle}</Text>
-        <Text style={[T.body, { marginTop: 8, lineHeight: 20 }]}>{so.bio}</Text>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}><Chip icon="link" label="riya.link/chai" /><Chip icon="shop" label="Presets shop" /></View>
+        <Text style={[T.body, { marginTop: 8, lineHeight: 20 }]}>{prof?.social_bio || so.bio}</Text>
+        {(prof?.links?.length || (moneyOn && feats.store)) ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+          {(prof?.links ?? []).map((l: string) => <Chip key={l} icon="link" label={l.replace(/^https?:\/\//, '').slice(0, 28)} onPress={() => Linking.openURL(/^https?:/.test(l) ? l : 'https://' + l).catch(() => {})} />)}
+          {moneyOn && feats.store ? <Chip icon="shop" label="My Stash" onPress={() => navigation.navigate('Stash')} /> : null}</View> : null}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
           <Btn small title="Edit profile" kind="ink" style={{ flex: 1 }} onPress={() => navigation.navigate('EditProfile')} />
           <Btn small title="New Moment" icon="plus" style={{ flex: 1 }} onPress={() => navigation.navigate('NewPost')} />
@@ -68,9 +77,9 @@ export function Profile({ navigation }: any) {
           <View style={{ flexDirection: 'row', gap: 14 }}>{['Chai eps', 'BTS', 'Fans', 'Travel'].map((h, i) => (
             <Pressable key={h} style={{ alignItems: 'center' }} onPress={() => navigation.navigate('Sparks', { start: i })}><View style={s.hl}><VibeMoji id={[42, 118, 203, 311][i]} size={40} /></View><Text style={{ fontSize: 11, fontWeight: '700', marginTop: 4 }}>{h}</Text></Pressable>))}</View>
         </Section>
-        <Section title={`Drops · ${mine.length}`}>
+        <Section title={`Drops · ${dropCount}`}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{grid.map(p => (
-            <View key={p.id} style={{ width: '32%' }}>{p.kind === 'thought' ? <View style={[s.gridT, { backgroundColor: p.bg ?? C.violet }]}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }} numberOfLines={5}>{p.text}</Text></View> : <Media uri={mediaUri(p.mediaUrl)} hue={p.hue} lens={p.lens} h={150} radius={6} />}</View>))}</View>
+            <Pressable key={p.id} style={{ width: '32%' }} accessibilityRole="button" accessibilityLabel={`Open Drop ${p.text.slice(0, 20)}`} onPress={() => online() && navigation.navigate('Comments', { id: p.id })}>{p.kind === 'thought' ? <View style={[s.gridT, { backgroundColor: p.bg ?? C.violet }]}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }} numberOfLines={5}>{p.text}</Text></View> : <View><Media uri={(p as any).mediaKind === 'video' || isVideoUrl(p.mediaUrl) ? null : mediaUri(p.mediaUrl)} hue={p.hue} lens={p.lens} h={150} radius={6} />{(p as any).mediaKind === 'video' || isVideoUrl(p.mediaUrl) ? <View style={s.play}><Icon name="play" size={12} color="#fff" /></View> : null}</View>}</Pressable>))}</View>
           {!mine.length ? <Text style={T.small}>Your Drops show up here. Tap + to make your first one.</Text> : null}
         </Section>
         <Card style={{ marginTop: S.lg }}>
@@ -102,6 +111,7 @@ const s = StyleSheet.create({
   cover: { height: 170, paddingTop: 50, paddingHorizontal: 20 },
   mood: { position: 'absolute', right: -6, bottom: -4, backgroundColor: C.bg, borderRadius: 20, padding: 2 },
   hl: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: C.line, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
+  play: { position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, padding: 4 },
   gridT: { height: 150, borderRadius: 14, padding: 10, justifyContent: 'center' },
   go: { width: 52, height: 52, borderRadius: 18, backgroundColor: C.lime, alignItems: 'center', justifyContent: 'center' },
   bal: { borderRadius: 30, padding: 20 },

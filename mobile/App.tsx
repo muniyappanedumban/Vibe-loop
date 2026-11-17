@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, View, AppState } from 'react-native';
+import { Platform, View, AppState, Text, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, createNavigationContainerRef, DefaultTheme } from '@react-navigation/native';
@@ -10,7 +10,8 @@ import { CC } from './src/chat/theme';
 import { TabBar } from './src/navigation/TabBar';
 import { ChatTabBar } from './src/chat/ChatTabBar';
 import { useStore } from './src/store/useStore';
-import { useSession, loadToken, online } from './src/lib/api';
+import { useSession, loadToken, online, useGate, APP_VERSION } from './src/lib/api';
+import { useConfig as useCfgGate, versionLt } from './src/lib/config';
 import { refresh } from './src/lib/sync';
 import { useConfig, loadConfig, navItems } from './src/lib/config';
 import { chat } from './src/chat/useChat';
@@ -34,7 +35,8 @@ import { Notifications, Settings } from './src/screens/System';
 import { Home, Motion, Sparks, NewPost } from './src/screens/Social';
 import { Search } from './src/screens/Connect';
 import { Emoji, Growth, Trust, SettingsHub } from './src/screens/Extras';
-import { ChatList, ChatRoom, NewChat, ShareToChat, ChatSearch, Starred } from './src/chat/screens/Chats';
+import { ChatList, ChatRoom, NewChat, ShareToChat, ChatSearch, Starred, LockGate } from './src/chat/screens/Chats';
+import { useHushPrefs } from './src/chat/hushPrefs';
 import { CallScreen, CallLog, LiveCamera, SnapView, FollowRequests, needs, startParity } from './src/chat/screens/Parity';
 import { Friends, MyCode, Vibes, StatusCompose, StatusView, Towns, CreateTown, TownRoom } from './src/chat/screens/People';
 import { Stash, BackstagePass, Props, CashFlow } from './src/screens/Money2';
@@ -44,6 +46,7 @@ import { Comments, LoveTrail, SaveStack, MoodDrop } from './src/screens/Micro';
 import { ContentHub, PageView, Blog, SpeakUp, CreatorProfile, ProductView } from './src/screens/Hub';
 import './src/lib/outbox';
 import { ChatMe, ChangeHandle, ChatSecurity, LanguageRegion, BubbleMojiGallery, Accounts } from './src/chat/screens/Me';
+import * as Hush from './src/chat/screens/HushSettings';
 
 const Stack = createNativeStackNavigator();
 const SocialTab = createBottomTabNavigator();
@@ -54,12 +57,26 @@ const SOCIAL_TABS: Record<string, React.ComponentType<any>> = { Home, Explore, C
 const CHAT_TABS: Record<string, React.ComponentType<any>> = { Chats: ChatList, Friends, Vibes, Towns, ChatMe };
 // Stack screens: every one is wrapped by gate(key) so the server config can switch it off per country/zone/slab.
 const STACK: Record<string, React.ComponentType<any>> = {
+  HushSettings: needs('hushSettings', Hush.HushSettings), HushProfile: needs('hushSettings', Hush.HushProfile), HushPrivacy: needs('hushSettings', Hush.HushPrivacy), HushBlocked: needs('hushSettings', Hush.HushBlocked), HushNotifications: needs('hushSettings', Hush.HushNotifications), HushChats: needs('hushSettings', Hush.HushChats), HushArchive: needs('hushSettings', Hush.HushArchive), HushCalls: needs('hushSettings', Hush.HushCalls), HushSecurity: needs('hushSettings', Hush.HushSecurity), HushStorage: needs('hushSettings', Hush.HushStorage), HushAbout: needs('hushSettings', Hush.HushAbout),
   Notifications, Settings, Sparks, NewPost, Search, Emoji, Growth, Trust, SettingsHub,
   // Creator Studio & classic screens — restored; each can be switched off in Admin → Screen Switches.
   CreatorHub, Loops: LoopsScreen, NewLoop, LoopDetail, FanReact, Archive, CreateHub, Copilot, Editor, Audio, Library, Memory, ReleaseGate, Earnings, Payout, Features, Learn, IconKit: IconKitScreen, Live, Vault,
   Call: needs('calls', CallScreen), CallLog: needs('calls', CallLog), LiveCamera: needs('liveCamera', LiveCamera), SnapView: needs('snaps', SnapView), FollowRequests: needs('followRequests', FollowRequests),
   ChatRoom, NewChat, ShareToChat, ChatSearch, Starred, MyCode, StatusCompose, StatusView, CreateTown, TownRoom, ChangeHandle, ChatSecurity, LanguageRegion, BubbleMojiGallery, Accounts, Stash, BackstagePass, Props, CashFlow, Outbox: OutboxScreen, EditProfile, Comments, LoveTrail, SaveStack, MoodDrop, ContentHub, PageView, Blog, SpeakUp, CreatorProfile, ProductView,
 };
+function GateOverlay() {
+  const net = useGate(); const acc = useCfgGate(s => s.cfg.access);
+  const g = net.kind ? net : acc?.maintenance ? { kind: 'maintenance' as const, message: acc.maintenanceMessage || 'Down for maintenance' }
+    : acc?.forceUpdate && acc.minAppVersion && versionLt(APP_VERSION, acc.minAppVersion) ? { kind: 'update' as const, message: `Update required — version ${acc.minAppVersion} or newer.` } : net;
+  if (!g.kind) return null;
+  return (
+    <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#120F24', alignItems: 'center', justifyContent: 'center', padding: 30 }}>
+      <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', textAlign: 'center' }}>{g.kind === 'update' ? 'Update required' : 'Back soon'}</Text>
+      <Text style={{ color: 'rgba(255,255,255,.75)', fontSize: 15, textAlign: 'center', marginTop: 12, lineHeight: 22 }}>{g.message}</Text>
+      <Pressable onPress={() => { useGate.setState({ kind: null, message: '' }); loadConfig().catch(() => {}); }} style={{ marginTop: 24, backgroundColor: '#C8F45A', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 999 }} accessibilityRole="button"><Text style={{ fontWeight: '900', color: '#0B0B12' }}>Try again</Text></Pressable>
+    </View>
+  );
+}
 export const STACK_SCREENS = Object.keys(STACK);
 startParity(navRef as any);
 const GATED = Object.fromEntries(Object.entries(STACK).map(([k, Comp]) => [k, gate(k, Comp)]));
@@ -78,6 +95,9 @@ function SocialTabs() {
 function ChatTabs() {
   const cfg = useConfig(s => s.cfg); const items = navItems(cfg, 'chat').filter(i => CHAT_TABS[i.key]);
   useEffect(() => { chat.loadAll().catch(() => {}); const t = setInterval(() => { chat.refreshConvs().catch(() => {}); chat.pulse().catch(() => {}); }, 5000); return () => clearInterval(t); }, []);
+  const lockOn = useHushPrefs(s => s.prefs.chatLock); const [unlocked, setUnlocked] = useState(false);
+  useEffect(() => { useHushPrefs.getState().load(); }, []);
+  if (lockOn && !unlocked) return <LockGate title="Hush" onOpen={() => setUnlocked(true)} />;  // Hush app-level chat lock
   return (
     <ChatTab.Navigator key={items.map(i => i.key).join()} tabBar={p => <ChatTabBar {...p} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: CC.bg } } as any}>
       {items.map(i => <ChatTab.Screen key={i.key} name={i.key} component={CHAT_TABS[i.key]} />)}
@@ -121,6 +141,7 @@ export default function App() {
           {Object.entries(GATED).map(([k, Comp]) => <Stack.Screen key={k} name={k} component={Comp} />)}
         </Stack.Navigator>
       </NavigationContainer>
+      <GateOverlay />
     </SafeAreaProvider>
   );
 }

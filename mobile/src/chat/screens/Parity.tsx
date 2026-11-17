@@ -9,6 +9,7 @@ import { call, useSession, online } from '../../lib/api';
 import { onEvent, rtSend, useRealtime, connectRealtime } from '../../lib/realtime';
 import { useFeature, feature } from '../../lib/config';
 import { chat } from '../useChat';
+import { useHushPrefs } from '../hushPrefs';
 import { LENSES, LensOverlay } from '../../components/Lens';
 
 // ---------- WebRTC (native: react-native-webrtc, web: browser APIs) ----------
@@ -16,7 +17,11 @@ const RTC: any = Platform.OS === 'web' ? { RTCPeerConnection: (globalThis as any
 const RTCView: any = Platform.OS === 'web' ? null : RTC?.RTCView;
 const newId = () => 'call_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 
+async function capBitrate(sender: any, maxBitrate: number) {
+  try { const prm = sender?.getParameters?.(); if (!prm) return; if (!prm.encodings?.length) prm.encodings = [{}]; prm.encodings.forEach((e: any) => { e.maxBitrate = maxBitrate; }); await sender.setParameters(prm); } catch { /* not supported on this platform */ }
+}
 export function CallScreen({ navigation, route }: any) {
+  useEffect(() => { useHushPrefs.getState().load(); }, []);
   const { peer, media: m0, incoming } = route?.params ?? {}; const media: 'audio' | 'video' = incoming?.media ?? m0 ?? 'audio';
   const who = incoming?.from ?? peer; const rt = useRealtime(s => s.status);
   const [state, setState] = useState<'idle' | 'calling' | 'ringing' | 'incoming' | 'connected' | 'ended'>(incoming ? 'incoming' : 'idle');
@@ -29,8 +34,10 @@ export function CallScreen({ navigation, route }: any) {
     if (!RTC?.RTCPeerConnection) throw new Error('Calls need the VibeLoop app build with WebRTC');
     const ice = await call<any>('GET', '/rtc/ice');
     const p = new RTC.RTCPeerConnection({ iceServers: ice.iceServers }); pc.current = p;
-    const s = await RTC.mediaDevices.getUserMedia({ audio: true, video: media === 'video' ? { facingMode: 'user' } : false }); stream.current = s; setLocal(s);
-    s.getTracks().forEach((t: any) => p.addTrack(t, s));
+    const saver = useHushPrefs.getState().prefs.callDataSaver;  // Hush: Call data saver → 320x240@15fps video, capped bitrates
+    const video = media === 'video' ? (saver ? { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15, max: 15 } } : { facingMode: 'user' }) : false;
+    const s = await RTC.mediaDevices.getUserMedia({ audio: true, video }); stream.current = s; setLocal(s);
+    s.getTracks().forEach((t: any) => { const sender = p.addTrack(t, s); if (saver) capBitrate(sender, t.kind === 'video' ? 150_000 : 24_000); });
     p.onicecandidate = (e: any) => e.candidate && rtSend({ type: 'call.ice', callId: callId.current, candidate: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate });
     p.ontrack = (e: any) => setRemote(e.streams?.[0] ?? null);
     p.onconnectionstatechange = () => { if (p.connectionState === 'connected') setState('connected'); if (p.connectionState === 'failed') setErr('Connection failed — a TURN relay may be needed on this network (Admin → Plugs → turn)'); };

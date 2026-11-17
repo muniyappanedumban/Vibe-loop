@@ -7,7 +7,8 @@ import { Screen, Header, Card, Btn, Chip, Field, Row, Tag, Avatar, useToast, Sec
 import { Icon, IconName } from '../components/Icon';
 import { call, online, useSession } from '../lib/api';
 import { useConfig } from '../lib/config';
-import { creator, useSocial } from '../store/useSocial';
+import { creator, useSocial, followLabel } from '../store/useSocial';
+import { isVideoUrl } from '../lib/uploads';
 import { Media } from '../components/Lens';
 import { mediaUri } from './Studio';
 import { ago } from '../lib/util';
@@ -118,11 +119,16 @@ export function SpeakUp({ route }: any) {
 
 /** Public creator profile — the missing "other people's profile" screen. Vouches, Props, Stash, follow, message. */
 export function CreatorProfile({ navigation, route }: any) {
-  const id = route?.params?.id; const so = useSocial(); const c = creator(id); const f = useConfig(s => s.cfg.features);
+  const id = route?.params?.id; const so = useSocial(); const c0 = creator(id); const f = useConfig(s => s.cfg.features);
   const [v, setV] = useState<any>({ avg: null, count: 0, items: [] }); const [rating, setRating] = useState(5); const [txt, setTxt] = useState(''); const { toast, show } = useToast();
   const load = () => call<any>('GET', `/users/${id}/vouches`).then(setV).catch(() => {});
   useEffect(() => { if (online() && f.vouches !== false) load(); }, [id]);
-  const posts = so.posts.filter(p => p.by === id); const following = so.following.includes(id);
+  // Signed in: profile header, follow state and the full Drops grid come from /users/{id}/posts.
+  const [srv, setSrv] = useState<{ user: any; items: any[]; locked: boolean } | null>(null);
+  useEffect(() => { if (online() && id) call<any>('GET', `/users/${id}/posts`).then(setSrv).catch(() => {}); }, [id, so.following.length, (so.requested ?? []).length]);
+  const posts: any[] = srv ? srv.items : so.posts.filter(p => p.by === id);
+  const c = (srv?.user ?? c0) as typeof c0;
+  const fl0 = followLabel(so, id); const fl = fl0 === 'Follow' && srv?.user?.followState === 'requested' ? 'Requested' : fl0; const following = fl !== 'Follow';
   return (
     <View style={{ flex: 1 }}><Screen>
       <Header title={c.name} sub={`${c.handle} · ${c.city ?? ''}`} />
@@ -131,7 +137,7 @@ export function CreatorProfile({ navigation, route }: any) {
         <View style={{ flex: 1 }}><Text style={{ lineHeight: 20 }}>{c.bio}</Text>{v.count ? <Text style={[T.small, { marginTop: 4 }]}>Vouched {Number(v.avg).toFixed(1)}★ by {v.count}</Text> : null}</View>
       </View>
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-        <Btn small title={following ? 'Following' : 'Follow'} kind={following ? 'ghost' : 'prism'} style={{ flex: 1 }} onPress={() => so.follow(id)} />
+        <Btn small title={fl} kind={following ? 'ghost' : 'prism'} style={{ flex: 1 }} onPress={() => so.follow(id)} />
         {online() ? <Btn small kind="ink" title="Message" icon="chat" style={{ flex: 1 }} onPress={() => chat.newConv([id]).then(cv => navigation.navigate('ChatRoom', { id: cv.id })).catch(e => show(e.message, 'err'))} /> : null}
       </View>
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
@@ -139,8 +145,9 @@ export function CreatorProfile({ navigation, route }: any) {
         {f.money && f.store ? <Btn small kind="ghost" title="Their Stash" icon="shop" style={{ flex: 1 }} onPress={() => navigation.navigate('Stash', { creator: id })} /> : null}
         <Btn small kind="ghost" title="Report" icon="flag" style={{ flex: 1 }} onPress={() => navigation.navigate('SpeakUp', { target: { type: 'user', id } })} />
       </View>
-      <Section title={`Drops · ${posts.length}`}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{posts.map(p => <Pressable key={p.id} style={{ width: '32%' }} onPress={() => navigation.navigate('Comments', { id: p.id })}><Media uri={mediaUri(p.mediaUrl)} hue={p.hue} lens={p.lens} h={130} radius={12} /></Pressable>)}</View>
+      <Section title={`Drops · ${srv?.user?.posts ?? posts.length}`}>
+        {srv?.locked ? <Text style={T.small}>This profile is private — follow to see their Drops.</Text> : null}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{posts.map(p => <Pressable key={p.id} style={{ width: '32%' }} onPress={() => navigation.navigate('Comments', { id: p.id })}><Media uri={p.mediaKind === 'video' || isVideoUrl(p.mediaUrl) ? null : mediaUri(p.mediaUrl)} hue={p.hue} lens={p.lens} h={130} radius={12}>{p.mediaKind === 'video' || isVideoUrl(p.mediaUrl) ? <Icon name="play" size={18} color="#fff" /> : null}</Media></Pressable>)}</View>
       </Section>
       {f.vouches !== false ? <Section title={`Vouches · ${v.count}`}>
         {v.items.map((x: any) => <Card key={x.id} style={{ marginBottom: 8 }}><Text style={{ fontWeight: '800' }}>{'★'.repeat(x.rating)}{'☆'.repeat(5 - x.rating)} · {x.by?.handle ?? ''}</Text><Text style={{ marginTop: 4 }}>{x.text}</Text><Text style={[T.small, { marginTop: 4 }]}>{x.context === 'collab' ? 'Collab' : 'Creator'} · {ago(x.at)}</Text></Card>)}

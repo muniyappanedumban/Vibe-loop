@@ -90,7 +90,7 @@ def conv_json(db: Session, c: M.Conv, me: M.User) -> dict:
     return {"id": c.id, "title": title, "group": c.group, "members": [user_json(x) for x in others], "folder": st.get("folder"),
             "muted": bool(st.get("muted")), "pinned": bool(st.get("pinned")), "locked": bool(st.get("locked")), "theme": st.get("theme"),
             "fadeSec": c.fade_sec, "request": bool(st.get("request")), "awaitingAccept": any((s or {}).get("request") for k, s in (c.state or {}).items() if k != me.id),
-            "unread": unread_count(db, c, me), "last": lt, "e2ee": conv_e2ee(db, c)}
+            "unread": unread_count(db, c, me), "last": lt, "e2ee": conv_e2ee(db, c), "archived": bool(st.get("archived"))}
 
 def conv_e2ee(db: Session, c: M.Conv) -> bool:
     if c.group or len(c.members) != 2: return False
@@ -107,7 +107,7 @@ def open_dm(db: Session, me: M.User, t: M.User) -> M.Conv:
     db.add(c); db.flush(); return c
 
 class ConvIn(BaseModel):
-    members: list[str] = Field(min_length=1, max_length=50); title: str | None = Field(default=None, max_length=80)
+    members: list[str] = Field(min_length=1, max_length=1024); title: str | None = Field(default=None, max_length=80)
 @router.get("/conv")
 def list_convs(u: M.User = Depends(current_user), db: Session = Depends(get_db)):
     convs = my_convs(db, u)
@@ -119,8 +119,11 @@ def list_convs(u: M.User = Depends(current_user), db: Session = Depends(get_db))
 
 @router.post("/conv")
 def create_conv(b: ConvIn, u: M.User = Depends(write_limit("conv_create")), db: Session = Depends(get_db)):
+    t0 = M.now_ms()
     ids = list(dict.fromkeys(i for i in b.members if i != u.id))
     if not ids or any(len(i) > 40 for i in ids): raise HTTPException(400, "Pick at least one person")
+    from .user_app import setting as ua_setting
+    if len(ids) + 1 > (mx := ua_setting(db, "limits.maxGroupSize", u)): raise HTTPException(400, f"Groups can have at most {mx} people")
     users = [db.get(M.User, i) for i in ids]
     if any(x is None or x.suspended for x in users): raise HTTPException(404, "Unknown member")
     if len(users) == 1: c = open_dm(db, u, users[0])
@@ -132,6 +135,8 @@ def create_conv(b: ConvIn, u: M.User = Depends(write_limit("conv_create")), db: 
             st[t.id] = {"request": not are_friends(db, u.id, t.id)}
         c = M.Conv(title=(b.title or ", ".join(x.name.split()[0] for x in users))[:80], group=True, members=[u.id, *ids], created_by=u.id, state=st)
         db.add(c); db.flush()
+    fade = (((u.settings or {}).get("hush") or {}).get("defaultFadeSec"))
+    if fade in (3600, 86400, 604800) and c.fade_sec is None and c.created_by == u.id and (c.at or 0) >= t0: c.fade_sec = fade  # Hush default fade (new convs only)
     db.commit(); return conv_json(db, c, u)
 
 class ConvPatch(BaseModel):
@@ -265,11 +270,18 @@ def send(cid: str, b: MsgIn, u: M.User = Depends(write_limit("message")), db: Se
         if not b.attachment: raise HTTPException(400, f"A {kind} message needs an attachment")
         mf = db.get(M.MediaFile, b.attachment.url.split("/")[-1].split(".")[0])
         if not mf or mf.owner_id != u.id: raise HTTPException(400, "Upload the file first")
+        from .user_app import setting as ua_setting
+        if mf.size and mf.size > ua_setting(db, "limits.fileMaxMB", u) * 1024 * 1024: raise HTTPException(413, f"Files in chats must be {ua_setting(db, 'limits.fileMaxMB', u)} MB or smaller")
         att = {"url": b.attachment.url, "name": mf.name or b.attachment.url.split("/")[-1], "size": mf.size, "mime": mf.mime, "kind": mf.kind}
+        if kind == "file" and mf.kind in ("image", "video"):
+            if not feature(db, u, "chatMedia"): raise HTTPException(403, "Not enabled")
+            if mf.kind == "video":
+                if mf.duration_sec and mf.duration_sec > (vmx := ua_setting(db, "limits.chatVideoMaxSec", u)) + 0.5: raise HTTPException(400, f"Chat videos must be {vmx} seconds or shorter")
+                if mf.duration_sec: att["durationSec"] = round(mf.duration_sec, 1)
         if kind == "voice":
             if not (mf.mime or "").startswith("audio/"): raise HTTPException(400, "A voice note must be audio")
             if not b.durationSec: raise HTTPException(400, "durationSec (1–300) is required")
-            if (getattr(mf, "duration_sec", None) or 0) > 300: raise HTTPException(400, "Voice notes are at most 5 minutes")
+            if max(getattr(mf, "duration_sec", None) or 0, b.durationSec) > (vn := ua_setting(db, "limits.voiceNoteMaxSec", u)) + 0.5: raise HTTPException(400, f"Voice notes are at most {vn} seconds")
             att["durationSec"] = b.durationSec
         if kind == "snap":
             att = make_snap(db, mf, b.attachment.url)
@@ -309,14 +321,16 @@ def edit_msg(mid: str, b: EditIn, u: M.User = Depends(current_user), db: Session
     m, _ = get_msg(db, mid, u)
     if m.sender != u.id: raise HTTPException(403, "You can only edit your own messages")
     if m.deleted or m.kind not in ("text",) or m.enc: raise HTTPException(409, "This message can't be edited")
-    if M.now_ms() - m.at > EDIT_WINDOW: raise HTTPException(409, "Edit window (15 min) has passed")
+    from .user_app import setting as ua_setting
+    if M.now_ms() - m.at > (w := ua_setting(db, "limits.editWindowMin", u)) * 60_000: raise HTTPException(409, f"Edit window ({w} min) has passed")
     m.text, m.edited = b.text.strip(), True; db.commit(); publish_msg(db, db.get(M.Conv, m.conv_id), m, "message.updated"); return msg_json(db, m, u)
 
 @router.delete("/messages/{mid}")
 def delete_msg(mid: str, u: M.User = Depends(current_user), db: Session = Depends(get_db)):
     m, _ = get_msg(db, mid, u)
     if m.sender != u.id: raise HTTPException(403, "You can only unsend your own messages")
-    if M.now_ms() - m.at > UNDO_WINDOW: raise HTTPException(409, "Undo window (60 min) has passed")
+    from .user_app import setting as ua_setting
+    if M.now_ms() - m.at > (w := ua_setting(db, "limits.undoWindowMin", u)) * 60_000: raise HTTPException(409, f"Undo window ({w} min) has passed")
     m.deleted, m.text, m.poll, m.ref, m.enc = True, "", None, None, None; db.commit(); publish_msg(db, db.get(M.Conv, m.conv_id), m, "message.updated"); return msg_json(db, m, u)
 
 class ReactIn(BaseModel): moji: int = Field(ge=0, le=10000)
@@ -429,11 +443,25 @@ def status_visible(db: Session, s: M.Status, me: M.User) -> bool:
 
 def status_json(db: Session, s: M.Status, me: M.User) -> dict:
     return {"id": s.id, "by": me_id(s.user_id, me), "user": user_json(db.get(M.User, s.user_id)), "kind": s.kind, "text": s.text, "moji": s.moji,
-            "bg": s.bg, "audience": s.audience, "at": s.at, "expiresAt": s.at + DAY}
+            "bg": s.bg, "audience": s.audience, "at": s.at, "expiresAt": s.at + DAY, "media": status_media(db, s, me)}
+
+def status_media(db: Session, s: M.Status, me: M.User) -> dict | None:
+    """Mood media is private: only viewers the audience allows get an expiring signed URL (same scheme as chat attachments)."""
+    if not s.media or not status_visible(db, s, me): return None
+    from .routes_media import signed_attachment
+    return signed_attachment(s.media)
+
+def vault_media(db: Session, mf: M.MediaFile, u: M.User):
+    """Grant Mood media to a member-less per-user vault conv, which makes /media treat it as private (owner + signed links only)."""
+    vid = f"mv-{u.id}"[:40]
+    if not db.get(M.Conv, vid): db.add(M.Conv(id=vid, title="", group=True, members=[], created_by=u.id, state={})); db.flush()
+    grant_media(db, mf.id, vid)
+
+class StatusMediaIn(BaseModel): url: str = Field(pattern=r"^/media/[A-Za-z0-9]+\.[a-z0-9]+$")
 
 class StatusIn(BaseModel):
     id: str | None = Field(default=None, pattern=r"^[\w-]{3,40}$")
-    kind: Literal["text", "mood"]; text: str | None = Field(default=None, max_length=300); moji: int | None = Field(default=None, ge=0, le=10000)
+    kind: Literal["text", "mood", "photo", "video"]; attachment: StatusMediaIn | None = None; text: str | None = Field(default=None, max_length=300); moji: int | None = Field(default=None, ge=0, le=10000)
     bg: str | None = Field(default=None, max_length=20); audience: Literal["friends", "close", "public"] = "friends"
 @router.post("/status")
 def post_status(b: StatusIn, u: M.User = Depends(write_limit("status")), db: Session = Depends(get_db)):
@@ -442,7 +470,20 @@ def post_status(b: StatusIn, u: M.User = Depends(write_limit("status")), db: Ses
         return status_json(db, ex, u)
     if b.kind == "text" and not (b.text or "").strip(): raise HTTPException(400, "Write something")
     if b.kind == "mood" and b.moji is None: raise HTTPException(400, "Pick a mood")
-    s = M.Status(id=b.id or M.nid("st"), user_id=u.id, kind=b.kind, text=(b.text or "").strip(), moji=b.moji, bg=b.bg, audience=b.audience); db.add(s); db.commit()
+    media = None
+    if b.kind in ("photo", "video"):
+        from .realtime import feature
+        if not feature(db, u, "moodMedia"): raise HTTPException(403, "Not enabled")
+        if not b.attachment: raise HTTPException(400, f"A {b.kind} Mood needs an attachment")
+        mf = db.get(M.MediaFile, b.attachment.url.split("/")[-1].split(".")[0])
+        if not mf or mf.owner_id != u.id: raise HTTPException(400, "Upload the file first")
+        if mf.kind != ("image" if b.kind == "photo" else "video"): raise HTTPException(400, f"That upload isn't a {b.kind}")
+        if mf.kind == "video" and mf.duration_sec and mf.duration_sec > 60.5: raise HTTPException(400, "Mood videos must be 60 seconds or shorter")
+        if mf.public: raise HTTPException(400, "That file is already public — upload it fresh for a Mood")
+        vault_media(db, mf, u)  # private: served only via signed links handed to allowed viewers
+        media = {"url": b.attachment.url, "kind": mf.kind, "mime": mf.mime, "size": mf.size, "durationSec": mf.duration_sec}
+    elif b.attachment: raise HTTPException(400, "Only photo/video Moods carry an attachment")
+    s = M.Status(id=b.id or M.nid("st"), user_id=u.id, kind=b.kind, text=(b.text or "").strip(), moji=b.moji, bg=b.bg, audience=b.audience, media=media); db.add(s); db.commit()
     return status_json(db, s, u)
 
 @router.get("/status")
@@ -469,7 +510,7 @@ def reply_status(sid: str, b: ReplyIn, u: M.User = Depends(current_user), db: Se
     if not s or s.at <= M.now_ms() - DAY or not status_visible(db, s, u): raise HTTPException(404, "Vibe not found")
     if s.user_id == u.id: raise HTTPException(400, "That's your own Vibe")
     c = open_dm(db, u, db.get(M.User, s.user_id)); check_can_send(db, c, u)
-    snippet = s.text[:60] if s.text else "mood"
+    snippet = s.text[:60] if s.text else {"photo": "photo", "video": "video"}.get(s.kind, "mood")
     m = add_message(db, c, u, "text", f"Replied to your Vibe “{snippet}”: {b.text.strip()}"); db.commit(); publish_msg(db, c, m)
     return {"conv": conv_json(db, c, u), "message": msg_json(db, m, u)}
 

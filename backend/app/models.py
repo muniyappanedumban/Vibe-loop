@@ -295,6 +295,7 @@ class Status(Base):
     kind: Mapped[str] = mapped_column(String(10)); text: Mapped[str] = mapped_column(String(300), default="")
     moji: Mapped[int | None] = mapped_column(Integer, nullable=True); bg: Mapped[str | None] = mapped_column(String(20), nullable=True)
     audience: Mapped[str] = mapped_column(String(10), default="friends"); at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+    media: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # photo/video Moods: {url, kind, mime, durationSec}
 
 class Town(Base):
     __tablename__ = "towns"

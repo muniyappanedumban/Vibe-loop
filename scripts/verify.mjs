@@ -21,7 +21,7 @@ ok(BUBBLEMOJI.length === 1000 && new Set(BUBBLEMOJI.map(b => bubbleSvg(b.id))).s
 for (const k of ['glow', 'hush']) ok(ICONKIT[k].length === 1000 && new Set(ICONKIT[k].map(i => kitSvg(k, i.id))).size === 1000 && new Set(ICONKIT[k].map(i => i.name)).size === 1000, `IconKit ${k}: 1000 unique icons & names`);
 ok(!ICONKIT.glow.some(g => ICONKIT.hush.some(h => kitSvg('glow', g.id) === kitSvg('hush', h.id))), 'Glow and Hush icon kits share no icon');
 const vNames = new Set(VIBEMOJI.map(m => m.name)); ok(!BUBBLEMOJI.some(b => vNames.has(b.name)), 'No emoji name is reused across modules');
-const app = fs.readFileSync(path.join(root, 'mobile/App.tsx'), 'utf8'); const stackBlock = app.slice(app.indexOf('const STACK'), app.indexOf('export const STACK_SCREENS'));
+const app = fs.readFileSync(path.join(root, 'mobile/App.tsx'), 'utf8'); const stackBlock = app.slice(app.indexOf('const STACK'), app.indexOf('\n};', app.indexOf('const STACK')));
 const tabBlocks = [...app.matchAll(/const (?:SOCIAL|CHAT)_TABS[^{]*\{([^}]*)\}/g)].map(m => m[1]).join(',');
 const keysOf = b => b.replace(/^[^{]*\{/, '').replace(/\/\/.*/g, '').replace(/\([^)]*\)/g, '').split(',').map(x => x.split(':')[0].trim()).filter(k => /^\w+$/.test(k) && !/^(Record|string|React|ComponentType|any|const|STACK)$/.test(k));
 const registered = new Set([...app.matchAll(/name="(\w+)"/g)].map(m => m[1]).concat(keysOf(stackBlock), keysOf(tabBlocks)));

@@ -7,13 +7,11 @@ import { Screen, Header, Card, Btn, Field, Row, Toggle, Chip, Avatar, useToast }
 import { call, online, useSession } from '../lib/api';
 import { useChat, chat } from '../chat/useChat';
 import { useStore } from '../store/useStore';
+import { uploadMedia } from '../lib/uploads';
 
 const STATES = ['TN', 'KA', 'KL', 'MH', 'DL', 'WB', 'TS', 'GJ'];
-async function uploadImage(uri: string, mime: string) {
-  const { apiUrl, token } = useSession.getState(); const form = new FormData();
-  if (typeof document !== 'undefined') form.append('file', await (await fetch(uri)).blob(), 'avatar'); else form.append('file', { uri, name: 'avatar.jpg', type: mime } as any);
-  const r = await fetch(apiUrl + '/media', { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form }); const j = await r.json(); if (!r.ok) throw new Error(j.detail ?? 'Upload failed'); return j.url as string;
-}
+// Avatar & cover use the same resumable /uploads flow as Drops and Blinks.
+const uploadImage = async (uri: string, mime: string) => (await uploadMedia(uri, mime, mime.includes('png') ? 'avatar.png' : 'avatar.jpg')).url;
 export function EditProfile({ navigation, route }: any) {
   const which: 'social' | 'chat' = route?.params?.module === 'chat' ? 'chat' : 'social';
   const p = useChat(s => s.profile); const me = useStore(s => s.user); const { toast, show } = useToast();

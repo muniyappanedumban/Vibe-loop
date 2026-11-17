@@ -5,7 +5,7 @@ import http from 'node:http'; import fs from 'node:fs'; import path from 'node:p
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'mobile', 'dist');
 // Two flat folders: Social module → screenshots/vibeloop, Chat module → screenshots/chat
-const CHAT = new Set(['Chats', 'ChatRoom', 'NewChat', 'ChatSearch', 'Starred', 'Friends', 'MyCode', 'Vibes', 'StatusCompose', 'StatusView', 'Towns', 'TownRoom', 'CreateTown', 'ChatMe', 'ChangeHandle', 'ChatSecurity', 'BubbleMojiGallery', 'ShareToChat', 'Accounts', 'LanguageRegion', 'Call', 'CallLog', 'SnapView']);
+const CHAT = new Set(['Chats', 'ChatRoom', 'NewChat', 'ChatSearch', 'Starred', 'Friends', 'MyCode', 'Vibes', 'StatusCompose', 'StatusView', 'Towns', 'TownRoom', 'CreateTown', 'ChatMe', 'ChangeHandle', 'ChatSecurity', 'BubbleMojiGallery', 'ShareToChat', 'Accounts', 'LanguageRegion', 'Call', 'CallLog', 'SnapView', 'HushSettings', 'HushProfile', 'HushPrivacy', 'HushBlocked', 'HushNotifications', 'HushChats', 'HushArchive', 'HushCalls', 'HushSecurity', 'HushStorage', 'HushAbout']);
 const DIRS = { social: path.join(root, 'screenshots', 'vibeloop'), chat: path.join(root, 'screenshots', 'chat') };
 const out = DIRS.social;
 const API = process.env.API_URL || 'http://localhost:8787';

@@ -9,6 +9,7 @@ import { VIBEMOJI, VIBEMOJI_CATEGORIES, REACTIONS, vibemojiSvg } from './vibemoj
 import { SECTIONS, ALL_FEATURES } from './features';
 import { PRD, PRD_GROUPS } from './prd';
 import { api, useApi, login, getToken, getUser, setSession, API_URL, uploadFile } from './api';
+import { UserAppSettingsPage, AllSwitchesPage } from './pages/UserAppSettings';
 import type { ApiUser, Overview, Report, ApiPayout, AuditRow, PrivacyReq, ApiAnnouncement, SearchResult, KV } from './api';
 
 /* Demo-only state (abuse rules / flagged accounts) — everything else comes from the API. */
@@ -19,7 +20,7 @@ export const PAGES = [
   ['dashboard', 'Mission Control'], ['users', 'Members'], ['moderation', 'Mod Queue'], ['payouts', 'Cashouts'],
   ['health', 'Vitals'], ['costs', 'Burn Rate'], ['flags', 'Switchboard'], ['audit', 'Paper Trail'],
   ['privacy', 'Privacy Desk'], ['abuse', 'Spam Shield'], ['revenue', 'Revenue Pulse'], ['announcements', 'Megaphone'], ['roles', 'Role Matrix'],
-  ['navigation', 'Nav Builder'], ['themes', 'Theme Studio'], ['screens', 'Screen Switches'], ['limits', 'Feature Dials'], ['zones', 'Zones'], ['slabs', 'Tiers'], ['languages', 'Lingo'], ['preview', 'Preview Room'],
+  ['navigation', 'Nav Builder'], ['themes', 'Theme Studio'], ['userapp', 'User App Settings'], ['switches', 'All Switches'], ['screens', 'Screen Switches'], ['limits', 'Feature Dials'], ['zones', 'Zones'], ['slabs', 'Tiers'], ['languages', 'Lingo'], ['preview', 'Preview Room'],
   ['otp', 'Login Watch'], ['identity', 'ID Desk'], ['chat', 'Hush & Hoods'],
   ['realtime', 'Realtime Monitor'], ['calls', 'Call Log'], ['push', 'Push Center'], ['e2ee', 'E2EE & Keys'],
   ['cashflow', 'Cash Flow'], ['money', 'Money switches'], ['plans', 'Backstage Pass'], ['countries', 'Country pricing'], ['boosts', 'Boosts'], ['stash', 'Stash'], ['plugs', 'Plugs'],
@@ -745,7 +746,7 @@ const MODS = ['social', 'chat'] as const;
 const FEATURE_KEYS = ['dswitch', 'swipeWorlds', 'chatBubble', 'post2chat', 'draftBridge', 'focusSwitch', 'statuses', 'towns', 'viewOnce', 'sendLater', 'polls', 'fadeChat', 'chatLock', 'payouts', 'paidLoops', 'live',
   'money', 'subscriptions', 'store', 'tips', 'ads', 'platformFees', 'blog', 'news', 'appLinks', 'reviews', 'productReviews', 'vouches', 'speakUp', 'promos',
   'chatCopy', 'quickPolish', 'phrasebook', 'smartChips', 'slashCommands', 'mysteryDrop', 'togetherTimer', 'placeDrop', 'partyChat', 'readAloud', 'chatExport', 'hopBack', 'hopShare', 'outbox', 'fileDrop', 'lenses', 'autoEdit', 'miniVote', 'pin3', 'saveStack', 'loveTrail', 'moodDrop', 'emojiSuggest',
-  'realtime', 'readReceipts', 'typing', 'voiceNotes', 'calls', 'push', 'e2ee', 'snaps', 'storyViewers', 'followRequests', 'liveCamera', 'demoMode'];
+  'realtime', 'readReceipts', 'typing', 'voiceNotes', 'calls', 'push', 'e2ee', 'snaps', 'storyViewers', 'followRequests', 'liveCamera', 'demoMode', 'chatMedia', 'moodMedia', 'hushSettings'];
 const FEATURE_DESC: Record<string, string> = {
   dswitch: 'Social ⇄ Chat module switch', swipeWorlds: 'Swipe between Social and Chat', chatBubble: 'Floating chat bubble over Social', post2chat: 'Share a post into a chat',
   draftBridge: 'Carry drafts between modules', focusSwitch: 'Focus mode mutes the other module', statuses: 'Vibes (24h statuses)', towns: 'Towns (communities)', viewOnce: 'View-once messages',
@@ -754,7 +755,7 @@ const FEATURE_DESC: Record<string, string> = {
   blog: 'The Loopdown / Hush Notes (blog)', news: 'Fresh Wire (news)', appLinks: 'Get the Apps page', reviews: 'Reviews master switch', productReviews: 'Real Talk product reviews (needs Stash)', vouches: 'Vouches (creator reviews)', speakUp: 'Speak Up reports & tickets', promos: 'VibeLoop brand promos',
   chatCopy: 'Hush · Copy & Paste', quickPolish: 'Hush · Quick Polish (on-device grammar)', phrasebook: 'Hush · Phrasebook (common phrases)', smartChips: 'Hush · Smart reply chips', slashCommands: 'Hush · Slash commands', mysteryDrop: 'Hush · Mystery Drop', togetherTimer: 'Hush · Together Timer', placeDrop: 'Hush · Place Drop (location card)', partyChat: 'Hush · Party Chat (24h group)', readAloud: 'Hush · Read Aloud', chatExport: 'Hush · Chat export', hopBack: 'Hop Back between modules', hopShare: 'Hop Share to latest chat', outbox: 'Offline Outbox', fileDrop: 'Hush · File Drop (1 GB)', lenses: 'Glow · Vibe Lenses', autoEdit: 'Glow · Auto Edit for video', miniVote: 'Glow · Mini Vote polls', pin3: 'Glow · Pin 3', saveStack: 'Glow · Save Stack', loveTrail: 'Glow · Love Trail', moodDrop: 'Mood Drop', emojiSuggest: 'Emoji suggestions while typing',
   realtime: 'Realtime gateway (live messages over WebSocket)', readReceipts: 'Read receipts (seen ticks)', typing: 'Typing indicators', voiceNotes: 'Voice notes in chats', calls: 'Voice & video calls (WebRTC)', push: 'Push notifications (Expo)',
-  e2ee: 'End-to-end encrypted chats', snaps: 'Snaps (view-once photo drops)', storyViewers: 'Story viewers list', followRequests: 'Follow requests for private accounts', liveCamera: 'Live camera with lens overlays', demoMode: 'Offline demo button on sign-in',
+  e2ee: 'End-to-end encrypted chats', snaps: 'Snaps (view-once photo drops)', storyViewers: 'Story viewers list', followRequests: 'Follow requests for private accounts', liveCamera: 'Live camera with lens overlays', demoMode: 'Offline demo button on sign-in', chatMedia: 'Hush · Photos & videos in chats', moodMedia: 'Hush · Photo & video Moods', hushSettings: 'Hush · Control Room (Hush settings)',
 };
 const SCREEN_KEYS = ['Home', 'Explore', 'Create', 'Motion', 'Profile', 'Chats', 'Friends', 'Vibes', 'Towns', 'ChatMe', 'NewLoop', 'LoopDetail', 'FanReact', 'Archive', 'Copilot', 'Editor', 'Audio', 'Memory',
   'ReleaseGate', 'Earnings', 'Payout', 'Notifications', 'Settings', 'Loops', 'Library', 'Sparks', 'NewPost', 'Vault', 'ChatThread', 'Search', 'Live', 'Emoji', 'Features', 'Growth', 'Trust', 'Learn',
@@ -1964,6 +1965,8 @@ function useCfgSearch(t: string) {
     ['Themes', 'themes', [...(has('theme', 'design', 'colour', 'color') ? [{ k: 'themes', title: 'Themes & design', sub: 'Social and Chat colours, presets, nav style, radius, density', href: '#/themes' }] : []),
       ...Object.entries(tp.data ?? {}).flatMap(([m, ps]) => ps.filter(p => has(p.key, m + ' theme', p.primary)).map(p => ({ k: m + p.key, title: <span className="row"><span className="sw">{[p.primary, p.secondary, p.accent].map(x => <i key={x} style={{ background: x }} />)}</span>{cap(p.key)}</span>, sub: `${cap(m)} preset · ${p.navStyle} · ${p.primary}`, href: '#/themes' }))),
       ...Object.entries(lr.data?.layers ?? {}).filter(([, l]) => l.theme && has('theme')).map(([k, l]) => ({ k: 'tl' + k, title: <code>{k}</code>, sub: 'theme: ' + Object.entries(l.theme as Record<string, ThemeMod>).map(([m, v]) => `${m} ${v.preset ?? 'custom'}`).join(', '), href: '#/themes' + (k === 'base' ? '' : '?layer=' + k) }))]],
+    ['User App Settings', 'userapp', has('user app', 'settings', 'defaults', 'limits', 'maintenance', 'sign-up', 'signup', 'min version', 'force update', 'otp', 'group size', 'file size', 'voice note', 'blink', 'privacy', 'edit window', 'unsend', 'reports', 'lenses', 'reactions', 'hashtags', 'mentions', 'read receipts', 'last seen', 'typing', 'fade', 'calls', 'mood') ? [{ k: 'userapp', title: 'User App Settings', sub: 'Glow, Hush & global defaults and limits per layer — limits.*, defaults.*, access.*', href: '#/userapp' }] : []],
+    ['All switches', 'switches', has('switch', 'switches', 'flag', 'flags', 'bulk', 'on/off') ? [{ k: 'switches', title: 'All switches', sub: 'Every feature flag and screen switch with bulk on/off', href: '#/switches' }] : []],
     ['Module names', 'navigation', has('module name', 'module names', 'rename module', 'd-switch', 'dswitch', 'glow', 'hush') ? [{ k: 'modnames', title: 'Module names', sub: 'Rename Glow / Hush per layer — moduleNames, module.social, module.chat', href: '#/navigation' }] : []],
     ['Screens', 'screens', SCREEN_KEYS.filter(k => has(k, SCREEN_DESC[k] ?? '')).slice(0, 10).map(k => ({ k, title: k, sub: `screens.${k}${SCREEN_DESC[k] ? ' · ' + SCREEN_DESC[k] : ''}`, href: '#/screens' }))],
     ['Live & reach', 'realtime', LIVE_PAGES.filter(x => has(...x)).map(([slug, title, sub]) => ({ k: slug, title, sub, href: '#/' + slug }))],
@@ -1986,7 +1989,7 @@ function Tabs<T extends string>({ v, set, opts }: { v: T; set: (t: T) => void; o
 }
 
 const VIEWS: Record<Slug, () => ReactNode> = { dashboard: Dashboard, users: Users, moderation: Moderation, payouts: Payouts, health: Health, costs: Costs, flags: Flags, audit: Audit, privacy: Privacy, abuse: Abuse, revenue: Revenue, announcements: Announcements, roles: Roles, settings: SettingsPage, emoji: Emoji, features: Features, search: GlobalSearch,
-  navigation: NavigationPage, themes: ThemesPage, screens: ScreensPage, limits: LimitsPage, zones: ZonesPage, slabs: SlabsPage, languages: LanguagesPage, preview: PreviewPage, otp: OtpPage, identity: IdentityPage, chat: ChatPage, learn: LearnPage, realtime: RealtimePage, calls: CallsPage, push: PushPage, e2ee: E2eePage,
+  navigation: NavigationPage, userapp: UserAppSettingsPage, switches: AllSwitchesPage, themes: ThemesPage, screens: ScreensPage, limits: LimitsPage, zones: ZonesPage, slabs: SlabsPage, languages: LanguagesPage, preview: PreviewPage, otp: OtpPage, identity: IdentityPage, chat: ChatPage, learn: LearnPage, realtime: RealtimePage, calls: CallsPage, push: PushPage, e2ee: E2eePage,
   cashflow: CashFlowPage, money: MoneyPage, plans: PlansPage, countries: CountriesPage, boosts: BoostsPage, stash: StashPage, plugs: PlugsPage, promos: PromosPage, uploads: UploadsPage,
   pages: PagesPage, blog: BlogPage, reviews: ReviewsPage, speakup: SpeakUpPage };
 
@@ -2342,3 +2345,6 @@ GUIDES.push(
     <>Add an internal note describing what you did and, if useful, a short message to the reporter. Set <b>Actioned</b> or <b>Closed</b>.</>,
     <>If someone may be in immediate danger, follow your escalation runbook and contact emergency services — the app can’t do that for you. Every step is in the Audit log.</>] },
 );
+
+/** Shared editor kit for pages in ./pages (read at render time, so the circular import is safe). */
+export const KIT = { useLayerEditor, LayerBar, Gate, Card, Pill, Toggle, Search, cfgMerge, FEATURE_KEYS, FEATURE_DESC, SCREEN_KEYS, SCREEN_DESC };

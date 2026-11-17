@@ -38,3 +38,10 @@ export async function uploadResumable(f: UploadFile, st: UploadState, onState: (
   }
   return call<any>('POST', `/uploads/${uploadId}/complete`);
 }
+
+/** One-shot helper for Glow (Drops, Blinks, avatar/cover): resumable upload of a picked photo/video → { url, kind }. */
+export async function uploadMedia(uri: string, mime: string, name: string, onProgress?: (p: number) => void): Promise<{ url: string; kind: string; mime: string; durationSec?: number }> {
+  const size = await fileSize(uri);
+  return uploadResumable({ uri, name, mime, size }, {}, () => {}, onProgress);
+}
+export const isVideoUrl = (u?: string | null) => !!u && /\.(mp4|mov|webm|m4v)(\?|$)/i.test(u);

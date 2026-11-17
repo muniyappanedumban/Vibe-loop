@@ -19,7 +19,9 @@
 ## Comments & shares
 - `GET /posts/{id}/comments?cursor=` (paged, 20), `POST` {id?, text, replyTo?}, `DELETE /comments/{id}` (author or post owner), `POST /comments/{id}/like`.
 - `POST /posts/{id}/share` {to: "chat"|"external"} counts shares.
-- `GET /feed?mode=foryou|circle|trending|fresh&cursor=` paged posts (keep /bootstrap as is).
+- `GET /feed?mode=foryou|circle|trending|fresh&cursor=` paged posts (keep /bootstrap as is). Glow Hub's "Load older Drops" pages `mode=fresh`.
+- `GET /users/{id|me}/posts?cursor=` → `{user: creator + {following, posts, followState: self|following|requested|none}, items, locked, nextCursor}` — Drops grid for Me and creator profiles (private/blocked rules as `/feed`; `locked` = private profile you don't follow). 404 for unknown/suspended/blocked.
+- `GET /search?q=` (1–60 chars) → `{q, people: [creator + followState], posts}` — Glow Seek over names/handles/city/bio and captions/mood/interest/place, visibility-filtered.
 
 ## Promos (our own brand promotions — admin controlled)
 - Promo: {id, title, body, kind: banner|card|video|image|link|post, mediaUrl?, url?, cta?, placement: ["home_banner","feed","chat_list","splash","explore"], target: {global: bool, countries: [ISO2], zones: [..], states: [..]}, startAt?, endAt?, active, priority}.

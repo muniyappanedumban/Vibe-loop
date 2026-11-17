@@ -14,3 +14,4 @@ build/
 media/
 .master_key
 backend/.env
+deploy/.env.prod

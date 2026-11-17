@@ -41,14 +41,20 @@ export async function forgetAccount(id: string) {
 /** @deprecated single-account helper kept for the password path */
 export async function saveToken(t: string | null) { useSession.setState({ token: t }); }
 
-export class ApiError extends Error { constructor(public status: number, msg: string) { super(msg); } }
+export class ApiError extends Error { constructor(public status: number, msg: string, public retryAfter?: number) { super(msg); } }
+export const APP_VERSION = '1.0.0';
+/** Platform gates from the server: force-update (426) or maintenance (503). App root shows a blocking screen. */
+export const useGate = create<{ kind: null | 'update' | 'maintenance'; message: string }>(() => ({ kind: null, message: '' }));
 export async function call<T = any>(method: string, path: string, body?: any, timeoutMs = 12000): Promise<T> {
   const { apiUrl, token } = useSession.getState();
   const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const r = await fetch(apiUrl + path, { method, signal: ctl.signal, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await fetch(apiUrl + path, { method, signal: ctl.signal, headers: { 'content-type': 'application/json', 'x-app-version': APP_VERSION, ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new ApiError(r.status, typeof data.detail === 'string' ? data.detail : `Request failed (${r.status})`);
+    if (r.status === 426) useGate.setState({ kind: 'update', message: String(data.detail ?? 'Please update VibeLoop') });
+    else if (r.status === 503 && (r.headers.get('retry-after') || /maint/i.test(String(data.detail ?? '')))) useGate.setState({ kind: 'maintenance', message: String(data.detail ?? 'Down for maintenance') });
+    else if (r.ok && useGate.getState().kind) useGate.setState({ kind: null, message: '' });
+    if (!r.ok) { const ra = parseInt(r.headers.get('retry-after') ?? '', 10); throw new ApiError(r.status, typeof data.detail === 'string' ? data.detail : `Request failed (${r.status})`, isFinite(ra) ? ra : undefined); }
     return data as T;
   } catch (e: any) {
     if (e instanceof ApiError) throw e;

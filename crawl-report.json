@@ -1,0 +1,857 @@
+{
+ "unregTargets": [],
+ "screens": [
+  {
+   "screen": "Home",
+   "kind": "glow-tab",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Social module Glow, 3 new",
+    "Explore",
+    "For You"
+   ]
+  },
+  {
+   "screen": "Explore",
+   "kind": "glow-tab",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "All",
+    "#food",
+    "#travel",
+    "#finance",
+    "#e2e",
+    "#life"
+   ]
+  },
+  {
+   "screen": "Create",
+   "kind": "glow-tab",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Drop",
+    "Gallery",
+    "Photo"
+   ]
+  },
+  {
+   "screen": "Motion",
+   "kind": "glow-tab",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Flicks"
+   ]
+  },
+  {
+   "screen": "Profile",
+   "kind": "glow-tab",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Chats",
+   "kind": "hush-tab",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Chat module Hush, 2 new",
+    "All"
+   ]
+  },
+  {
+   "screen": "Friends",
+   "kind": "hush-tab",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Chat module Hush, 2 new"
+   ]
+  },
+  {
+   "screen": "Vibes",
+   "kind": "hush-tab",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Chat module Hush, 2 new",
+    "Moods"
+   ]
+  },
+  {
+   "screen": "Towns",
+   "kind": "hush-tab",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Chat module Hush, 2 new"
+   ]
+  },
+  {
+   "screen": "ChatMe",
+   "kind": "hush-tab",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Chat module Hush, 2 new"
+   ]
+  },
+  {
+   "screen": "HushSettings",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushProfile",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushPrivacy",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushBlocked",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushNotifications",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushChats",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushArchive",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushCalls",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushSecurity",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushStorage",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "HushAbout",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Notifications",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "All"
+   ]
+  },
+  {
+   "screen": "Settings",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Sparks",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "NewPost",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Blink",
+    "Gallery",
+    "Photo"
+   ]
+  },
+  {
+   "screen": "Search",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Emoji",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "All"
+   ]
+  },
+  {
+   "screen": "Growth",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Trust",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Add"
+   ]
+  },
+  {
+   "screen": "SettingsHub",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "CreatorHub",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Loops",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "All"
+   ]
+  },
+  {
+   "screen": "NewLoop",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Comedy short",
+    "Educational",
+    "Series episode",
+    "Lifestyle",
+    "Podcast clip"
+   ]
+  },
+  {
+   "screen": "LoopDetail",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "FanReact",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Archive",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "CreateHub",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Copilot",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Monsoon street food in Pune under ₹200",
+    "Explaining SIPs to my mom",
+    "Ep 5 of chai-break comedy"
+   ]
+  },
+  {
+   "screen": "Editor",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Undo",
+    "Redo",
+    "9:16",
+    "1:1",
+    "16:9"
+   ]
+  },
+  {
+   "screen": "Audio",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "15%"
+   ]
+  },
+  {
+   "screen": "Library",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "All"
+   ]
+  },
+  {
+   "screen": "Memory",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "ReleaseGate",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Public",
+    "Unlisted",
+    "Supporters"
+   ]
+  },
+  {
+   "screen": "Earnings",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Payout",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Max",
+    "Hold to sign request"
+   ]
+  },
+  {
+   "screen": "Features",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Creator platform · 200"
+   ]
+  },
+  {
+   "screen": "Learn",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "IconKit",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Glow kit",
+    "Hush kit",
+    "All"
+   ]
+  },
+  {
+   "screen": "Live",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Vault",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Call",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "CallLog",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "LiveCamera",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "SnapView",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "FollowRequests",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "ChatRoom",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Play video"
+   ]
+  },
+  {
+   "screen": "NewChat",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "ShareToChat",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "ChatSearch",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Starred",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "MyCode",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Share my ID link"
+   ]
+  },
+  {
+   "screen": "StatusCompose",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Text Mood",
+    "Photo / Video",
+    "Inner Circle",
+    "Friends"
+   ]
+  },
+  {
+   "screen": "StatusView",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Send"
+   ]
+  },
+  {
+   "screen": "CreateTown",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "TownRoom",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Post",
+    "collabs",
+    "Send"
+   ]
+  },
+  {
+   "screen": "ChangeHandle",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "ChatSecurity",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "LanguageRegion",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "BubbleMojiGallery",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "All"
+   ]
+  },
+  {
+   "screen": "Accounts",
+   "kind": "stack",
+   "owner": "hush",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Stash",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Cashfree"
+   ],
+   "expected": [
+    "Buy: 409 POST /store/orders {\"detail\":\"Payments not configured by admin\"}"
+   ]
+  },
+  {
+   "screen": "BackstagePass",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Cashfree"
+   ],
+   "expected": [
+    "Get the pass: 409 POST /money/subscribe {\"detail\":\"Payments not configured by admin\"}"
+   ]
+  },
+  {
+   "screen": "Props",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "₹50",
+    "Cashfree"
+   ]
+  },
+  {
+   "screen": "CashFlow",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Outbox",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Try sending now"
+   ]
+  },
+  {
+   "screen": "EditProfile",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "TN",
+    "KA",
+    "KL",
+    "MH",
+    "DL"
+   ]
+  },
+  {
+   "screen": "Comments",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Post"
+   ]
+  },
+  {
+   "screen": "LoveTrail",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "SaveStack",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Create"
+   ]
+  },
+  {
+   "screen": "MoodDrop",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "ContentHub",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "PageView",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "Blog",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "The Loopdown"
+   ]
+  },
+  {
+   "screen": "SpeakUp",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "noops": [
+    "Harassment",
+    "Rule violation",
+    "Scam / fraud",
+    "Impersonation"
+   ]
+  },
+  {
+   "screen": "CreatorProfile",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": []
+  },
+  {
+   "screen": "ProductView",
+   "kind": "stack",
+   "owner": "glow",
+   "blank": false,
+   "errors": [],
+   "clicks": [],
+   "expected": [
+    "Post review: 403 POST /store/products/prod_u1_presets/reviews {\"detail\":\"Real Talk is for people who bought (or claimed) this — get it first\"}"
+   ]
+  }
+ ]
+}

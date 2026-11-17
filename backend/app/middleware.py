@@ -36,6 +36,30 @@ def config_area(path: str):
     if _match(path, SOCIAL_PREFIXES): return "module", "social"
     return None
 
+ACCESS_EXEMPT = ("/admin", "/auth", "/app-config", "/health", "/healthz", "/ready", "/docs", "/openapi.json", "/media", "/pages")
+
+def _ver(v: str):
+    try: return tuple(int(x) for x in v.strip().split(".")[:3])
+    except ValueError: return None
+
+def access_gate(headers: dict):
+    """User App Settings → access.*: maintenance mode (503 for non-staff) and minimum app version (426 when forceUpdate)."""
+    from .config_resolver import resolve
+    from .routes_config import optional_user
+    hc = headers.get(b"x-country", b"").decode("latin-1")
+    db = SessionLocal()
+    try:
+        u = optional_user(db, headers.get(b"authorization", b"").decode("latin-1"))
+        acc = resolve(db, None, country=u and (u.profile or {}).get("country") or (hc if len(hc) == 2 and hc.isalpha() else None)).get("access") or {}
+        if acc.get("maintenance") and not (u and u.role in ("owner", "admin", "moderator", "support")):
+            return 503, acc.get("maintenanceMessage") or "Down for maintenance", [(b"retry-after", b"300")]
+        cv = _ver(headers.get(b"x-app-version", b"").decode("latin-1"))
+        mv = _ver(acc.get("minAppVersion") or "0.0.0")
+        if acc.get("forceUpdate") and cv and mv and cv < mv:
+            return 426, f"Please update VibeLoop to {acc['minAppVersion']} or newer", []
+    finally: db.close()
+    return None
+
 class SecurityMiddleware:
     def __init__(self, app): self.app = app
 
@@ -67,6 +91,9 @@ class SecurityMiddleware:
                 if not done: done = True; return {"type": "http.request", "body": body, "more_body": False}
                 return await orig_receive()  # block until the real disconnect (streaming responses listen for it)
 
+        if scope.get("method") != "OPTIONS" and not _match(path, ACCESS_EXEMPT):
+            if blocked := access_gate(headers): return await _send_json(send, *blocked)
+
         if scope.get("method") != "OPTIONS" and (k := kill_for(scope["path"])):
             db = SessionLocal()
             try: flag = db.scalar(select(M.KV).where(M.KV.ns == "kill", M.KV.key == k))
@@ -91,6 +118,10 @@ class SecurityMiddleware:
             if msg["type"] == "http.response.start":
                 existing = {h[0].lower() for h in msg.get("headers", [])}
                 msg["headers"] = list(msg.get("headers", [])) + [h for h in SEC_HEADERS if h[0] not in existing]
+                if path.startswith("/media/"):  # web app runs on another origin: same-site CORP → ERR_BLOCKED_BY_ORB on <img>/<video>.
+                    ct = next((v for k, v in msg["headers"] if k.lower() == b"content-type"), b"")  # access is already gated by grant/signature
+                    if ct.startswith((b"image/", b"video/")):
+                        msg["headers"] = [(k, v) for k, v in msg["headers"] if k.lower() != b"cross-origin-resource-policy"] + [(b"cross-origin-resource-policy", b"cross-origin")]
             await send(msg)
         await self.app(scope, receive, send_wrapped)
 
@@ -154,3 +185,26 @@ class JsonGZipMiddleware:
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http" and not scope["path"].startswith(("/media/", "/uploads/")): return await self.gz(scope, receive, send)
         return await self.app(scope, receive, send)
+
+
+class TimeoutMiddleware:
+    """Caps wall-clock time per HTTP request (REQUEST_TIMEOUT_SEC). If nothing was sent yet → 504; if the response already
+    started, the connection is cut. Uploads, media streaming and WebSockets are exempt (long by design).
+    Note: sync endpoints run in a worker thread that cannot be killed — the DB statement_timeout bounds their queries."""
+    EXEMPT = ("/media", "/uploads", "/ws")
+    def __init__(self, app, timeout: float | None = None):
+        from .config import REQUEST_TIMEOUT_SEC
+        self.app, self.timeout = app, REQUEST_TIMEOUT_SEC if timeout is None else timeout
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or self.timeout <= 0 or _match(scope.get("path", ""), self.EXEMPT):
+            return await self.app(scope, receive, send)
+        import asyncio
+        started = {"v": False}
+        async def send_wrapped(msg):
+            if msg["type"] == "http.response.start": started["v"] = True
+            await send(msg)
+        try: await asyncio.wait_for(self.app(scope, receive, send_wrapped), self.timeout)
+        except asyncio.TimeoutError:
+            logging.getLogger("vibeloop").warning("request timeout after %.1fs: %s %s", self.timeout, scope.get("method"), scope.get("path"))
+            if not started["v"]: await _send_json(send, 504, "Request timed out")

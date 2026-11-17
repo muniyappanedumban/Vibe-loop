@@ -15,7 +15,9 @@ import { useT } from '../lib/config';
 // Hop Back: each module remembers the screen you were on (e.g. an open chat), so one tap brings you right back.
 const lastSpot: Record<'social' | 'chat', { screen: string; params?: any } | undefined> = { social: undefined, chat: undefined };
 const CHAT_STACK = new Set(['ChatRoom', 'NewChat', 'ChatSearch', 'Starred', 'MyCode', 'StatusCompose', 'StatusView', 'CreateTown', 'TownRoom', 'ChangeHandle', 'ChatSecurity', 'BubbleMojiGallery']);
-export function switchModule(nav: any, m: 'social' | 'chat', then?: { screen: string; params?: any }) {
+export function switchModule(nav0: any, m: 'social' | 'chat', then?: { screen: string; params?: any }) {
+  // Always act on the ROOT stack: tab screens hand us their tab navigator, whose reset() can't reach Main/ChatMain.
+  let nav = nav0; try { while (nav?.getParent?.()) nav = nav.getParent(); } catch {}
   try { const st = nav.getState?.(); const top = st?.routes?.[st.index ?? 0]; const from = useSession.getState().module;
     if (top && !['Main', 'ChatMain'].includes(top.name)) lastSpot[CHAT_STACK.has(top.name) ? 'chat' : from] = { screen: top.name, params: top.params }; } catch {}
   useSession.getState().setModule(m);
@@ -32,9 +34,10 @@ export function usePulse() {
 export function DSwitch({ dark, active }: { dark?: boolean; active?: 'social' | 'chat' }) {
   const nav = useNavigation<any>(); const stored = useSession(s => s.module); const module = active ?? stored; const tr = useT(); const p = usePulse();
   const go = (m: 'social' | 'chat') => { if (m !== module) switchModule(nav, m); };
+  const goRef = useRef(go); goRef.current = go;
   const pan = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8,
-    onPanResponderRelease: (_, g) => { if (g.dx > 24) go('chat'); else if (g.dx < -24) go('social'); },
+    onPanResponderRelease: (_, g) => { if (g.dx > 24) goRef.current('chat'); else if (g.dx < -24) goRef.current('social'); },
   })).current;
   const Side = ({ m, label, badge }: { m: 'social' | 'chat'; label: string; badge: number }) => {
     const on = module === m;

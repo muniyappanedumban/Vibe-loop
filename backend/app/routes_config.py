@@ -35,6 +35,7 @@ def app_config(country: str | None = None, lang: str | None = None, authorizatio
     return Response(body, media_type="application/json", headers=hdr)
 
 def bump(db: Session) -> int:
+    R.invalidate(db)
     v = R.version(db) + 1; db.merge(M.KV(ns="config_meta", key="version", value={"v": v})); return v
 
 @router.get("/admin/config/layers")

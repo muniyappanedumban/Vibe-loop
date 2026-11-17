@@ -64,8 +64,22 @@ def mood_drop(u: M.User) -> dict | None:
     md = (u.profile or {}).get("moodDrop")
     return md if md and md.get("at", 0) > M.now_ms() - DAY else None
 
+def photo_visible(u: M.User) -> bool:
+    """Hush photoVisibility: may the current viewer see u's chat photo?"""
+    w = (((u.settings or {}).get("hush") or {}).get("photoVisibility")) or "everyone"
+    if w == "everyone": return True
+    v = VIEWER.get()
+    if v and v["id"] == u.id: return True
+    if w == "nobody" or not v: return False
+    from sqlalchemy.orm import object_session
+    db = object_session(u)
+    return bool(db) and are_friends(db, u.id, v["id"])
+
 def user_json(u: M.User) -> dict:
     p = prof(u)
+    if u.avatar_chat and not photo_visible(u):
+        return {"id": u.id, "handle": u.handle, "name": u.name, "hue": u.hue, "bio": p["chat_bio"], "verified": bool(u.verified), "mood": p["mood"],
+                "avatar": u.avatar_social if MODULE.get() != "chat" else None, "lastSeen": last_seen_for(u), "moodDrop": mood_drop(u)}
     return {"id": u.id, "handle": u.handle, "name": u.name, "hue": u.hue, "bio": p["chat_bio"], "verified": bool(u.verified), "mood": p["mood"],
             "avatar": avatar_for(u), "lastSeen": last_seen_for(u), "moodDrop": mood_drop(u)}
 

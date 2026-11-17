@@ -1,3 +1,4 @@
+import { useLiveSync } from '../lib/sync';
 import React, { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { C, S, T } from '../theme/tokens';
@@ -12,6 +13,7 @@ import { switchModule } from '../components/ModuleSwitch';
 const REMOVED = new Set(['Tribes']);  // only routes that no longer exist; restored screens navigate normally
 const KIND: Record<string, { icon: any; tint: string }> = { friend: { icon: 'users', tint: '#14B88D' }, ping: { icon: 'heart', tint: C.pink }, dm: { icon: 'chat', tint: '#14B88D' }, town: { icon: 'users', tint: C.tangerine }, reaction: { icon: 'chat', tint: C.violet }, approval: { icon: 'fingerprint', tint: C.pink }, earning: { icon: 'cash', tint: '#12A27C' }, system: { icon: 'flag', tint: C.tangerine }, loop: { icon: 'loops', tint: C.violet } };
 export function Notifications({ navigation }: any) {
+  useLiveSync();
   const st = useStore();
   const [f, setF] = useState('all');
   const list = st.notices.filter(n => f === 'all' || (f === 'unread' ? !n.read : n.kind === f));

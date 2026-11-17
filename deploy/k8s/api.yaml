@@ -1,0 +1,97 @@
+# VibeLoop API on Kubernetes. Apply: kubectl apply -f deploy/k8s/   (create the Secret first — see secret.example.yaml)
+# Postgres (with PgBouncer) and Redis are expected as managed services (RDS/Cloud SQL/AlloyDB + ElastiCache/Memorystore);
+# their URLs come from the Secret. Media must be object storage + CDN at this tier (pods have no shared disk).
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: vibeloop-api, labels: { app: vibeloop-api } }
+data:
+  ENV: "prod"
+  DEMO_OTP: "0"
+  TRUST_PROXY: "1"
+  PGBOUNCER: "1"
+  POOL_SIZE: "5"
+  MAX_OVERFLOW: "5"
+  WEB_CONCURRENCY: "3"
+  REQUEST_TIMEOUT_SEC: "30"
+  CONFIG_CACHE_TTL_SEC: "5"
+  GRACEFUL_TIMEOUT: "25"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: vibeloop-api, labels: { app: vibeloop-api } }
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 25% } }
+  selector: { matchLabels: { app: vibeloop-api } }
+  template:
+    metadata: { labels: { app: vibeloop-api } }
+    spec:
+      terminationGracePeriodSeconds: 40
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: topology.kubernetes.io/zone, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: vibeloop-api } } }
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: vibeloop-api } } }
+      containers:
+        - name: api
+          image: REGISTRY/vibeloop-api:TAG   # pin by digest in CI
+          ports: [{ name: http, containerPort: 8000 }]
+          envFrom:
+            - configMapRef: { name: vibeloop-api }
+            - secretRef: { name: vibeloop-api }   # DATABASE_URL, DATABASE_READ_URL, REDIS_URL, JWT_SECRET, APPROVAL_SECRET, OTP_SECRET, MASTER_KEY, CORS_ORIGINS
+          resources:
+            requests: { cpu: "1", memory: 512Mi }
+            limits: { memory: 1Gi }          # no CPU limit: avoids CFS throttling latency; HPA scales on requests
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          startupProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          lifecycle:
+            # Give the Service/Ingress time to drop this pod from endpoints before SIGTERM stops accepting.
+            preStop: { exec: { command: ["sleep", "8"] } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }, { name: media, mountPath: /var/lib/vibeloop/media }]
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        # Placeholder ONLY: emptyDir is per-pod. Uploads must go to object storage before running >1 replica in k8s
+        # (or mount a ReadWriteMany volume such as EFS/Filestore as a stopgap). See docs/SCALING.md.
+        - { name: media, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: vibeloop-api, labels: { app: vibeloop-api } }
+spec:
+  selector: { app: vibeloop-api }
+  ports: [{ name: http, port: 80, targetPort: http }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: vibeloop-api }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: vibeloop-api }
+  minReplicas: 3
+  maxReplicas: 60   # cap by DB capacity: maxReplicas × WEB_CONCURRENCY × (POOL_SIZE+MAX_OVERFLOW) ≤ PgBouncer max_client_conn
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 60 } }
+  behavior:
+    scaleUp: { stabilizationWindowSeconds: 0, policies: [{ type: Percent, value: 100, periodSeconds: 30 }] }
+    scaleDown: { stabilizationWindowSeconds: 300, policies: [{ type: Percent, value: 20, periodSeconds: 60 }] }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: vibeloop-api }
+spec:
+  minAvailable: 2
+  selector: { matchLabels: { app: vibeloop-api } }

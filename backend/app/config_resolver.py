@@ -22,16 +22,19 @@ BASE = {
     "features": {k: True for k in ["dswitch", "swipeWorlds", "chatBubble", "post2chat", "draftBridge", "focusSwitch", "statuses", "towns", "viewOnce", "sendLater",
                                    "polls", "fadeChat", "chatLock", "payouts", "paidLoops", "live", "promos",
                                    "blog", "news", "appLinks", "reviews", "productReviews", "vouches", "speakUp",
-                                   "realtime", "readReceipts", "typing", "voiceNotes", "calls", "push", "e2ee", "snaps", "storyViewers", "followRequests", "liveCamera", "demoMode"]} | {k: False for k in MONEY_FLAGS},
+                                   "realtime", "readReceipts", "typing", "voiceNotes", "calls", "push", "e2ee", "snaps", "storyViewers", "followRequests", "liveCamera", "demoMode", "chatMedia", "moodMedia", "hushSettings"]} | {k: False for k in MONEY_FLAGS},
     # v3 money: everything off until the admin turns it on (Money settings mirrors into the base layer)
 
-    "limits": {"maxAccounts": 5, "maxGroupSize": 50, "statusHours": 24, "editWindowMin": 15, "undoWindowMin": 60},
+    "limits": {"maxAccounts": 5, "maxGroupSize": 50, "statusHours": 24, "editWindowMin": 15, "undoWindowMin": 60},  # + user_app.SETTINGS (merged below)
     "fees": {"platformFee": 0.08},
     "languages": {"default": "en", "available": ["en", "hi", "ta", "te", "kn", "ml", "mr", "bn"], "strings": EN_STRINGS},
     "banner": None,
     "moduleNames": {"social": "Glow", "chat": "Hush"},
     "rtc": {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},  # v6: public STUN only; TURN creds via GET /rtc/ice
 }
+from . import user_app as _UA  # User App Settings: limits/defaults/access defaults come from one schema
+
+for _k, _v in _UA.base_values().items(): BASE[_k] = {**BASE.get(_k, {}), **_v}
 def _p(primary, secondary, accent, bg, ink, nav, tertiary=None, surface="#FFFFFF", radius=None, density="comfy", mod="social"):
     d = {"primary": primary, "secondary": secondary, "accent": accent, "bg": bg, "surface": surface, "ink": ink, "navStyle": nav,
          "radius": radius or ("round" if mod == "social" else "soft"), "density": density}
@@ -102,7 +105,7 @@ DEFAULT_SLABS = [{"key": "starter", "name": "Starter", "minFollowers": 0, "maxFo
                  {"key": "pro", "name": "Pro", "minFollowers": 10000}]
 DEFAULT_LANGS = {"available": ["en", "hi", "ta", "te", "kn", "ml", "mr", "bn"], "default": "en"}
 LAYER_RE = re.compile(r"^(base|country:[A-Z]{2}|zone:[A-Z0-9_-]{1,30}|slab:[a-z0-9_-]{1,30}|lang:[a-z]{2,3})$")
-TOP_KEYS = {"modules": dict, "nav": dict, "screens": dict, "features": dict, "limits": dict, "fees": dict, "languages": dict, "banner": (dict, type(None)), "theme": dict, "moduleNames": dict, "rtc": dict}
+TOP_KEYS = {"modules": dict, "nav": dict, "screens": dict, "features": dict, "limits": dict, "fees": dict, "languages": dict, "banner": (dict, type(None)), "theme": dict, "moduleNames": dict, "rtc": dict, "defaults": dict, "access": dict}
 
 def deep_merge(a, b):
     """b over a. dicts merge recursively; nav lists merge by item key; other values replace."""
@@ -155,12 +158,38 @@ def resolve_with(ls: dict, country: str, zone: str, slab: str, lang: str, ver: i
 def followers(db: Session, uid: str) -> int:
     return db.scalar(select(func.count()).select_from(M.Edge).where(M.Edge.kind == "follow", M.Edge.target == uid)) or 0
 
+META_KEY = "cfg:meta"
+
+def _meta(db: Session) -> dict:
+    return {"layers": layers(db), "zones": zones(db), "slabs": slabs(db), "langs": languages(db), "ver": version(db)}
+
+def invalidate(db: Session | None = None):
+    """Drop the cached config inputs. Called by every config write (routes_config.bump). With a session, the session is marked
+    so it bypasses the cache for the rest of its transaction, and the key is dropped again after commit (closes the race where
+    another request re-caches pre-commit data). Without Redis, other processes may serve the old config for ≤ CONFIG_CACHE_TTL_SEC."""
+    from .cache import cache
+    cache.delete(META_KEY)
+    if db is not None and not db.info.get("cfg_dirty"):
+        from sqlalchemy import event
+        db.info["cfg_dirty"] = True
+        def _after(sess): sess.info.pop("cfg_dirty", None); cache.delete(META_KEY)
+        event.listen(db, "after_commit", _after, once=True)
+        event.listen(db, "after_rollback", lambda sess: sess.info.pop("cfg_dirty", None), once=True)
+
 def resolve(db: Session, user: M.User | None = None, country: str | None = None, lang: str | None = None, slab: str | None = None) -> dict:
+    """Layered config for one viewer. Inputs (KV rows) and outputs are cached for CONFIG_CACHE_TTL_SEC (app.cache); config
+    writes invalidate. Output depends only on (version, country, zone, slab, lang), so many users share one cache entry."""
+    from .cache import cache
+    from .config import CONFIG_CACHE_TTL_SEC as ttl
+    if db.info.get("cfg_dirty"): ttl = 0  # this transaction changed config: never cache/serve uncommitted state
+    m = cache.get_or_set(META_KEY, ttl, lambda: _meta(db))
     p = (user.profile or {}) if user else {}
     country = (country or p.get("country") or "IN").upper()[:2]
-    lang = (lang or p.get("lang") or languages(db).get("default", "en")).lower()[:3]
-    slab = slab or slab_for(followers(db, user.id) if user else 0, slabs(db))
-    return resolve_with(layers(db), country, zone_for(country, zones(db)), slab, lang, version(db), languages(db))
+    lang = (lang or p.get("lang") or m["langs"].get("default", "en")).lower()[:3]
+    slab = slab or slab_for(followers(db, user.id) if user else 0, m["slabs"])
+    zone = zone_for(country, m["zones"])
+    return cache.get_or_set(f"cfg:{m['ver']}:{country}:{zone}:{slab}:{lang}", ttl,
+                            lambda: resolve_with(m["layers"], country, zone, slab, lang, m["ver"], m["langs"]))
 
 def validate_layer(key: str, override, existing: dict) -> str | None:
     """Return an error message, or None if the layer is valid."""
@@ -181,6 +210,7 @@ def validate_layer(key: str, override, existing: dict) -> str | None:
         for s in ice:
             if not isinstance(s, dict) or set(s) != {"urls"} or not isinstance(s["urls"], list) or not all(isinstance(x, str) and x.startswith("stun:") and len(x) < 200 for x in s["urls"]):
                 return "rtc.iceServers in config are public STUN only: [{urls: [\"stun:host:port\"]}] — put TURN in Plugs → turn"
+    if err := _UA.validate(override): return err
     mn = override.get("moduleNames", {})
     if set(mn) - {"social", "chat"}: return "moduleNames has social and chat only"
     for v in mn.values():

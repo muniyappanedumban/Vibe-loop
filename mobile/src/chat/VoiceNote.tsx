@@ -4,9 +4,10 @@ import { View, Text, Pressable } from 'react-native';
 import { useAudioRecorder, RecordingPresets, AudioModule, useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 import { CC } from './theme';
 import { ChatIcon } from './ChatIcon';
+import { useLimit } from '../lib/config';
 
 export function useVoiceRecorder(onDone: (file: { uri: string; durationSec: number }) => void, onError: (m: string) => void) {
-  const rec = useAudioRecorder(RecordingPresets.HIGH_QUALITY); const [on, setOn] = useState(false); const started = useRef(0);
+  const rec = useAudioRecorder(RecordingPresets.HIGH_QUALITY); const [on, setOn] = useState(false); const started = useRef(0); const maxSec = useLimit('voiceNoteMaxSec', 300);
   const start = async () => {
     try { const p = await AudioModule.requestRecordingPermissionsAsync(); if (!p.granted) return onError('Microphone permission is off');
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }); await rec.prepareToRecordAsync(); rec.record(); started.current = Date.now(); setOn(true); }
@@ -14,9 +15,11 @@ export function useVoiceRecorder(onDone: (file: { uri: string; durationSec: numb
   };
   const stop = async (send = true) => {
     if (!on) return; setOn(false);
-    try { await rec.stop(); const dur = (Date.now() - started.current) / 1000; if (send && rec.uri && dur >= 0.7) onDone({ uri: rec.uri, durationSec: Math.min(300, Math.round(dur)) }); else if (send) onError('Hold a little longer to record'); }
+    try { await rec.stop(); const dur = (Date.now() - started.current) / 1000; if (send && rec.uri && dur >= 0.7) onDone({ uri: rec.uri, durationSec: Math.min(maxSec, Math.round(dur)) }); else if (send) onError('Hold a little longer to record'); }
     catch (e: any) { onError(e?.message ?? 'Recording failed'); }
   };
+  const stopRef = useRef(stop); stopRef.current = stop;
+  useEffect(() => { if (!on) return; const t = setTimeout(() => stopRef.current(true), maxSec * 1000); return () => clearTimeout(t); }, [on, maxSec]);  // auto-stop at the admin limit
   return { on, start, stop };
 }
 export function VoicePlayer({ uri, me, durationSec }: { uri: string; me: boolean; durationSec?: number }) {

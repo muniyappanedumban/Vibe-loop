@@ -31,6 +31,18 @@ def in_quiet_hours(settings: dict, now: datetime | None = None) -> bool:
     h = ((now or datetime.now(timezone.utc)) + timedelta(minutes=off)).hour
     return (start <= h < end) if start < end else (h >= start or h < end)
 
+def hush_gate(db, u: M.User, kind: str, data: dict):
+    """Hush Control Room notification toggles. False = drop; "nopreview" = send with a generic body."""
+    n = {"messages": True, "groups": True, "calls": True, "moods": True, "previews": True, **(((u.settings or {}).get("hush") or {}).get("notif") or {})}
+    if kind in ("message", "mention"):
+        cid = ((data or {}).get("params") or {}).get("id")
+        c = db.get(M.Conv, cid) if cid else None
+        if not n["groups" if c is not None and c.group else "messages"]: return False
+        return True if n["previews"] else "nopreview"
+    if kind in ("call", "call_invite") and not n["calls"]: return False
+    if kind == "mood" and not n["moods"]: return False
+    return True
+
 def queue_notice(uid: str, n: dict):
     """Called after commit for every new Notice — decides in the worker whether it becomes a push."""
     if n.get("kind") in PUSH_KINDS: _submit(_send_notice, uid, n)
@@ -53,6 +65,9 @@ def _send(uid: str, kind: str, title: str, body: str, data: dict, force: bool = 
             if not feature(db, u, "push"): return
             if module == "social" and prof(u)["focus_social_muted"]: return  # Focus Switch
             if in_quiet_hours(u.settings or {}): return
+            gate = hush_gate(db, u, kind, data)
+            if gate is False: return
+            if gate == "nopreview": body = "New message"
         expo = [t for t in toks if t.provider == "expo"]
         for t in toks:
             if t.provider != "expo": db.add(M.PushSend(user_id=uid, kind=kind, provider=t.provider, status="skipped", error="FCM sending not configured — use Expo tokens"))

@@ -17,11 +17,12 @@ async function decryptAll(convId: string, ms: Msg[]) {
 }
 
 export type CUser = { id: string; handle: string; name: string; hue: number; bio?: string; verified?: boolean; mood?: number | null; close?: boolean; bestie?: boolean; since?: number; avatar?: string | null; lastSeen?: number | null; flame?: number; moodDrop?: { moji: number; text?: string } | null };
-export type Conv = { e2ee?: boolean; id: string; title: string; group: boolean; members: CUser[]; folder: string | null; muted: boolean; pinned: boolean; locked: boolean; theme: string | null; fadeSec: number | null; request: boolean; unread: number; last: { text: string; at: number; from: string } | null };
-export type Msg = { id: string; convId: string; from: string; kind: 'text' | 'poll' | 'post' | 'draft' | 'viewonce' | 'ping' | 'system' | 'file' | 'voice' | 'snap' | 'call'; status?: 'sent' | 'delivered' | 'read' | null; durationSec?: number | null; enc?: { v: number; nonce: string; box: string; senderKey: string } | null; plain?: string; attachment?: { url: string | null; name?: string; size?: number; mime: string; kind: string; locked?: boolean } | null; pending?: boolean; text: string; replyTo: { id: string; text: string; from: string } | null;
+export type Conv = { e2ee?: boolean; id: string; title: string; group: boolean; members: CUser[]; folder: string | null; muted: boolean; pinned: boolean; locked: boolean; theme: string | null; fadeSec: number | null; request: boolean; archived?: boolean; unread: number; last: { text: string; at: number; from: string } | null };
+export type Msg = { id: string; convId: string; from: string; kind: 'text' | 'poll' | 'post' | 'draft' | 'viewonce' | 'ping' | 'system' | 'file' | 'voice' | 'snap' | 'call'; status?: 'sent' | 'delivered' | 'read' | null; durationSec?: number | null; enc?: { v: number; nonce: string; box: string; senderKey: string } | null; plain?: string; attachment?: { url: string | null; name?: string; size?: number; mime: string; kind: string; locked?: boolean; durationSec?: number } | null; pending?: boolean; progress?: number; failed?: string; text: string; replyTo: { id: string; text: string; from: string } | null;
   reactions: { moji: number; by: string }[]; starred: boolean; pinned: boolean; edited: boolean; deleted: boolean; at: number; expiresAt: number | null; sendAt: number | null;
   poll: { q: string; options: { text: string; votes: number }[]; myVote: number | null } | null; ref: { type: 'post' | 'loop'; id: string; title: string; hue: number } | null; opened: boolean };
-export type Status = { id: string; by: CUser | string; kind: 'text' | 'mood'; text: string; moji: number | null; bg: string | null; audience: string; at: number; expiresAt: number };
+export type StatusMedia = { url: string; kind: 'image' | 'video'; mime?: string; size?: number; durationSec?: number | null };
+export type Status = { pending?: boolean; progress?: number; failed?: string; media?: StatusMedia | null; id: string; by: CUser | string; kind: 'text' | 'mood' | 'photo' | 'video'; text: string; moji: number | null; bg: string | null; audience: string; at: number; expiresAt: number };
 export type Town = { id: string; name: string; open: boolean; hue: number; about: string; members: number; role: string | null; channels: { id: string; name: string }[]; board: { id: string; text: string; at: number }[]; invite: string | null };
 export type TMsg = { id: string; from: CUser | string; text: string; at: number };
 export type Profile = { name: string; handle: string; social_bio: string; chat_bio: string; hidden: boolean; who_can_message: 'everyone' | 'friends' | 'nobody'; ghost_hours: boolean; focus_social_muted: boolean; social_private: boolean; chat_read_receipts: boolean; handle_changed_at?: number | null; mood?: number | null; avatar_social?: string | null; avatar_chat?: string | null; cover?: string | null; state?: string; pronouns?: string; links?: string[]; last_seen_visible?: boolean; country?: string; lang?: string };
@@ -71,11 +72,11 @@ export const chat = {
       try { await call('POST', `/conv/${convId}/messages`, full); await Promise.all([chat.openConv(convId), chat.refreshConvs()]); return; }
       catch (e: any) { if (!isNetworkError(e)) { set({ error: e.message }); throw e; } }
     }
-    enqueue({ id, kind: 'msg', path: `/conv/${convId}/messages`, body: { ...full, kind: body.kind ?? (file ? 'file' : 'text') }, file, fileField: file ? 'attachment' : undefined, label: file ? `${body.kind === 'voice' ? 'Voice note' : body.kind === 'snap' ? 'Snap' : 'File'} · ${file.name}` : `Message · ${body.text.slice(0, 40)}` });
+    enqueue({ id, kind: 'msg', path: `/conv/${convId}/messages`, body: { ...full, kind: body.kind ?? (file ? 'file' : 'text') }, file, fileField: file ? 'attachment' : undefined, label: file ? `${body.kind === 'voice' ? 'Voice note' : body.kind === 'snap' ? 'Snap' : file.mime.startsWith('image/') ? 'Photo' : file.mime.startsWith('video/') ? 'Video' : 'File'} · ${file.name}` : `Message · ${body.text.slice(0, 40)}` });
   },
   /** Pending (outbox) messages for a conversation, rendered after the synced ones. */
   pendingFor(convId: string): Msg[] {
-    return useOutbox.getState().items.filter(i => i.kind === 'msg' && i.path === `/conv/${convId}/messages`).map(i => ({ id: i.id, convId, from: 'me', kind: i.body.kind ?? 'text', text: i.body.text, replyTo: null, reactions: [], starred: false, pinned: false, edited: false, deleted: false, at: i.at, expiresAt: null, sendAt: null, poll: null, ref: null, opened: false, pending: true, attachment: i.file ? { url: i.file.uri, name: i.file.name, size: i.file.size, mime: i.file.mime, kind: 'file' } : null }));
+    return useOutbox.getState().items.filter(i => i.kind === 'msg' && i.path === `/conv/${convId}/messages`).map(i => ({ id: i.id, convId, from: 'me', kind: i.body.kind ?? 'text', text: i.body.text, replyTo: null, reactions: [], starred: false, pinned: false, edited: false, deleted: false, at: i.at, expiresAt: null, sendAt: null, poll: null, ref: null, opened: false, pending: true, progress: i.progress, failed: i.status === 'failed' ? i.error ?? 'failed' : undefined, attachment: i.file ? { url: i.file.uri, name: i.file.name, size: i.file.size, mime: i.file.mime, kind: i.file.mime.startsWith('image/') ? 'image' : i.file.mime.startsWith('video/') ? 'video' : 'file' } : null }));
   },
   async msgAction(convId: string, id: string, action: 'react' | 'star' | 'pin' | 'vote' | 'open', body?: any) { const r = await wrap(call<any>('POST', `/messages/${id}/${action}`, body)); await chat.openConv(convId); return r; },
   async edit(convId: string, id: string, text: string) { await wrap(call('PATCH', `/messages/${id}`, { text })); await chat.openConv(convId); },
@@ -84,6 +85,8 @@ export const chat = {
   async patchConv(id: string, body: Partial<{ folder: string | null; muted: boolean; pinned: boolean; locked: boolean; theme: string; fadeSec: number | null; accept: boolean }>) {
     const c = await wrap(call<Conv>('PATCH', `/conv/${id}`, body)); set(s => ({ convs: s.convs.map(x => (x.id === id ? { ...x, ...c } : x)) })); return c;
   },
+  /** Server-side archive (Hush Control Room); GET /conv carries `archived`. */
+  async archive(id: string, archived: boolean) { await wrap(call('POST', `/conv/${id}/archive`, { archived })); set(s => ({ convs: s.convs.map(x => (x.id === id ? { ...x, archived } : x)) })); },
   async newConv(members: string[], title?: string) { const c = await wrap(call<Conv>('POST', '/conv', { members, title })); await chat.refreshConvs(); return c; },
   async lookup(handle: string) { return wrap(call<CUser>('GET', `/users/lookup?handle=${encodeURIComponent(handle)}`)); },
   async friendRequest(handle: string) { await wrap(call('POST', '/friends/request', { handle })); await chat.loadFriends(); },
@@ -92,7 +95,16 @@ export const chat = {
   async friendFlag(id: string, body: { close?: boolean; bestie?: boolean }) { await wrap(call('PATCH', `/friends/${id}`, body)); await chat.loadFriends(); },
   async loadFriends() { const fr = await call<any>('GET', '/friends'); set({ friends: fr.friends, incoming: fr.incoming, outgoing: fr.outgoing }); },
   async ping(to: string, moji: number, kind: 'wave' | 'heart' | 'ping') { await wrap(call('POST', '/pings', { to, moji, kind })); },
-  async postStatus(body: { kind: 'text' | 'mood'; text?: string; moji?: number; bg?: string; audience: string }) { await wrap(call('POST', '/status', body)); set({ statuses: normS(await call('GET', '/status')) }); },
+  /** Photo/video Moods upload through the outbox (resumable, survives offline) and then POST /status with attachment {url}. */
+  async postStatus(body: { kind: 'text' | 'mood' | 'photo' | 'video'; text?: string; moji?: number; bg?: string; audience: string }, file?: UploadFile) {
+    if (file) { const id = 'st_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36); enqueue({ id, kind: 'post', path: '/status', body: { ...body, id }, file, fileField: 'attachment', label: `Mood · ${body.kind === 'video' ? 'Video' : 'Photo'}` }); return; }
+    await wrap(call('POST', '/status', body)); set({ statuses: normS(await call('GET', '/status')) });
+  },
+  async loadStatuses() { if (online()) set({ statuses: normS(await call('GET', '/status')) }); },
+  /** Photo/video Moods still uploading (outbox) — shown first in the Moods grid with progress. */
+  pendingStatuses(): Status[] {
+    return useOutbox.getState().items.filter(i => i.path === '/status' && i.file).map(i => ({ id: i.id, by: 'me', kind: i.body.kind, text: i.body.text ?? '', moji: null, bg: i.body.bg ?? null, audience: i.body.audience, at: i.at, expiresAt: i.at + 86400_000, pending: true, progress: i.progress, failed: i.status === 'failed' ? i.error ?? 'failed' : undefined, media: { url: i.file!.uri, kind: i.file!.mime.startsWith('video/') ? 'video' : 'image' } }));
+  },
   async replyStatus(id: string, text: string) { await wrap(call('POST', `/status/${id}/reply`, { text })); await chat.refreshConvs(); },
   async deleteStatus(id: string) { await wrap(call('DELETE', `/status/${id}`)); set({ statuses: normS(await call('GET', '/status')) }); },
   async loadTowns() { set({ towns: await call('GET', '/towns') }); },
@@ -123,7 +135,7 @@ useChat.subscribe(st => {
   }, 800);
 });
 // When the outbox delivers a message, refresh that chat.
-onSent(it => { if (it.kind === 'msg') { const conv = it.path.split('/')[2]; chat.openConv(conv).catch(() => {}); chat.refreshConvs().catch(() => {}); } });
+onSent(it => { if (it.path === '/status') chat.loadStatuses().catch(() => {}); if (it.kind === 'msg') { const conv = it.path.split('/')[2]; chat.openConv(conv).catch(() => {}); chat.refreshConvs().catch(() => {}); } });
 
 // Live updates from the WebSocket gateway: refetch only what changed.
 const live = new Set<string>(); export const watchConv = (id: string | null, on: boolean) => { if (id) on ? live.add(id) : live.delete(id); };

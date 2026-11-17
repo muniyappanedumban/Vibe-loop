@@ -12,18 +12,20 @@ import { useSocial } from '../store/useSocial';
 import { call, online, useSession } from '../lib/api';
 import { uid } from '../lib/util';
 import { enqueue, isNetworkError } from '../lib/outbox';
+import { uploadMedia } from '../lib/uploads';
+import { ApiError } from '../lib/api';
+import { useLimit, useDefaults } from '../lib/config';
 
 const SOUNDS = ['Chai Lofi', 'Monsoon Drums', 'Kovai Nights', 'Sunrise Sitar Loop', 'Desi Beat 92', 'No sound'];
 const MOODS = ['Happy', 'Funny', 'Inspiring', 'Relaxing', 'Emotional'];
 const BGS = ['#6C3BFF', '#FF3D9A', '#FF8A3D', '#14B88D', '#120F24', '#FFC23D'];
 export const mediaUri = (u?: string | null) => (u ? (u.startsWith('/media/') ? useSession.getState().apiUrl + u : u) : null);
 
-async function upload(localUri: string, mime = 'image/jpeg') {
-  const { apiUrl, token } = useSession.getState(); const form = new FormData();
-  if (Platform.OS === 'web') { const blob = await (await fetch(localUri)).blob(); form.append('file', blob, 'photo'); }
-  else form.append('file', { uri: localUri, name: 'photo.jpg', type: mime } as any);
-  const r = await fetch(apiUrl + '/media', { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form });
-  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail ?? 'Upload failed'); return j.url as string;
+// Photos AND videos go through the resumable /uploads flow (chunked, up to 1 GB, resumes after drops).
+async function upload(localUri: string, mime = 'image/jpeg', onProgress?: (p: number) => void) {
+  const isVid = mime.startsWith('video/'); const ext = isVid ? (mime.includes('quicktime') ? 'mov' : mime.includes('webm') ? 'webm' : 'mp4') : (mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg');
+  try { return (await uploadMedia(localUri, mime, `${isVid ? 'clip' : 'photo'}.${ext}`, onProgress)).url; }
+  catch (e: any) { if (e instanceof ApiError && e.status === 0) throw new Error('Network offline'); throw e; }
 }
 
 export function NewPost({ navigation, route }: any) {
@@ -34,15 +36,19 @@ export function NewPost({ navigation, route }: any) {
   const [vEdit, setVEdit] = useState<VideoEdit>({ trimStart: 0, trimEnd: 0, speed: 1, captions: [] }); const [capText, setCapText] = useState(''); const [capAlign, setCapAlign] = useState<Caption['align']>('center'); const [capStyle, setCapStyle] = useState<Caption['style']>('pop'); const [capAt, setCapAt] = useState(0); const [mood, setMood] = useState('Happy');
   const [place, setPlace] = useState(''); const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null); const [locBusy, setLocBusy] = useState(false);
   const [collab, setCollab] = useState(''); const [sound, setSound] = useState<string | null>(null); const [audience, setAudience] = useState<'public' | 'circle' | 'quiet'>('public');
-  const [hours, setHours] = useState(24); const [pollQ, setPollQ] = useState(''); const [pollO, setPollO] = useState(''); const [toChat, setToChat] = useState(false); const [busy, setBusy] = useState(false);
+  const [hours, setHours] = useState(24); const [pollQ, setPollQ] = useState(''); const [pollO, setPollO] = useState(''); const [toChat, setToChat] = useState(false); const [busy, setBusy] = useState(false); const [prog, setProg] = useState<number | null>(null);
   const { toast, show } = useToast();
-  const tags = useMemo(() => Array.from(new Set((text.match(/[#@][\w.]{2,30}/g) ?? []).map(t => t.toLowerCase()))), [text]);
+  const postVidMax = useLimit('postVideoMaxSec', 60); const blinkVidMax = useLimit('blinkVideoMaxSec', 60); const blinkMax = useLimit('blinkHours', 24); const glow = useDefaults()?.glow;
+  const vidMax = mode === 'story' ? blinkVidMax : postVidMax; const hashOn = glow?.hashtags !== false; const mentOn = glow?.mentions !== false;
+  const lenses = useMemo(() => (Array.isArray(glow?.lenses) ? LENSES.filter(l => l.key === 'none' || glow!.lenses.includes(l.key)) : LENSES), [glow?.lenses]);
+  const hourOpts = [1, 6, 12, 24].filter(h => h <= blinkMax); const hoursOk = hourOpts.includes(hours) ? hours : (hourOpts[hourOpts.length - 1] ?? 1);
+  const tags = useMemo(() => Array.from(new Set((text.match(/[#@][\w.]{2,30}/g) ?? []).map(t => t.toLowerCase()))).filter(t => (t.startsWith('#') ? hashOn : mentOn)), [text, hashOn, mentOn]);
 
   const pick = async (camera: boolean, video = false) => {
     try {
       const perm = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) return show(camera ? 'Camera permission is off — enable it in Settings' : 'Photo access is off — enable it in Settings', 'err');
-      const r = camera ? await ImagePicker.launchCameraAsync(video ? { mediaTypes: ['videos'], videoMaxDuration: 60, quality: 0.8 } : { quality: 0.8, allowsEditing: true }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.8, videoMaxDuration: 180 });
+      const r = camera ? await ImagePicker.launchCameraAsync(video ? { mediaTypes: ['videos'], videoMaxDuration: vidMax, quality: 0.8 } : { quality: 0.8, allowsEditing: true }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.8, videoMaxDuration: vidMax });
       const a = !r.canceled ? r.assets[0] : null;
       if (a) { const isVid = a.type === 'video'; const dur = a.duration ? a.duration / 1000 : 0; setLocal({ uri: a.uri, mime: a.mimeType ?? (isVid ? 'video/mp4' : 'image/jpeg'), kind: isVid ? 'video' : 'image', duration: dur }); setVEdit({ trimStart: 0, trimEnd: dur, speed: 1, captions: [] }); }
     } catch (e: any) { show(e.message ?? 'Could not open the picker', 'err'); }
@@ -58,18 +64,18 @@ export function NewPost({ navigation, route }: any) {
   };
   const publish = async () => {
     if (!text.trim()) return show(mode === 'story' ? 'Add a line of text to your Blink' : 'Write a caption first', 'err');
-    if (local?.kind === 'video' && (local.duration ?? 0) > 60.5 && (vEdit.trimEnd - vEdit.trimStart) > 60.5) return show('Videos can be up to 1 minute — use Auto Cut or trim', 'err');
+    if (local?.kind === 'video' && (local.duration ?? 0) > vidMax + 0.5 && (vEdit.trimEnd - vEdit.trimStart) > vidMax + 0.5) return show(`Videos can be up to ${vidMax}s — use Auto Cut or trim`, 'err');
     setBusy(true);
-    const fileOf = () => (local ? { uri: local.uri, name: local.kind === 'video' ? 'clip.mp4' : 'photo.jpg', mime: local.mime ?? (local.kind === 'video' ? 'video/mp4' : 'image/jpeg'), size: 0 } : undefined);
+    const fileOf = () => (local ? { uri: local.uri, name: local.kind === 'video' ? (local.mime?.includes('quicktime') ? 'clip.mov' : local.mime?.includes('webm') ? 'clip.webm' : 'clip.mp4') : (local.mime?.includes('png') ? 'photo.png' : 'photo.jpg'), mime: local.mime ?? (local.kind === 'video' ? 'video/mp4' : 'image/jpeg'), size: 0 } : undefined);
     try {
       let mediaUrl: string | null = null;
-      try { if (local && isOnline) mediaUrl = await upload(local.uri, local.mime ?? 'image/jpeg'); }
+      try { if (local && isOnline) mediaUrl = await upload(local.uri, local.mime ?? (local.kind === 'video' ? 'video/mp4' : 'image/jpeg'), p => setProg(p)); }
       catch (e: any) { if (!/Failed to fetch|Network|offline/i.test(e.message ?? '')) throw e; mediaUrl = null; (e as any).offline = true; throw Object.assign(new Error('offline'), { offline: true }); }
       if (mode === 'story') {
-        const spBody = { id: uid('s'), text: text.trim(), hue, lens: lens === 'none' ? null : lens, mediaUrl, place: place || null, hours, close: audience === 'circle' };
+        const spBody = { id: uid('s'), text: text.trim(), hue, lens: lens === 'none' ? null : lens, mediaUrl, place: place || null, hours: hoursOk, close: audience === 'circle' };
         if (isOnline) { try { const sp = await call<any>('POST', '/sparks', spBody); useSocial.setState(s => ({ sparks: [sp, ...s.sparks] })); } catch (e: any) { if (!isNetworkError(e)) throw e; enqueue({ id: spBody.id, kind: 'spark', path: '/sparks', body: spBody, file: fileOf(), fileField: local ? 'mediaUrl' : undefined, label: `Blink · ${spBody.text.slice(0, 30)}` }); show('Saved offline — your Blink goes live when you reconnect'); setTimeout(() => navigation.goBack(), 900); return; } }
-        else useSocial.setState(s => ({ sparks: [{ id: uid('s'), by: 'me', hue, text: text.trim(), at: Date.now(), lens, mediaUrl: local?.uri ?? null, place, close: audience === 'circle', expiresAt: Date.now() + hours * 3600_000 }, ...s.sparks] }));
-        show(`Blink live for ${hours}h`); setTimeout(() => navigation.goBack(), 700); return;
+        else useSocial.setState(s => ({ sparks: [{ id: uid('s'), by: 'me', hue, text: text.trim(), at: Date.now(), lens, mediaUrl: local?.uri ?? null, place, close: audience === 'circle', expiresAt: Date.now() + hoursOk * 3600_000 }, ...s.sparks] }));
+        show(`Blink live for ${hoursOk}h`); setTimeout(() => navigation.goBack(), 700); return;
       }
       const body: any = { id: uid('p'), kind: mode === 'thought' ? 'thought' : 'photo', text: text.trim(), hue, mood, interest: 'Life', place: place || undefined, bg: mode === 'thought' ? bg : undefined,
         mediaUrl: mediaUrl ?? undefined, lens: lens === 'none' ? undefined : lens, lat: coords?.lat, lng: coords?.lng, tags, collab: collab.trim() || undefined, sound: sound && sound !== 'No sound' ? sound : undefined, audience, mediaKind: local?.kind, edit: local?.kind === 'video' ? vEdit : undefined, poll: pollQ.trim() && pollO.split(',').filter(x => x.trim()).length >= 2 ? { q: pollQ.trim(), options: pollO.split(',').map(x => x.trim()).filter(Boolean).slice(0, 4) } : undefined };
@@ -80,12 +86,12 @@ export function NewPost({ navigation, route }: any) {
     } catch (e: any) {
       if (e?.offline) {   // couldn't upload the photo/video: queue the whole Drop/Blink with its file
         const id = uid(mode === 'story' ? 's' : 'p'); const isStory = mode === 'story';
-        const body: any = isStory ? { id, text: text.trim(), hue, lens: lens === 'none' ? null : lens, place: place || null, hours, close: audience === 'circle' }
+        const body: any = isStory ? { id, text: text.trim(), hue, lens: lens === 'none' ? null : lens, place: place || null, hours: hoursOk, close: audience === 'circle' }
           : { id, kind: 'photo', text: text.trim(), hue, mood, interest: 'Life', place: place || undefined, lens: lens === 'none' ? undefined : lens, lat: coords?.lat, lng: coords?.lng, tags, collab: collab.trim() || undefined, sound: sound && sound !== 'No sound' ? sound : undefined, audience, mediaKind: local?.kind, edit: local?.kind === 'video' ? vEdit : undefined };
         enqueue({ id, kind: isStory ? 'spark' : 'post', path: isStory ? '/sparks' : '/posts', body, file: fileOf(), fileField: 'mediaUrl', label: `${isStory ? 'Blink' : 'Drop'} · ${text.trim().slice(0, 30)}` });
         show('Saved offline — uploads automatically when you reconnect'); setTimeout(() => navigation.goBack(), 900);
       } else show(e.message, 'err');
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setProg(null); }
   };
 
   return (
@@ -144,7 +150,7 @@ export function NewPost({ navigation, route }: any) {
             </Card>) : null}
           <Text style={[T.tiny, { marginTop: S.lg, marginBottom: 8 }]}>VIBE LENSES</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-            {LENSES.map(l => (
+            {lenses.map(l => (
               <Pressable key={l.key} onPress={() => setLens(l.key)} style={{ alignItems: 'center', width: 70 }} accessibilityRole="button" accessibilityLabel={`Lens ${l.name}`} accessibilityState={{ selected: lens === l.key }}>
                 <View style={[s.lensThumb, lens === l.key && { borderColor: C.violet }]}><Media uri={local?.uri} hue={hue} lens={l.key} city="CITY" h={80} radius={14} /></View>
                 <Text style={[T.small, { fontSize: 10, marginTop: 4, color: lens === l.key ? C.violet : C.inkSoft }]} numberOfLines={1}>{l.name}</Text>
@@ -174,7 +180,7 @@ export function NewPost({ navigation, route }: any) {
             <Text style={[T.small, { marginTop: 6 }]}>Sound tags are labels for now — licensed music playback isn't connected yet.</Text>
           </>) : (<>
             <Text style={[T.tiny, { marginBottom: 8 }]}>BLINK TIMER</Text>
-            <View style={{ flexDirection: 'row', gap: 6 }}>{[1, 6, 12, 24].map(h => <Chip key={h} icon="clock" label={`${h}h`} active={hours === h} onPress={() => setHours(h)} />)}</View>
+            <View style={{ flexDirection: 'row', gap: 6 }}>{hourOpts.map(h => <Chip key={h} icon="clock" label={`${h}h`} active={hoursOk === h} onPress={() => setHours(h)} />)}</View>
           </>)}
         </Card>
 
@@ -185,7 +191,7 @@ export function NewPost({ navigation, route }: any) {
           {mode !== 'story' ? <Chip icon="lock" label="Quiet share" active={audience === 'quiet'} onPress={() => setAudience('quiet')} /> : null}
         </View>
         {mode !== 'story' && isOnline ? <Card style={{ marginTop: 12 }}><Row icon="chat" title="Also send to a chat" sub="Post2Chat after publishing" right={<Toggle value={toChat} onChange={setToChat} label="Also send to chat" />} /></Card> : null}
-        <Btn title={busy ? 'Publishing…' : mode === 'story' ? `Share Blink · ${hours}h` : 'Publish'} icon="send" disabled={busy} onPress={publish} style={{ marginTop: S.xl }} />
+        <Btn title={busy ? (prog != null && prog < 1 ? `Uploading ${Math.round(prog * 100)}%…` : 'Publishing…') : mode === 'story' ? `Share Blink · ${hoursOk}h` : 'Publish'} icon="send" disabled={busy} onPress={publish} style={{ marginTop: S.xl }} />
       </Screen>
       {toast}
     </View>

@@ -21,6 +21,8 @@ NODE = uuid.uuid4().hex[:8]
 CHANNEL = "vl:rt"
 MAX_FRAME = 64 * 1024
 FRAMES_PER_SEC = 30
+PRESENCE_KEY = "vl:on:"   # hash per user: node id → last heartbeat (unix s); shared across processes when REDIS_URL is set
+PRESENCE_TTL = 90
 
 class Conn:
     __slots__ = ("ws", "loop", "user_id")
@@ -40,8 +42,39 @@ class Hub:
             s = self.conns.get(c.user_id, set()); s.discard(c)
             if not s: self.conns.pop(c.user_id, None); return True
             return False
-    def online(self, uid: str) -> bool:
+    def online_local(self, uid: str) -> bool:
         with self.lock: return bool(self.conns.get(uid))
+    def online(self, uid: str) -> bool:
+        """Connected to this process, or (REDIS_URL) to any process whose heartbeat is fresh. Redis down → local answer."""
+        if self.online_local(uid): return True
+        if not REDIS_URL: return False
+        try:
+            cut = time.time() - PRESENCE_TTL
+            return any(float(v) > cut for v in self._redis().hvals(PRESENCE_KEY + uid))
+        except Exception as e:
+            log.warning("realtime presence lookup failed (%s)", type(e).__name__); return False
+
+    def mark(self, uid: str, on: bool):
+        """Record this node's presence for uid in Redis (blocking: call from a worker thread). No-op without REDIS_URL."""
+        if not REDIS_URL: return
+        try:
+            r, k = self._redis(), PRESENCE_KEY + uid
+            if on: r.pipeline().hset(k, NODE, time.time()).expire(k, PRESENCE_TTL).execute()
+            else: r.hdel(k, NODE)
+        except Exception as e: log.warning("realtime presence mark failed (%s)", type(e).__name__)
+
+    def _heartbeat(self):
+        """Refresh this node's presence fields so a crashed node's users age out within PRESENCE_TTL seconds."""
+        while True:
+            time.sleep(PRESENCE_TTL / 3)
+            with self.lock: uids = list(self.conns)
+            try:
+                p, now = self._redis().pipeline(transaction=False), time.time()
+                for i, u in enumerate(uids, 1):
+                    p.hset(PRESENCE_KEY + u, NODE, now).expire(PRESENCE_KEY + u, PRESENCE_TTL)
+                    if i % 1000 == 0: p.execute()
+                p.execute()
+            except Exception as e: log.warning("realtime presence heartbeat failed (%s)", type(e).__name__)
     def count(self) -> tuple[int, int]:
         with self.lock: return sum(len(s) for s in self.conns.values()), len(self.conns)
 
@@ -84,6 +117,7 @@ class Hub:
                 except Exception as e:
                     log.warning("realtime redis subscriber error (%s), retrying", type(e).__name__); time.sleep(2)
         threading.Thread(target=run, daemon=True, name="vl-rt-sub").start()
+        threading.Thread(target=self._heartbeat, daemon=True, name="vl-rt-presence").start()
 
     def stats(self) -> dict:
         now = time.time(); conns, users = self.count()
@@ -92,7 +126,7 @@ class Hub:
         return {"connections": conns, "users": users, "eventsLastMinute": per.get(0, 0),
                 "eventsPerMinute": [{"minute": -i, "count": per.get(i, 0)} for i in range(59, -1, -1)],
                 "byType": dict(Counter(k for _, k in recent)), "redis": bool(REDIS_URL), "node": NODE,
-                "note": "Counts are for this API process only" + (" (events fan out via Redis)." if REDIS_URL else "; with several processes set REDIS_URL.")}
+                "note": "Counts are for this API process only" + (" (events fan out via Redis; presence is shared)." if REDIS_URL else "; with several processes set REDIS_URL.")}
 
 hub = Hub()
 def publish(uids, evt: dict): hub.publish(uids, evt)
@@ -150,6 +184,11 @@ def _presence(uid: str, online: bool):
         hub.publish(presence_targets(uid), {"type": "presence", "userId": uid, "online": online, "lastSeen": u.last_seen_at if u.last_seen_visible is not False else None})
     finally: db.close()
 
+def _went_offline(uid: str, ghost: bool):
+    hub.mark(uid, False)
+    # Only announce "offline" when no other process still holds a socket for this user (shared presence via Redis).
+    if not ghost and not hub.online(uid): _presence(uid, False)
+
 @router.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     uid, ghost, code = await run_in_threadpool(_auth, ws.query_params.get("token", ""))
@@ -158,6 +197,7 @@ async def ws_endpoint(ws: WebSocket):
     hub.start_subscriber()
     c = Conn(ws, asyncio.get_running_loop(), uid)
     first = hub.add(c)
+    if first and REDIS_URL: await run_in_threadpool(hub.mark, uid, True)
     await ws.send_json({"type": "hello", "userId": uid, "serverTime": M.now_ms()})
     if first and not ghost: await run_in_threadpool(_presence, uid, True)
     window, n, strikes = int(time.time()), 0, 0
@@ -180,7 +220,7 @@ async def ws_endpoint(ws: WebSocket):
     except RuntimeError: pass
     finally:
         last = hub.remove(c)
-        if last and not ghost: await run_in_threadpool(_presence, uid, False)
+        if last: await run_in_threadpool(_went_offline, uid, ghost)  # one hop: the task may be cancelled after the first await
 
 def err(code: str, message: str, ref: str | None = None) -> dict: return {"type": "error", "code": code, "message": message, "ref": ref}
 
@@ -198,6 +238,7 @@ def handle(uid: str, msg: dict) -> dict | None:
             c = db.get(M.Conv, str(msg.get("convId", ""))[:40])
             if not c or uid not in c.members: return err("not_found", "Conversation not found", t)
             if prof(u)["ghost_hours"]: return None  # ghosts don't broadcast typing
+            if (((u.settings or {}).get("hush") or {}).get("typingVisible")) is False: return None  # Hush: typing hidden
             hub.publish([m for m in c.members if m != uid], {"type": "typing", "convId": c.id, "userId": uid, "on": bool(msg.get("on"))}); return None
         if t in ("read", "delivered"):
             from . import receipts

@@ -1,0 +1,9 @@
+; Reference only — the compose file configures bitnami/pgbouncer through env vars. Key choices:
+[pgbouncer]
+pool_mode = transaction          ; app sets PGBOUNCER=1 (no server-side prepared statements); no session state is used
+max_client_conn = 5000           ; replicas × workers × (POOL_SIZE + MAX_OVERFLOW) must stay under this
+default_pool_size = 40           ; real Postgres connections per db/user pair — keep well under max_connections
+reserve_pool_size = 10
+server_idle_timeout = 300
+; With PGBOUNCER=1 the app does NOT send the statement_timeout startup option (PgBouncer rejects unknown ones).
+; Set it per role instead:  ALTER ROLE vibeloop SET statement_timeout = '15s';

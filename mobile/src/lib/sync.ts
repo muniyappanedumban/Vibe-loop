@@ -1,5 +1,7 @@
 // Server is the source of truth when signed in. Screens update local state optimistically, then `bg()` sends the
 // change; any failure triggers a full re-sync from /bootstrap so the app never shows a state the server rejected.
+import { useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { call, online, useSession, saveAccountToken, activateAccount, forgetAccount } from './api';
 import { useStore } from '../store/useStore';
 import { useSocial } from '../store/useSocial';
@@ -18,6 +20,8 @@ export async function bootstrap() {
     privacy: so.privacy ?? s.privacy, reactionPack: so.reactionPack ?? s.reactionPack, lessons: so.lessons ?? s.lessons, profileMood: so.profileMood ?? s.profileMood, bio: so.bio || s.bio,
   }));
   useSession.setState({ lastSync: Date.now(), error: null });
+  // Pending follow requests I sent (private accounts) → "Requested" state on follow buttons. 403 = feature off.
+  call<any>('GET', '/follow/requests').then(r => useSocial.setState({ requested: (r.outgoing ?? []).map((x: any) => x.user?.id).filter(Boolean) })).catch(() => useSocial.setState({ requested: [] }));
 }
 export function refresh() { if (!online()) return Promise.resolve(); return (refreshing ??= bootstrap().catch(e => { useSession.setState({ error: e.message }); }).finally(() => { refreshing = null; })); }
 
@@ -64,4 +68,9 @@ export async function publishOnline(loopId: string, visibility: string, rights: 
 export async function payoutOnline(amount: number) {
   const { token } = await must<any>('POST', '/approvals', { action: 'payout', payload: `${amount}` });
   const p = await must<any>('POST', '/payouts', { amount, approvalToken: token }); useStore.setState(s => ({ payouts: [p, ...s.payouts] })); return p;
+}
+
+/** Glow screens call this so the feed / pings / Blinks re-pull from the server when focused (at most every 15 s). */
+export function useLiveSync() {
+  useFocusEffect(useCallback(() => { if (online() && Date.now() - (useSession.getState().lastSync ?? 0) > 15_000) refresh(); }, []));
 }

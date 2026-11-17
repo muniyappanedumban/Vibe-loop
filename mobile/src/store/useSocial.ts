@@ -64,7 +64,7 @@ export const LIVES: LiveEv[] = [
 
 type S = {
   creators: Creator[]; tribes: Tribe[]; lives: LiveEv[];
-  posts: Post[]; sparks: Spark[]; chats: Chat[]; following: string[]; saved: string[]; myReacts: Record<string, string>; joined: string[];
+  posts: Post[]; sparks: Spark[]; chats: Chat[]; following: string[]; requested: string[]; saved: string[]; myReacts: Record<string, string>; joined: string[];
   blocked: string[]; restricted: string[]; reports: { id: string; target: string; reason: string; at: number }[]; seenSparks: string[]; votes: Record<string, 'a' | 'b'>;
   privacy: { privateAccount: boolean; teenSpace: boolean; hideLikes: boolean; commentGuard: boolean; guardWords: string[]; msgRequests: boolean };
   reactionPack: number[]; lessons: string[]; reminders: string[]; profileMood: number; bio: string;
@@ -80,12 +80,20 @@ type A = {
 const prefs = () => { const s = useSocial.getState(); bg('PUT', '/social-prefs', { privacy: s.privacy, reactionPack: s.reactionPack, lessons: s.lessons, profileMood: s.profileMood, bio: s.bio }); };
 export const useSocial = create<S & A>()(persist(immer(set => ({
   creators: CREATORS, tribes: TRIBES, lives: LIVES,
-  posts: SEED_POSTS, sparks: SEED_SPARKS, chats: SEED_CHATS, following: ['u1', 'u3', 'u4'], saved: ['p3'], myReacts: {}, joined: ['t1'], blocked: [], restricted: [], reports: [], seenSparks: [], votes: {},
+  posts: SEED_POSTS, sparks: SEED_SPARKS, chats: SEED_CHATS, following: ['u1', 'u3', 'u4'], requested: [], saved: ['p3'], myReacts: {}, joined: ['t1'], blocked: [], restricted: [], reports: [], seenSparks: [], votes: {},
   privacy: { privateAccount: false, teenSpace: false, hideLikes: false, commentGuard: true, guardWords: ['spam', 'fake followers'], msgRequests: true },
   reactionPack: [7, 42, 118, 203, 77, 311], lessons: [], reminders: [], profileMood: 118, bio: 'Comedy shorts about office chai life · testing everything in Loops first',
   react: (id, key) => { bg('POST', `/posts/${id}/react`, { key }, replacePost); set(s => { const p = s.posts.find(x => x.id === id); if (!p) return; const prev = s.myReacts[id]; if (prev) p.reactions[prev]--; if (prev === key) delete s.myReacts[id]; else { p.reactions[key] = (p.reactions[key] || 0) + 1; s.myReacts[id] = key; } }); },
   save: id => { bg('POST', `/edges/save/${id}`); set(s => { s.saved = s.saved.includes(id) ? s.saved.filter(x => x !== id) : [id, ...s.saved]; }); },
-  follow: id => { bg('POST', `/edges/follow/${id}`); set(s => { s.following = s.following.includes(id) ? s.following.filter(x => x !== id) : [...s.following, id]; }); },
+  // Private accounts answer "requested" (Follow Knock): reflect the server's state instead of assuming "following".
+  follow: id => {
+    bg('POST', `/edges/follow/${id}`, undefined, (r: any) => set(s => {
+      const st = r?.state ?? (r?.on ? 'following' : 'none');
+      s.following = st === 'following' ? Array.from(new Set([...s.following, id])) : s.following.filter(x => x !== id);
+      s.requested = st === 'requested' ? Array.from(new Set([...(s.requested ?? []), id])) : (s.requested ?? []).filter(x => x !== id);
+    }));
+    set(s => { if ((s.requested ?? []).includes(id)) { s.requested = s.requested.filter(x => x !== id); return; } s.following = s.following.includes(id) ? s.following.filter(x => x !== id) : [...s.following, id]; });
+  },
   comment: (id, text) => { bg('POST', `/posts/${id}/comments`, { text }, (r: any) => replacePost(r.post)); set(s => { const p = s.posts.find(x => x.id === id); if (!p) return; const bad = s.privacy.commentGuard && s.privacy.guardWords.some(w => text.toLowerCase().includes(w.toLowerCase())); if (!bad) p.comments.push({ by: 'me', text }); }); },
   share: id => { bg('POST', `/posts/${id}/share`); set(s => { const p = s.posts.find(x => x.id === id); if (p) p.shares++; }); },
   addPost: p => { const id = uid('p'); bg('POST', '/posts', { ...p, id }, replacePost); set(s => { s.posts.unshift({ ...p, id, by: 'me', at: Date.now(), reactions: { heart: 0, fire: 0, laugh: 0, touch: 0, clap: 0, boom: 0 }, comments: [], shares: 0, views: 0, mine: true }); }); },
@@ -110,3 +118,5 @@ export const useSocial = create<S & A>()(persist(immer(set => ({
 })), { name: 'vibeloop-social-v1', storage: createJSONStorage(() => AsyncStorage) }));
 export const creator = (id: string) => useSocial.getState().creators.find(c => c.id === id) ?? CREATORS.find(c => c.id === id) ?? { id, name: id === 'me' ? 'You' : 'Unknown', handle: id === 'me' ? '@you' : '@unknown', hue: 280, city: '', bio: '', followers: 0 };
 export const compact = (n: number) => (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n));
+/** Follow button label honouring Follow Knocks (private accounts): Following / Requested / Follow. */
+export const followLabel = (s: { following: string[]; requested?: string[] }, id: string) => (s.following.includes(id) ? 'Following' : (s.requested ?? []).includes(id) ? 'Requested' : 'Follow');

@@ -1,0 +1,17 @@
+# Run before rolling out a new image: kubectl apply -f deploy/k8s/migrate-job.yaml && kubectl wait --for=condition=complete job/vibeloop-migrate
+# Uses MIGRATE_DATABASE_URL (direct to the primary, not through transaction-pooled PgBouncer).
+apiVersion: batch/v1
+kind: Job
+metadata: { name: vibeloop-migrate }
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext: { runAsNonRoot: true, runAsUser: 10001 }
+      containers:
+        - name: migrate
+          image: REGISTRY/vibeloop-api:TAG
+          command: ["sh", "-c", "DATABASE_URL=\"$MIGRATE_DATABASE_URL\" PGBOUNCER=0 exec alembic upgrade head"]
+          envFrom: [{ configMapRef: { name: vibeloop-api } }, { secretRef: { name: vibeloop-api } }]
+          env: [{ name: MIGRATE_DATABASE_URL, valueFrom: { secretKeyRef: { name: vibeloop-api, key: MIGRATE_DATABASE_URL } } }]

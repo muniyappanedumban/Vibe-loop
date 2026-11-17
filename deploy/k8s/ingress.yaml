@@ -1,0 +1,24 @@
+# ingress-nginx. No session affinity needed: realtime fan-out and presence are shared through Redis.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vibeloop-api
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "51m"          # /media video; app enforces per-route caps (1 MB / 5 MB chunk / 50 MB)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"      # WebSocket /ws idle; clients ping
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+    nginx.ingress.kubernetes.io/enable-cors: "false"             # the app owns CORS
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # ingress-nginx upgrades WebSockets automatically (Upgrade/Connection headers are forwarded); the timeouts above keep them open.
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: nginx
+  tls: [{ hosts: ["api.example.com"], secretName: vibeloop-api-tls }]
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: vibeloop-api, port: { number: 80 } } } }
