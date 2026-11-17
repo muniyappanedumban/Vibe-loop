@@ -8,6 +8,7 @@ import { Screen, Header, Card, Row, Section, Btn, Field, Chip, useToast, Tag } f
 import { call } from '../lib/api';
 import { useConfig } from '../lib/config';
 import { ago } from '../lib/util';
+import { ADDON_ENTRIES } from './extras/index';
 
 type U = { id: string; name: string; handle: string } | null;
 function useLoad<X>(path: string | null): [X | null, string | null, () => void] {
@@ -29,8 +30,9 @@ export function GlowExtras({ navigation }: any) {
     { k: 'glow.dailySpark', route: 'DailySpark', icon: 'spark', title: 'Daily Spark', sub: 'One question a day — answer to see everyone else’s' },
     { k: 'glow.capsules', route: 'Capsules', icon: 'lock', title: 'Time Capsules', sub: 'Seal a note today, open it on a date you choose' },
     { k: 'glow.kudos', route: 'Kudos', icon: 'heart', title: 'Kudos', sub: 'Thank people with a badge · weekly Kudos Board' },
+    ...ADDON_ENTRIES.filter(e => e.module === 'glow').map(e => ({ k: e.flag, route: e.route, icon: e.icon, title: e.title, sub: e.sub })),
   ].filter(i => addon(i.k));
-  return <Screen><Header title="Glow Extras" sub="Little rituals that make Glow yours" />
+  return <Screen><Header title="Glow Extras" sub={`${items.length} extras · little rituals that make Glow yours`} />
     <Card>{items.map(i => <Row key={i.route} icon={i.icon as any} title={i.title} sub={i.sub} onPress={() => navigation.navigate(i.route)} />)}
       {!items.length ? <Text style={T.small}>Extras are switched off right now.</Text> : null}</Card></Screen>;
 }
@@ -41,6 +43,7 @@ export function HushExtras({ navigation }: any) {
       {sa ? <Row icon="clock" title="Safe Arrival" sub="Check in when you get there — or your people get a nudge" onPress={() => navigation.navigate('SafeArrival')} /> : null}
       {addon('hush.pacts') ? <Row icon="check" title="Pacts" sub="Shared checklists — open any chat › ⋯ › Pacts" /> : null}
       {addon('hush.tab') ? <Row icon="cash" title="Hush Tab" sub="Split costs in a chat — open any chat › ⋯ › Hush Tab" /> : null}
+      {ADDON_ENTRIES.filter(e => e.module === 'hush' && addon(e.flag)).map(e => <Row key={e.route} icon={e.icon as any} title={e.title} sub={e.needsConv ? `${e.sub} — open a chat › ⋯ › Extras` : e.sub} onPress={e.needsConv ? undefined : () => navigation.navigate(e.route)} />)}
     </Card></Screen>;
 }
 

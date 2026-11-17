@@ -9,6 +9,7 @@ import { MAX_UPLOAD } from '../../lib/uploads';
 import { useSession } from '../../lib/api';
 import { useLimit, useDefaults, useConfig } from '../../lib/config';
 import { useNavigation } from '@react-navigation/native';
+import { ADDON_ENTRIES } from '../../screens/extras/index';
 import { CC, AQUA, BUBBLE_THEMES } from '../theme';
 import { ChatIcon } from '../ChatIcon';
 import { BubbleMoji } from '../BubbleMojiView';
@@ -287,6 +288,7 @@ function ConvSettings({ c, onDone, show }: { c: Conv; onDone: () => void; show: 
     <CCard style={{ marginBottom: 12 }}>
       {addons?.pacts !== false ? <CRow icon="check" title="Pacts" sub="Shared checklists for this chat" onPress={() => nav.navigate('Pacts', { convId: c.id })} /> : null}
       {addons?.tab !== false ? <CRow icon="board" title="Hush Tab" sub="Split costs · who owes what" onPress={() => nav.navigate('HushTab', { convId: c.id })} /> : null}
+      {ADDON_ENTRIES.filter(e => e.needsConv && (addons as any)?.[e.flag.split('.')[1]] !== false).map(e => <CRow key={e.route} icon="spark" title={e.title} sub={e.sub} onPress={() => nav.navigate(e.route, { convId: c.id })} />)}
       <CRow icon="pin" title="Pin chat" right={<CToggle value={c.pinned} onChange={v => patch({ pinned: v })} label="Pin chat" />} />
       <CRow icon="mute" title="Silent Vibe (mute)" right={<CToggle value={c.muted} onChange={v => patch({ muted: v })} label="Mute" />} />
       <CRow icon="lock" title="Vibe Lock" sub="Needs device authentication to open" right={<CToggle value={c.locked} onChange={v => patch({ locked: v })} label="Lock chat" />} />

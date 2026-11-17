@@ -469,6 +469,9 @@ function Extras() {
   const names: Record<string, [string, string]> = { dailySpark: ['Daily Spark', 'addons.glow.dailySpark'], capsules: ['Time Capsules', 'addons.glow.capsules'], kudos: ['Kudos', 'addons.glow.kudos'],
     pacts: ['Pacts', 'addons.hush.pacts'], tab: ['Hush Tab', 'addons.hush.tab'], safeArrival: ['Safe Arrival', 'addons.hush.safeArrival'] };
   const today = new Date().toISOString().slice(0, 10);
+  const batches = [2, 3, 4, 5, 6, 7, 8, 9];
+  const [more, setMore] = useState<({ n: number; title: string; module: string; items: { name: string; flag: string; on: boolean; week: number }[] } | { n: number; error: string })[]>([]);
+  useEffect(() => { Promise.all(batches.map(n => api<{ title: string; module: string; items: { name: string; flag: string; on: boolean; week: number }[] }>(`/admin/addons/b${n}`).then(r => ({ n, ...r })).catch(e => ({ n, error: (e as Error).message })))).then(setMore); }, []);
   return <>
     <p className="note">Turn each add-on on or off (globally or per country) in <a className="link" href="#/userapp">User App Settings</a> → Glow / Hush → <code>addons.*</code>. Switched-off add-ons disappear from the app and the API refuses them.</p>
     <div className="grid g2">
@@ -479,6 +482,8 @@ function Extras() {
         </div>}
       </Card>)}
     </div>
+    <div className="grid g2">{more.map(b => 'error' in b ? <Card key={b.n} title={`Batch ${b.n}`}><ApiErr msg={b.error} retry={() => location.reload()} /></Card>
+      : <Card key={b.n} title={`${b.module === 'glow' ? 'Glow' : 'Hush'} · ${b.title}`} extra={<LivePill />}><div className="mlist">{b.items.map(i => <div key={i.flag} className="mitem"><div className="grow"><b>{i.name}</b><small className="mono muted">{i.flag}</small></div><small>{i.week} this week</small>{i.on ? <Pill tone="mint">on</Pill> : <Pill tone="gray">off</Pill>}</div>)}</div></Card>)}</div>
     <Card title="Daily Spark questions" extra={<LivePill />}>
       <p className="note">Days without a custom question use the built-in rotation. Changing today's question keeps existing answers.</p>
       {q.error ? <ApiErr msg={q.error} retry={q.reload} /> : !q.data ? <p className="loading">Loading…</p> :

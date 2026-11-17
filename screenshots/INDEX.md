@@ -20,8 +20,32 @@
 | vibeloop/08-create-studio.png | create studio | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | vibeloop/09-brief-copilot.png | brief copilot | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | vibeloop/10-video-editor.png | video editor | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/100-vibe-meter.png | vibe meter | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/101-streak-garden.png | streak garden | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/102-micro-challenges.png | micro challenges | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/103-spotlight-wall.png | spotlight wall | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/104-hot-take-duels.png | hot take duels | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/105-gratitude-jar.png | gratitude jar | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/106-local-pulse.png | local pulse | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/107-skill-swap-board.png | skill swap board | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/108-ask-box.png | ask box | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/109-memory-lane.png | memory lane | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | vibeloop/11-audio-subtitles.png | audio subtitles | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/110-goal-ladder.png | goal ladder | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/111-wish-shelf.png | wish shelf | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/112-photo-prompt.png | photo prompt | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/113-mentor-match.png | mentor match | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/114-hidden-gems.png | hidden gems | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/115-recipe-box.png | recipe box | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/116-book-nook.png | book nook | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/117-meetup-board.png | meetup board | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/118-collab-canvas.png | collab canvas | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/119-office-hours.png | office hours | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | vibeloop/12-library.png | library | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/120-fan-missions.png | fan missions | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/121-moodboard-pins.png | moodboard pins | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/122-time-lock-polls.png | time lock polls | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| vibeloop/123-thank-you-stories.png | thank you stories | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | vibeloop/13-memory-graph.png | memory graph | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | vibeloop/14-release-gate.png | release gate | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | vibeloop/15-profile.png | profile | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
@@ -94,6 +118,30 @@
 | vibeloop/91-daily-spark.png | daily spark | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | vibeloop/92-time-capsules.png | time capsules | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | vibeloop/93-kudos.png | kudos | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/124-check-in-circle.png | check in circle | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/125-plan-board.png | plan board | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/126-birthday-buddy.png | birthday buddy | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/127-ride-rota.png | ride rota | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/128-decision-dice.png | decision dice | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/129-gift-pool.png | gift pool | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/130-chore-rotation.png | chore rotation | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/131-watch-queue.png | watch queue | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/132-secret-santa.png | secret santa | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/133-lend-log.png | lend log | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/134-habit-buddies.png | habit buddies | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/135-trip-planner.png | trip planner | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/136-emergency-card.png | emergency card | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/137-remind-them.png | remind them | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/138-meeting-notes.png | meeting notes | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/139-memory-jar.png | memory jar | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/140-kindness-streak.png | kindness streak | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/141-quiet-reply.png | quiet reply | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/142-confession-box.png | confession box | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/143-time-zone-board.png | time zone board | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/144-read-later-shelf.png | read later shelf | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/145-study-sprint.png | study sprint | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/146-shared-budget.png | shared budget | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
+| chat/147-vote-to-pin.png | vote to pin | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | chat/43-accounts-switcher.png | accounts switcher | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | chat/44-language-region.png | language region | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
 | chat/50-chat-list.png | chat list | Web build of the mobile app, 390×844 @3x (Chromium, Playwright) | @riya.makes | Pass — rendered from live API |
