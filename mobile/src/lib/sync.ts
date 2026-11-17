@@ -45,14 +45,20 @@ async function finishLogin(r: any) {
 export type OtpTicket = { sent: boolean; channel: string; to: string; expiresIn: number; demoCode?: string };
 export const requestOtp = (identifier: string) => call<OtpTicket>('POST', '/auth/otp/request', { identifier: identifier.trim() });
 export const register = (handle: string, name: string, email: string) => call<OtpTicket>('POST', '/auth/register', { handle: handle.trim(), name: name.trim(), email: email.trim() });
-export async function verifyOtp(identifier: string, code: string) { return finishLogin(await call<any>('POST', '/auth/otp/verify', { identifier: identifier.trim(), code })); }
+/** Result of a sign-in step: signed in, or the account has two-factor on and needs a second code. */
+export type LoginStep = { user: any; mfaTicket?: undefined } | { user?: undefined; mfaTicket: string };
+async function loginStep(r: any): Promise<LoginStep> { return r.mfaRequired ? { mfaTicket: r.mfaTicket } : { user: await finishLogin(r) }; }
+export async function verifyOtp(identifier: string, code: string) { return loginStep(await call<any>('POST', '/auth/otp/verify', { identifier: identifier.trim(), code })); }
+/** Second step for accounts with two-factor: authenticator code or a recovery code. */
+export async function verifyMfa(ticket: string, code: string) { return finishLogin(await call<any>('POST', '/auth/mfa/verify', { ticket, code: code.trim() })); }
 /** Password login (staff / seeded test users). */
-export async function signIn(email: string, password: string) { return finishLogin(await call<any>('POST', '/auth/login', { email, password })); }
+export async function signIn(email: string, password: string) { return loginStep(await call<any>('POST', '/auth/login', { email, password })); }
 export async function switchAccount(id: string) {
   await activateAccount(id); useStore.getState().reset(); useSocial.setState(useSocial.getInitialState?.() ?? {}); await bootstrap();
 }
 /** Sign out of the active account only; other accounts on the device stay signed in. */
 export async function signOut() {
+  await call('POST', '/auth/logout').catch(() => {});  // end this device's session on the server
   const s = useSession.getState(); if (s.activeId) await forgetAccount(s.activeId);
   useStore.getState().reset(); const next = useSession.getState().accounts[0]; if (next) await switchAccount(next.id).catch(() => {});
 }

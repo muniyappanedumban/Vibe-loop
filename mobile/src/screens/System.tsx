@@ -30,7 +30,7 @@ export function Notifications({ navigation }: any) {
   );
 }
 
-export function Settings({ route }: any) {
+export function Settings({ route, navigation }: any) {
   const sec: string | undefined = route?.params?.section; const show_ = (k: string) => !sec || sec === k;
   const st = useStore(); const s = st.settings; const set = st.setSetting;
   const { toast, show } = useToast();
@@ -46,14 +46,10 @@ export function Settings({ route }: any) {
         {show_('account') ? <Section title="Account & security">
           <Card>
             <Row icon="user" title={st.user.name} sub={st.user.handle} />
-            <Row icon="lock" title="Two-factor (TOTP)" sub={s.mfa ? 'On · recovery codes saved' : 'Off'} right={<Toggle value={s.mfa} onChange={v => set('mfa', v)} label="Two-factor" />} />
+            <Row icon="lock" title="Two-factor sign-in" sub="Authenticator app + recovery codes" onPress={() => navigation.navigate('TwoFactor')} />
             <Row icon="fingerprint" title="Biometric for publish & payout" right={<Toggle value={s.biometric} onChange={v => set('biometric', v)} label="Biometric" />} />
-            <Row icon="eye" title="Active sessions" sub="This device · now" />
-            <Row icon="check" title="Email verified" sub="riya@… · verified" tint="#12A27C" />
-            <Row icon="cash" title="Phone verification" sub="Not verified" onPress={() => show('Verification needs the SMS service — not connected yet', 'err')} />
-            <Row icon="lock" title="Change password" onPress={() => show('Password change needs the auth server — not connected yet', 'err')} />
-            <Row icon="copy" title="Recovery codes" sub={s.mfa ? '10 codes · generated on enable' : 'Turn on two-factor first'} />
-            <Row icon="layers" title="Connected devices" sub="1 device · this browser/phone" />
+            <Row icon="layers" title="Your devices" sub="Where you're signed in" onPress={() => navigation.navigate('Devices')} />
+            <Row icon="clock" title="Account activity" sub="Sign-ins and security changes" onPress={() => navigation.navigate('AccountActivity')} />
           </Card>
         </Section> : null}
         {show_('privacy') ? <Section title="Privacy & data">

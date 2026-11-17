@@ -32,6 +32,7 @@ import { Live } from './src/screens/LiveLane';
 import { Vault } from './src/screens/Keepers';
 import { Explore } from './src/screens/Discover';
 import { Notifications, Settings } from './src/screens/System';
+import { SecurityCenter, TwoFactor, Devices, AccountActivity } from './src/screens/Security';
 import { Home, Motion, Sparks, NewPost } from './src/screens/Social';
 import { Search } from './src/screens/Connect';
 import { Emoji, Growth, Trust, SettingsHub } from './src/screens/Extras';
@@ -58,6 +59,7 @@ const CHAT_TABS: Record<string, React.ComponentType<any>> = { Chats: ChatList, F
 // Stack screens: every one is wrapped by gate(key) so the server config can switch it off per country/zone/slab.
 const STACK: Record<string, React.ComponentType<any>> = {
   HushSettings: needs('hushSettings', Hush.HushSettings), HushProfile: needs('hushSettings', Hush.HushProfile), HushPrivacy: needs('hushSettings', Hush.HushPrivacy), HushBlocked: needs('hushSettings', Hush.HushBlocked), HushNotifications: needs('hushSettings', Hush.HushNotifications), HushChats: needs('hushSettings', Hush.HushChats), HushArchive: needs('hushSettings', Hush.HushArchive), HushCalls: needs('hushSettings', Hush.HushCalls), HushSecurity: needs('hushSettings', Hush.HushSecurity), HushStorage: needs('hushSettings', Hush.HushStorage), HushAbout: needs('hushSettings', Hush.HushAbout),
+  SecurityCenter, TwoFactor, Devices, AccountActivity,
   Notifications, Settings, Sparks, NewPost, Search, Emoji, Growth, Trust, SettingsHub,
   // Creator Studio & classic screens — restored; each can be switched off in Admin → Screen Switches.
   CreatorHub, Loops: LoopsScreen, NewLoop, LoopDetail, FanReact, Archive, CreateHub, Copilot, Editor, Audio, Library, Memory, ReleaseGate, Earnings, Payout, Features, Learn, IconKit: IconKitScreen, Live, Vault,

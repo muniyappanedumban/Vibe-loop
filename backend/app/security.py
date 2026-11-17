@@ -18,8 +18,10 @@ def password_ok(pw: str) -> str | None:
     if pw.lower() == pw or not any(c.isdigit() for c in pw): return "Use upper & lower case letters and a number"
     return None
 
-def make_access(user: M.User) -> str:
-    return jwt.encode({"sub": user.id, "role": user.role, "tv": user.token_version or 0, "exp": int(time.time()) + ACCESS_TTL_MIN * 60, "iat": int(time.time())}, JWT_SECRET, "HS256")
+def make_access(user: M.User, sid: str | None = None) -> str:
+    claims = {"sub": user.id, "role": user.role, "tv": user.token_version or 0, "exp": int(time.time()) + ACCESS_TTL_MIN * 60, "iat": int(time.time())}
+    if sid: claims["sid"] = sid
+    return jwt.encode(claims, JWT_SECRET, "HS256")
 
 def decode_access(token: str) -> dict:
     """Verify an access JWT: HS256 only, exp/iat/sub required, small clock-skew leeway. Raises jwt.PyJWTError."""
@@ -36,7 +38,17 @@ def current_user(authorization: str = Header(default=""), db: Session = Depends(
     if not u: raise HTTPException(401, "Unknown user")
     if data.get("tv", 0) != (u.token_version or 0): raise HTTPException(401, "Session ended — sign in again")
     if u.suspended: raise HTTPException(403, "Account suspended")
+    if sid := data.get("sid"):
+        ses = db.get(M.AuthSession, str(sid))
+        if not ses or ses.user_id != u.id or ses.revoked_at: raise HTTPException(401, "Session ended — sign in again")
+        now = M.now_ms()
+        if now - (ses.last_seen or 0) > 60_000: ses.last_seen = now; db.commit()  # throttled: one write per minute per session
     return u
+
+def current_sid(authorization: str = Header(default="")) -> str | None:
+    """Session id of the calling token (already verified by current_user in the same request)."""
+    try: return decode_access(authorization[7:]).get("sid") if authorization.startswith("Bearer ") else None
+    except jwt.PyJWTError: return None
 
 def require(*roles: str):
     def dep(u: M.User = Depends(current_user)) -> M.User:

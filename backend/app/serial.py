@@ -59,5 +59,5 @@ def chat_json(db: Session, c: M.Chat, me: M.User) -> dict:
             "request": st.get("request", False), "msgs": [{"id": m.id, "from": me_id(m.sender, me), "text": m.text, "at": m.at, "react": m.react} for m in msgs]}
 
 def user_admin_json(u: M.User) -> dict:
-    return {"id": u.id, "email": u.email, "handle": u.handle, "name": u.name, "role": u.role, "suspended": u.suspended, "mfaRequired": u.mfa_required, "createdAt": u.created_at,
+    return {"id": u.id, "email": u.email, "handle": u.handle, "name": u.name, "role": u.role, "suspended": u.suspended, "mfaRequired": u.mfa_required, "twoFactor": bool(u.totp_secret), "createdAt": u.created_at,
             "avatar": u.avatar_social or u.avatar_chat, "lastSeenAt": u.last_seen_at}

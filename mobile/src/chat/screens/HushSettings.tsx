@@ -286,6 +286,9 @@ export function HushSecurity({ navigation }: any) {
       </CCard>
       <CCard style={{ marginTop: 12 }}>
         {fLock ? <CRow icon="lock" title="Lock Hush" sub="Ask for device unlock when opening locked chats" right={<CToggle value={st.settings.chatLock} onChange={v => patch({ chatLock: v })} label="Chat lock" />} /> : null}
+        <CRow icon="lock" title="Two-factor sign-in" sub="Authenticator app + recovery codes" onPress={() => navigation.navigate('TwoFactor')} />
+        <CRow icon="phone" title="Your devices" sub="See and sign out devices" onPress={() => navigation.navigate('Devices')} />
+        <CRow icon="clock" title="Account activity" sub="Sign-ins and security changes" onPress={() => navigation.navigate('AccountActivity')} />
         <CRow icon="shield" title="Lockdown details" sub="Login method, codes, this device" onPress={() => navigation.navigate('ChatSecurity')} />
       </CCard>
       <CBtn kind="coral" icon="close" title="Sign out on all devices" style={{ marginTop: 16 }} onPress={() => signOutEverywhere().then(() => navigation.reset({ index: 0, routes: [{ name: useSession.getState().activeId ? 'ChatMain' : 'SignIn' }] })).catch(e => show(e.message, true))} />

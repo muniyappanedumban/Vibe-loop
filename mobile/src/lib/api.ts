@@ -43,13 +43,24 @@ export async function saveToken(t: string | null) { useSession.setState({ token:
 
 export class ApiError extends Error { constructor(public status: number, msg: string, public retryAfter?: number) { super(msg); } }
 export const APP_VERSION = '1.0.0';
+/** Stable random id for this install (sent as x-device-id so the server can list devices and spot new ones). */
+let DEVICE_ID = '';
+// HTTP header values must be plain ASCII (Android's OkHttp rejects anything else), so strip the rest.
+const DEVICE_NAME = (Platform.OS === 'android' ? `${(Platform as any).constants?.Model ?? 'Android phone'} (Android ${Platform.Version})` : Platform.OS === 'ios' ? `iPhone (iOS ${Platform.Version})` : 'Web browser').replace(/[^\x20-\x7E]/g, '').slice(0, 120);
+export async function loadDeviceId() {
+  if (DEVICE_ID) return DEVICE_ID;
+  try { DEVICE_ID = (await AsyncStorage.getItem('vibeloop.deviceId')) || ''; } catch {}
+  if (!DEVICE_ID) { DEVICE_ID = 'dev-' + Array.from({ length: 24 }, () => Math.floor(Math.random() * 16).toString(16)).join(''); AsyncStorage.setItem('vibeloop.deviceId', DEVICE_ID).catch(() => {}); }
+  return DEVICE_ID;
+}
+loadDeviceId();
 /** Platform gates from the server: force-update (426) or maintenance (503). App root shows a blocking screen. */
 export const useGate = create<{ kind: null | 'update' | 'maintenance'; message: string }>(() => ({ kind: null, message: '' }));
 export async function call<T = any>(method: string, path: string, body?: any, timeoutMs = 12000): Promise<T> {
   const { apiUrl, token } = useSession.getState();
   const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const r = await fetch(apiUrl + path, { method, signal: ctl.signal, headers: { 'content-type': 'application/json', 'x-app-version': APP_VERSION, ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await fetch(apiUrl + path, { method, signal: ctl.signal, headers: { 'content-type': 'application/json', 'x-app-version': APP_VERSION, 'x-device-id': DEVICE_ID || (await loadDeviceId()), 'x-device-name': DEVICE_NAME, ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
     const data = await r.json().catch(() => ({}));
     if (r.status === 426) useGate.setState({ kind: 'update', message: String(data.detail ?? 'Please update VibeLoop') });
     else if (r.status === 503 && (r.headers.get('retry-after') || /maint/i.test(String(data.detail ?? '')))) useGate.setState({ kind: 'maintenance', message: String(data.detail ?? 'Down for maintenance') });

@@ -7,7 +7,7 @@ import { Icon } from '../components/Icon';
 import { VibeMoji } from '../components/VibeMoji';
 import { BubbleMoji } from '../chat/BubbleMojiView';
 import { useSession, call, MAX_ACCOUNTS } from '../lib/api';
-import { requestOtp, register, verifyOtp, OtpTicket } from '../lib/sync';
+import { requestOtp, register, verifyOtp, verifyMfa, OtpTicket } from '../lib/sync';
 import { useStore } from '../store/useStore';
 import { useConfig, useLimit, useAccess } from '../lib/config';
 import { ApiError } from '../lib/api';
@@ -22,7 +22,7 @@ export const handleProblem = (h: string) => {
 
 export default function SignIn({ navigation, route }: any) {
   const sess = useSession(); const adding = !!route?.params?.add;
-  const [tab, setTab] = useState<'in' | 'up'>('in'); const [step, setStep] = useState<'id' | 'code'>('id');
+  const [tab, setTab] = useState<'in' | 'up'>('in'); const [step, setStep] = useState<'id' | 'code' | 'mfa'>('id'); const [mfaTicket, setMfaTicket] = useState(''); const [mfaCode, setMfaCode] = useState('');
   const [ident, setIdent] = useState(''); const [handle, setHandle] = useState(''); const [name, setName] = useState(''); const [email, setEmail] = useState('');
   const [ticket, setTicket] = useState<OtpTicket | null>(null); const [code, setCode] = useState(''); const [busy, setBusy] = useState(false); const [wait, setWait] = useState(0);
   const [url, setUrl] = useState(sess.apiUrl); const [showUrl, setShowUrl] = useState(false); const [ping, setPing] = useState<string | null>(null);
@@ -44,8 +44,19 @@ export default function SignIn({ navigation, route }: any) {
   const verify = async (c = code) => {
     if (c.length !== 6) return;
     setBusy(true);
-    try { await verifyOtp(identifier, c); navigation.reset({ index: 0, routes: [{ name: useSession.getState().module === 'chat' ? 'ChatMain' : 'Main' }] }); }
+    try {
+      const r = await verifyOtp(identifier, c);
+      if (r.mfaTicket) { setMfaTicket(r.mfaTicket); setMfaCode(''); setStep('mfa'); return; }
+      goHome();
+    }
     catch (e: any) { show(e.message, 'err'); setCode(''); } finally { setBusy(false); }
+  };
+  const goHome = () => navigation.reset({ index: 0, routes: [{ name: useSession.getState().module === 'chat' ? 'ChatMain' : 'Main' }] });
+  const verify2 = async () => {
+    const c = mfaCode.trim(); if (c.replace(/-/g, '').length !== 6 && c.replace(/-/g, '').length !== 16) return show('Enter the 6-digit code or a recovery code', 'err');
+    setBusy(true);
+    try { await verifyMfa(mfaTicket, c); goHome(); }
+    catch (e: any) { show(e.message, 'err'); setMfaCode(''); if (e instanceof ApiError && e.status === 401) setStep('id'); } finally { setBusy(false); }
   };
   const test = async () => { sess.setApiUrl(url); setPing('…'); try { const h = await call<any>('GET', '/health'); setPing(h.ok ? 'Connected' : 'Unhealthy'); } catch (e: any) { setPing(e.message); } };
 
@@ -55,10 +66,16 @@ export default function SignIn({ navigation, route }: any) {
         {adding ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}><IconBtn name="back" label="Back" onPress={() => navigation.goBack()} /><Text style={T.h3}>Add account ({sess.accounts.length}/{maxAcc})</Text></View> : null}
         <LinearGradient colors={['#1E1E27', '#0B1F24']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
           <View style={{ flexDirection: 'row', gap: 4 }}><VibeMoji id={7} size={42} /><BubbleMoji id={17} size={42} /><VibeMoji id={311} size={42} /><BubbleMoji id={88} size={42} /></View>
-          <Text style={s.h}>{step === 'code' ? 'Check your code' : tab === 'in' ? 'Sign in with your @ID' : 'Claim your @ID'}</Text>
+          <Text style={s.h}>{step === 'mfa' ? 'One more step' : step === 'code' ? 'Check your code' : tab === 'in' ? 'Sign in with your @ID' : 'Claim your @ID'}</Text>
           <Text style={s.p}>One ID. Every connection. No phone number needed.</Text>
         </LinearGradient>
-        {full ? <Card style={{ marginTop: S.lg }}><Text style={T.h3}>{maxAcc} of {maxAcc} accounts used</Text><Text style={T.small}>Remove an account from Me → Accounts before adding another.</Text></Card> : step === 'id' ? (<>
+        {full ? <Card style={{ marginTop: S.lg }}><Text style={T.h3}>{maxAcc} of {maxAcc} accounts used</Text><Text style={T.small}>Remove an account from Me → Accounts before adding another.</Text></Card> : step === 'mfa' ? (<>
+          <Text style={[T.body, { marginTop: S.lg }]}>Two-factor is on for <Text style={{ fontWeight: '800' }}>{identifier}</Text>. Enter the 6-digit code from your authenticator app, or one of your recovery codes.</Text>
+          <Field label="Authenticator or recovery code" value={mfaCode} onChangeText={t => setMfaCode(t.replace(/[^0-9a-fA-F-]/g, '').slice(0, 19))} autoCapitalize="none" keyboardType="default" placeholder="123456 or abcd-ef12-…" />
+          <Btn title={busy ? 'Checking…' : 'Verify & sign in'} icon="lock" disabled={busy} onPress={verify2} style={{ marginTop: S.md }} />
+          <Pressable onPress={() => setStep('id')} style={{ marginTop: 14 }}><Text style={{ color: C.violet, fontWeight: '800' }}>Start over</Text></Pressable>
+          <Text style={[T.small, { marginTop: 10 }]}>Lost your phone and your recovery codes? Contact support from the help page — staff can reset two-factor after checking it's you.</Text>
+        </>) : step === 'id' ? (<>
           <View style={{ flexDirection: 'row', gap: 8, marginVertical: S.lg }}>
             {(signupOpen ? (['in', 'up'] as const) : (['in'] as const)).map(m => <Pressable key={m} onPress={() => setTab(m)} style={[s.seg, tab === m && s.segOn]} accessibilityRole="tab" accessibilityState={{ selected: tab === m }}><Text style={{ fontWeight: '800', color: tab === m ? '#fff' : C.ink }}>{m === 'in' ? 'Sign in' : 'Create account'}</Text></Pressable>)}
           </View>

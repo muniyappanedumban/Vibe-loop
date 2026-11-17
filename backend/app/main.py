@@ -66,6 +66,8 @@ app.add_middleware(RequestContextMiddleware)
 from .routes_media import router as media_router
 app.include_router(media_router)
 app.include_router(routes_identity.router)
+from . import routes_security
+app.include_router(routes_security.router)
 app.include_router(routes_chat.router)
 app.include_router(routes_config.router)
 from . import routes_money, routes_store, routes_ads, routes_integrations
@@ -110,15 +112,17 @@ class SignUp(BaseModel):
     email: str = Field(max_length=200); password: str = Field(max_length=200); name: str = Field(max_length=60); handle: str = Field(max_length=21)
 class SignIn(BaseModel): email: str = Field(min_length=1, max_length=200); password: str = Field(min_length=1, max_length=200)
 @app.post("/auth/signup")
-def signup(b: SignUp, db: Session = Depends(get_db)):
+def signup(b: SignUp, req: Request, db: Session = Depends(get_db)):
     if err := password_ok(b.password): raise HTTPException(400, err)
     h = b.handle if b.handle.startswith("@") else "@" + b.handle
     if db.scalar(select(M.User).where(or_(M.User.email == b.email.lower(), M.User.handle == h))): raise HTTPException(409, "Email or handle already taken")
     from .user_app import setting as ua_setting
     if not ua_setting(db, "access.signupOpen"): raise HTTPException(403, "Sign-ups are closed right now")
     u = M.User(email=b.email.lower(), handle=h, name=b.name, password_hash=hash_password(b.password), role="creator")
-    db.add(u); db.flush(); audit(db, u.handle, "auth.signup"); db.commit()
-    return {"token": make_access(u), "user": user_admin_json(u)}
+    db.add(u); db.flush(); audit(db, u.handle, "auth.signup")
+    from .routes_security import start_session
+    tok = start_session(db, u, req, "sign-up"); db.commit()
+    return {"token": tok, "user": user_admin_json(u)}
 @app.post("/auth/login")
 def login(b: SignIn, req: Request, db: Session = Depends(get_db)):
     ident = b.email.strip().lower()[:200]
@@ -127,8 +131,9 @@ def login(b: SignIn, req: Request, db: Session = Depends(get_db)):
     u = next((x for x in db.scalars(q) if verify_password(b.password, x.password_hash)), None)  # email may hold up to 5 accounts
     if not u: raise HTTPException(401, "Wrong email or password")
     if u.suspended: raise HTTPException(403, "Account suspended")
-    audit(db, u.handle, "auth.login"); db.commit()
-    return {"token": make_access(u), "user": user_admin_json(u)}
+    audit(db, u.handle, "auth.login")
+    from .routes_security import sign_in_or_challenge
+    return sign_in_or_challenge(db, u, req, "password", {"user": user_admin_json(u)})
 @app.get("/me")
 def me(u: M.User = Depends(current_user)): return user_admin_json(u)
 

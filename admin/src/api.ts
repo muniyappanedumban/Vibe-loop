@@ -4,7 +4,7 @@ export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefin
 const KEY = 'vibeloop.admin.token';
 const UKEY = 'vibeloop.admin.user';
 
-export interface ApiUser { id: string; email: string; handle: string; name: string; role: string; suspended: boolean; mfaRequired: boolean; createdAt: number; avatar?: string | null; lastSeenAt?: number | null }
+export interface ApiUser { id: string; email: string; handle: string; name: string; role: string; suspended: boolean; mfaRequired: boolean; createdAt: number; avatar?: string | null; lastSeenAt?: number | null ; twoFactor?: boolean }
 export interface Overview { users: number; creators: number; loops: number; reactions: number; posts: number; openReports: number; pendingPayouts: number; pendingPrivacy: number; gross: number; fees: number }
 export interface Report { id: string; reporter: string; target: string; reason: string; reasonCode: string | null; status: string; at: number }
 export interface ApiPayout { id: string; creator: string; amount: number; status: string; at: number; reviewedBy: string | null }
@@ -53,11 +53,18 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   return data as T;
 }
 
-export async function login(email: string, password: string) {
-  const r = await api<{ token: string; user: ApiUser }>('/auth/login', { method: 'POST', body: { email, password } });
+/** Password sign-in. Returns { mfaTicket } when the account has two-factor on; finish with loginMfa. */
+export async function login(email: string, password: string): Promise<{ mfaTicket?: string }> {
+  const r = await api<{ token?: string; user?: ApiUser; mfaRequired?: boolean; mfaTicket?: string }>('/auth/login', { method: 'POST', body: { email, password } });
+  if (r.mfaRequired && r.mfaTicket) return { mfaTicket: r.mfaTicket };
+  if (r.user!.role !== 'owner') throw new ApiError('This account is not staff (owner role required).', 403);
+  setSession(r.token!, r.user!);
+  return {};
+}
+export async function loginMfa(ticket: string, code: string) {
+  const r = await api<{ token: string; user: ApiUser & { role: string } }>('/auth/mfa/verify', { method: 'POST', body: { ticket, code: code.trim() } });
   if (r.user.role !== 'owner') throw new ApiError('This account is not staff (owner role required).', 403);
   setSession(r.token, r.user);
-  return r;
 }
 
 /** Fetch a GET endpoint; `reload` refetches. `path` null skips fetching. */

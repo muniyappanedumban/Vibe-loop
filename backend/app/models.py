@@ -15,6 +15,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), default="creator", index=True)  # owner|creator|editor|analyst|viewer|fan
     suspended: Mapped[bool] = mapped_column(Boolean, default=False)
     mfa_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    totp_secret: Mapped[str | None] = mapped_column(String(300), nullable=True)  # Fernet-encrypted base32 secret; set = 2FA on
     hue: Mapped[int] = mapped_column(Integer, default=280)
     city: Mapped[str] = mapped_column(String(80), default="")
     bio: Mapped[str] = mapped_column(Text, default="")
@@ -530,3 +531,33 @@ Index("ix_chats_members_gin", cast(Chat.members, JSONB), postgresql_using="gin")
 def has_member(col, uid: str):
     """SQL filter: JSON member list contains uid (uses the GIN index above)."""
     return cast(col, JSONB).contains([uid])
+
+
+# ---------- login safety (sessions, 2FA recovery codes, security events) ----------
+class AuthSession(Base):
+    """One row per sign-in. Access tokens carry its id (`sid`); revoking it ends that token on the next request."""
+    __tablename__ = "auth_sessions"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("ses"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    device_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    device_name: Mapped[str] = mapped_column(String(120), default="")
+    ip: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+    last_seen: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+    revoked_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+class RecoveryCode(Base):
+    __tablename__ = "recovery_codes"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("rcv"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    used_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+class SecurityEvent(Base):
+    """User-visible account activity: sign-ins, new devices, 2FA changes, session revokes."""
+    __tablename__ = "security_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+    kind: Mapped[str] = mapped_column(String(40)); detail: Mapped[str] = mapped_column(String(300), default="")
+    ip: Mapped[str] = mapped_column(String(64), default="")

@@ -44,6 +44,9 @@ SETTINGS = [
     # ---------------- Global ----------------
     _s("access.signupOpen", "global", "Sign-up open", "bool", True, True),
     _s("limits.otpResendSec", "global", "OTP resend cooldown (s, 0 = off; the rate limiter still applies)", "int", 0, True, min=0, max=600),
+    _s("security.twoFactor", "global", "Two-factor sign-in (authenticator app)", "bool", True, True, "Off: users can't turn it on and sign-in skips the 2FA step (existing setups are kept)."),
+    _s("security.newDeviceAlerts", "global", "New-device sign-in alerts", "bool", True, True, "Push + Account activity entry when an account signs in on a new device."),
+    _s("security.sessionList", "global", "Users can see and sign out their devices", "bool", True, True),
     _s("limits.maxAccounts", "global", "Max accounts per email", "int", 5, True, min=1, max=10),
     _s("access.maintenance", "global", "Maintenance mode", "bool", False, True, "On: non-staff API calls get 503; the app shows the message."),
     _s("access.maintenanceMessage", "global", "Maintenance message", "str", "We're tuning things up — back soon.", maxLen=200),
@@ -52,7 +55,7 @@ SETTINGS = [
     _s("limits.autoHideReports", "global", "Auto-hide a post after N reports (0 = off)", "int", 5, True, min=0, max=1000),
 ]
 BY_PATH = {s["path"]: s for s in SETTINGS}
-OWNED_TOP = ("defaults", "access")  # top-level keys this module owns entirely; "limits" is shared (fees etc. stay elsewhere)
+OWNED_TOP = ("defaults", "access", "security")  # top-level keys this module owns entirely; "limits" is shared (fees etc. stay elsewhere)
 LEGACY_LIMITS = {"maxAccounts", "maxGroupSize", "statusHours", "editWindowMin", "undoWindowMin"}
 
 def base_values() -> dict:

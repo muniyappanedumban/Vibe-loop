@@ -123,9 +123,10 @@ def otp_verify(b: OtpVerifyIn, req: Request, db: Session = Depends(get_db)):
         if r.attempts >= OTP_MAX_ATTEMPTS: raise HTTPException(429, "Too many wrong attempts — request a new code")
         raise bad
     r.used_at, r.verified = M.now_ms(), True
-    u.verified = True; audit(db, u.handle, "auth.otp_login"); db.commit()
+    u.verified = True; audit(db, u.handle, "auth.otp_login")
     accounts = db.scalars(select(M.User).where(M.User.email == u.email, M.User.verified == True).order_by(M.User.created_at)).all()  # noqa: E712
-    return {"token": make_access(u), "user": {**user_json(u), "role": u.role}, "accounts": [user_json(a) for a in accounts]}
+    from .routes_security import sign_in_or_challenge
+    return sign_in_or_challenge(db, u, req, "email code", {"user": {**user_json(u), "role": u.role}, "accounts": [user_json(a) for a in accounts]})
 
 @router.post("/auth/logout-all")
 def logout_all(u: M.User = Depends(current_user), db: Session = Depends(get_db)):

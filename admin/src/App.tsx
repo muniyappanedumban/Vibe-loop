@@ -8,7 +8,7 @@ import { Icon, Logo } from './icons';
 import { VIBEMOJI, VIBEMOJI_CATEGORIES, REACTIONS, vibemojiSvg } from './vibemoji';
 import { SECTIONS, ALL_FEATURES } from './features';
 import { PRD, PRD_GROUPS } from './prd';
-import { api, useApi, login, getToken, getUser, setSession, API_URL, uploadFile } from './api';
+import { api, useApi, login, loginMfa, ApiError, getToken, getUser, setSession, API_URL, uploadFile } from './api';
 import { UserAppSettingsPage, AllSwitchesPage } from './pages/UserAppSettings';
 import type { ApiUser, Overview, Report, ApiPayout, AuditRow, PrivacyReq, ApiAnnouncement, SearchResult, KV } from './api';
 
@@ -125,18 +125,21 @@ function Bar({ v, max, tone = 'prism' }: { v: number; max: number; tone?: string
 function Login() {
   const [email, setEmail] = useState(''); const [pw, setPw] = useState('');
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [ticket, setTicket] = useState(''); const [code, setCode] = useState('');
   return <div className="login">
     <div className="login-art"><div className="brand"><Logo /><div><b>VibeLoop</b><small>Admin</small></div></div>
       <div><span className="eyebrow">Staff console</span><h2>Keep the Loop safe, fair and fun.</h2><p>Moderation, payouts, flags and platform settings — every action is written to the append-only audit log.</p></div><span /></div>
     <div className="login-form"><form onSubmit={async e => {
       e.preventDefault(); setBusy(true); setErr(null);
-      try { await login(email.trim(), pw); } catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
+      try { if (ticket) await loginMfa(ticket, code); else { const r = await login(email.trim(), pw); if (r.mfaTicket) { setTicket(r.mfaTicket); setCode(''); } } }
+      catch (x) { setErr((x as Error).message); if ((x as ApiError).status === 401 && ticket) setTicket(''); } finally { setBusy(false); }
     }}>
       <h1>Sign in</h1><p className="muted">Staff accounts only (owner role).</p>
       <label className="lbl" htmlFor="em">Email</label><input id="em" type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@vibeloop.app" />
       <label className="lbl" htmlFor="pw">Password</label><input id="pw" type="password" autoComplete="current-password" value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" />
+      {ticket && <><label className="lbl" htmlFor="mfa">Two-factor code</label><input id="mfa" autoFocus autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} placeholder="123456 or recovery code" /></>}
       {err && <div className="errbox" role="alert">{err}</div>}
-      <button className="btn prism" disabled={busy || !email || !pw}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      <button className="btn prism" disabled={busy || !email || !pw || (!!ticket && code.trim().length < 6)}>{busy ? 'Signing in…' : ticket ? 'Verify' : 'Sign in'}</button>
       <p className="note">API: <code>{API_URL}</code> · session token is kept in this tab only.</p>
     </form></div>
   </div>;
@@ -187,11 +190,11 @@ function Users() {
   const openId = hp('open');
   return <>{openId && <MemberDrawer id={openId} close={() => setHp('open', null)} />}<Card title={r.data ? `${r.data.length} accounts` : 'Accounts'} extra={<div className="row"><LivePill /><Search v={q} set={setQ} ph="Search name, handle, email" /></div>}>
     {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !r.data ? <p className="loading">Loading from API…</p> :
-    <table><thead><tr><th>User</th><th>Role</th><th>MFA</th><th>Status</th><th>Last seen</th><th>Joined</th><th /></tr></thead><tbody>
+    <table><thead><tr><th>User</th><th>Role</th><th>2FA</th><th>Status</th><th>Last seen</th><th>Joined</th><th /></tr></thead><tbody>
       {r.data.map(u => <tr key={u.id} className={u.suspended ? 'dim' : ''}>
         <td><button className="who linkrow" data-member={u.id} onClick={() => setHp('open', u.id)}><MemberAvatar src={u.avatar ?? null} name={u.name} size={32} /><div><b>{u.name}</b><small>{u.handle} · {u.email}</small></div></button></td>
         <td><select value={u.role} disabled={busy || u.id === me?.id} onChange={e => patch(u, { role: e.target.value }, `${u.handle} → ${cap(e.target.value)}`)}>{ROLES.map(x => <option key={x} value={x.toLowerCase()}>{x}</option>)}</select></td>
-        <td>{u.mfaRequired ? <Pill tone="mint">enforced</Pill> : <button className="btn sm ghost" disabled={busy} onClick={() => patch(u, { mfaRequired: true }, `MFA enforced for ${u.handle}`)}>Enforce MFA</button>}</td>
+        <td>{u.twoFactor ? <Pill tone="mint">on</Pill> : <Pill tone="gray">off</Pill>}</td>
         <td>{u.suspended ? <Pill tone="red">suspended</Pill> : <Pill tone="mint">active</Pill>}</td>
         <td className="muted small">{ago(u.lastSeenAt ?? null)}</td>
         <td className="muted">{new Date(u.createdAt).toISOString().slice(0, 10)}</td>
@@ -1727,6 +1730,24 @@ function MemberAvatar({ src, name, hue, size = 64 }: { src: string | null; name:
   return src ? <img className="mav" style={{ width: size, height: size }} src={mediaSrc(src)!} alt="" /> :
     <span className="mav" style={{ width: size, height: size, fontSize: size * .38, background: `hsl(${hue ?? 250} 30% 92%)`, color: `hsl(${hue ?? 250} 35% 32%)` }}>{name.split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase()}</span>;
 }
+type SecInfo = { twoFactor: boolean; sessions: { id: string; device: string; ip: string; createdAt: number; lastSeen: number }[]; events: { at: number; kind: string; detail: string; ip: string }[] };
+/** Login safety for one member: 2FA state, signed-in devices, recent security events; support can reset 2FA or sign out everywhere. */
+function MemberSecurity({ id }: { id: string }) {
+  const r = useApi<SecInfo>(`/admin/users/${encodeURIComponent(id)}/security`); const { run, busy } = useAct(); const s = r.data;
+  return <>
+    <h6 className="dsec">Login & security</h6>
+    {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !s ? <p className="loading">Loading…</p> : <>
+      <div className="kv"><span>Two-factor</span><span>{s.twoFactor ? <Pill tone="mint">on</Pill> : <Pill tone="gray">off</Pill>}</span>
+        <span>Devices</span><span>{s.sessions.length ? s.sessions.map(x => <div key={x.id}>{x.device} <small className="muted">· {ago(x.lastSeen)}{x.ip ? ' · ' + x.ip : ''}</small></div>) : '—'}</span>
+        <span>Recent events</span><span>{s.events.length ? s.events.slice(0, 8).map((e, i) => <div key={i}><b>{e.kind.replace(/_/g, ' ')}</b> <small className="muted">{e.detail} · {ago(e.at)}</small></div>) : '—'}</span></div>
+      <div className="row mt">
+        <button className="btn sm danger" disabled={busy || !s.sessions.length} onClick={() => run(() => api(`/admin/users/${encodeURIComponent(id)}/sessions/revoke`, { method: 'POST' }), 'Signed out of every device', r.reload)}>Sign out everywhere</button>
+        {s.twoFactor && <button className="btn sm ghost" disabled={busy} onClick={() => run(() => api(`/admin/users/${encodeURIComponent(id)}/2fa-reset`, { method: 'POST' }), 'Two-factor reset — member signed out', r.reload)}>Reset two-factor</button>}
+      </div>
+      <p className="note">Reset two-factor only after confirming identity (e.g. reply from the account email). It signs the member out everywhere.</p>
+    </>}
+  </>;
+}
 function MemberDrawer({ id, close }: { id: string; close: () => void }) {
   const r = useApi<Member>('/admin/users/' + encodeURIComponent(id));
   useEffect(() => { const f = (e: KeyboardEvent) => e.key === 'Escape' && close(); addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [close]);
@@ -1749,6 +1770,7 @@ function MemberDrawer({ id, close }: { id: string; close: () => void }) {
         <span>Mood Drop</span><span>{m.moodDrop ? <>{m.moodDrop.text || 'mood'} <small className="muted">#{m.moodDrop.moji} · {ago(m.moodDrop.at)}</small></> : '—'}</span>
         <span>Links</span><span>{m.links.length ? m.links.map(l => <a key={l} className="link" href={l} target="_blank" rel="noreferrer">{l}</a>) : '—'}</span>
         <span>Joined</span><span>{when(m.createdAt)}</span><span>User id</span><code>{m.id}</code></div>
+      <MemberSecurity id={m.id} />
     </>}
   </aside></div>;
 }

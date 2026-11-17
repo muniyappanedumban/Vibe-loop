@@ -78,7 +78,7 @@ SlidingWindowLimiter = MemoryBackend  # backwards-compatible name
 
 # ---------- auth buckets: identifier + IP, 15-minute window ----------
 WINDOW = 15 * 60
-LIMITS = {"otp_request": 5, "otp_verify": 10, "login": 10, "register": 5}
+LIMITS = {"otp_request": 5, "otp_verify": 10, "login": 10, "register": 5, "mfa_verify": 8}
 
 def _deny(retry: int):
     raise HTTPException(429, "Too many attempts — try again later", headers={"Retry-After": str(retry)})
