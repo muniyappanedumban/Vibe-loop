@@ -17,10 +17,11 @@ SPEC = {"razorpay": (["mode", "keyId"], ["keySecret", "webhookSecret"], ["keyId"
         "msg91": (["mode", "templateId", "sender", "enabled"], ["authKey"], ["authKey", "templateId", "sender"]),
         "maps": (["mode", "provider"], ["key"], ["key"]),
         "turn": (["urls", "username"], ["credential", "sharedSecret"], ["urls"]),  # + credential or sharedSecret (checked in get_config)
-        "expo": ([], ["accessToken"], [])}  # Expo push works without a token; the access token is optional
+        "expo": ([], ["accessToken"], []),
+        "scanner": (["url", "enabled"], ["apiKey"], ["url"])}  # content-safety scanner webhook (see routes_trust.scan_media)  # Expo push works without a token; the access token is optional
 DEFAULTS = {"razorpay": {"mode": "test", "keyId": ""}, "cashfree": {"mode": "test", "appId": ""},
             "msg91": {"mode": "test", "templateId": "", "sender": "", "enabled": False}, "maps": {"mode": "test", "provider": "google"},
-            "turn": {"urls": "", "username": ""}, "expo": {}}
+            "turn": {"urls": "", "username": ""}, "expo": {}, "scanner": {"url": "", "enabled": False}}
 
 def _raw(db: Session, name: str) -> dict:
     r = db.get(M.KV, ("integrations", name)); return dict(r.value) if r else dict(DEFAULTS[name])
@@ -105,11 +106,17 @@ def test_expo(cfg: dict) -> dict:
     tok = "with your access token" if cfg.get("accessToken") else "without an access token"
     return {"ok": True, "message": f"Expo is reachable {tok} (HTTP {r.status_code}); the test token was rejected as expected — no notification was sent."}
 
+def test_scanner(cfg: dict) -> dict:
+    hdr = {"Authorization": f"Bearer {cfg['apiKey']}"} if cfg.get("apiKey") else {}
+    try: r = httpx.post(cfg["url"], json={"ping": True}, headers=hdr, timeout=TIMEOUT)
+    except httpx.HTTPError as e: return {"ok": False, "message": f"Scanner unreachable ({type(e).__name__})"}
+    return {"ok": r.status_code < 400, "message": f"Scanner answered HTTP {r.status_code}"}
+
 @router.post("/admin/integrations/{name}/test")
 def test_integration(name: str, a: M.User = Depends(STAFF), db: Session = Depends(get_db)):
     if name not in SPEC: raise HTTPException(404, "Unknown integration")
     cfg = get_config(db, name)
     if not cfg: return {"ok": False, "configured": False, "message": "Not configured — add the keys and save first"}
-    res = {"razorpay": razorpay.test, "cashfree": cashfree.test, "msg91": msg91.test, "maps": test_maps, "turn": test_turn, "expo": test_expo}[name](cfg)
+    res = {"razorpay": razorpay.test, "cashfree": cashfree.test, "msg91": msg91.test, "maps": test_maps, "turn": test_turn, "expo": test_expo, "scanner": test_scanner}[name](cfg)
     audit(db, a.handle, "integrations.test", f"{name} ok={res['ok']}"); db.commit()
     return {**res, "configured": True, "mode": cfg.get("mode")}

@@ -29,6 +29,13 @@ def decode_access(token: str) -> dict:
     return jwt.decode(token, JWT_SECRET, ["HS256"], leeway=JWT_LEEWAY_SEC, options={"require": ["exp", "iat", "sub"]})
 
 def current_user(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> M.User:
+    return _auth(authorization, db, allow_suspended=False)
+
+def current_user_any(authorization: str = Header(default=""), db: Session = Depends(get_db)) -> M.User:
+    """Like current_user but lets a suspended account through — only for appeals, account standing, export and deletion."""
+    return _auth(authorization, db, allow_suspended=True)
+
+def _auth(authorization: str, db: Session, allow_suspended: bool) -> M.User:
     """Every authenticated request: valid signature + expiry, user exists, token version current (logout-all / suspension
     revoke), and the account is not suspended — checked against the DB on each request, not from token claims."""
     if not authorization.startswith("Bearer "): raise HTTPException(401, "Sign in required")
@@ -37,7 +44,8 @@ def current_user(authorization: str = Header(default=""), db: Session = Depends(
     u = db.get(M.User, str(data["sub"]))
     if not u: raise HTTPException(401, "Unknown user")
     if data.get("tv", 0) != (u.token_version or 0): raise HTTPException(401, "Session ended — sign in again")
-    if u.suspended: raise HTTPException(403, "Account suspended")
+    if (u.settings or {}).get("deletedAt"): raise HTTPException(401, "Account deleted")
+    if u.suspended and not allow_suspended: raise HTTPException(403, "Account suspended")
     if sid := data.get("sid"):
         ses = db.get(M.AuthSession, str(sid))
         if not ses or ses.user_id != u.id or ses.revoked_at: raise HTTPException(401, "Session ended — sign in again")

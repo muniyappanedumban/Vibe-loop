@@ -134,7 +134,10 @@ def complete(sid: str, u: M.User = Depends(current_user), db: Session = Depends(
     if s.kind == "video": dur = probe_duration(path) or s.duration_sec
     mid = secrets.token_hex(12); os.replace(path, os.path.join(MEDIA_DIR, f"{mid}.{s.ext}"))
     mf = M.MediaFile(id=mid, owner_id=u.id, mime=s.mime, size=s.size, kind=s.kind, name=s.filename, duration_sec=dur)
-    db.add(mf); s.done, s.media_id = True, mid
+    db.add(mf)
+    from .routes_trust import on_new_media
+    on_new_media(db, mf, os.path.join(MEDIA_DIR, f"{mid}.{s.ext}"), u)
+    s.done, s.media_id = True, mid
     audit(db, u.handle, "upload.complete", f"{mid} {s.mime} {s.size}B"); db.commit()
     return media_out(mf, s.ext)
 

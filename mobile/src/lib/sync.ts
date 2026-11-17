@@ -44,7 +44,7 @@ async function finishLogin(r: any) {
 }
 export type OtpTicket = { sent: boolean; channel: string; to: string; expiresIn: number; demoCode?: string };
 export const requestOtp = (identifier: string) => call<OtpTicket>('POST', '/auth/otp/request', { identifier: identifier.trim() });
-export const register = (handle: string, name: string, email: string) => call<OtpTicket>('POST', '/auth/register', { handle: handle.trim(), name: name.trim(), email: email.trim() });
+export const register = (handle: string, name: string, email: string, birthDate?: string) => call<OtpTicket>('POST', '/auth/register', { handle: handle.trim(), name: name.trim(), email: email.trim(), ...(birthDate ? { birthDate } : {}) });
 /** Result of a sign-in step: signed in, or the account has two-factor on and needs a second code. */
 export type LoginStep = { user: any; mfaTicket?: undefined } | { user?: undefined; mfaTicket: string };
 async function loginStep(r: any): Promise<LoginStep> { return r.mfaRequired ? { mfaTicket: r.mfaTicket } : { user: await finishLogin(r) }; }

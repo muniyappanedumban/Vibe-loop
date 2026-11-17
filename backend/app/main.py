@@ -44,7 +44,11 @@ async def lifespan(_app):
     from .routes_uploads import cleanup_abandoned
     n = cleanup_abandoned()  # abandoned resumable uploads (> 24 h)
     if n: import logging; logging.getLogger("vibeloop").warning("removed %d abandoned upload sessions", n)
+    import threading as _thr
+    from .routes_trust import purge_loop
+    _stop = _thr.Event(); _thr.Thread(target=purge_loop, args=(_stop,), daemon=True, name="purge").start()  # erase accounts past their deletion date (hourly)
     yield
+    _stop.set()
     # Graceful shutdown (SIGTERM from gunicorn/k8s): the server has stopped accepting and drained in-flight requests by now.
     # Let queued push sends finish (bounded), then close pooled DB connections so PgBouncer/Postgres free them at once.
     import threading as _th
@@ -66,8 +70,9 @@ app.add_middleware(RequestContextMiddleware)
 from .routes_media import router as media_router
 app.include_router(media_router)
 app.include_router(routes_identity.router)
-from . import routes_security
+from . import routes_security, routes_trust
 app.include_router(routes_security.router)
+app.include_router(routes_trust.router)
 app.include_router(routes_chat.router)
 app.include_router(routes_config.router)
 from . import routes_money, routes_store, routes_ads, routes_integrations
@@ -339,6 +344,8 @@ class PostPoll(BaseModel):
 class PostIn(BaseModel): id: str | None = Field(default=None, pattern=r'^[\w-]{3,40}$'); kind: str = Field(max_length=20); text: str = Field(min_length=1, max_length=2200); hue: int = Field(default=200, ge=0, le=360); mood: str = Field(default="Happy", max_length=30); interest: str = Field(default="Life", max_length=30); place: str | None = Field(default=None, max_length=120); bg: str | None = Field(default=None, max_length=20); slides: int | None = Field(default=None, ge=0, le=20); mediaUrl: str | None = Field(default=None, max_length=120, pattern=r'^/media/[\w.-]+$'); lens: str | None = Field(default=None, max_length=20); lat: float | None = Field(default=None, ge=-90, le=90); lng: float | None = Field(default=None, ge=-180, le=180); tags: list[str] = Field(default_factory=list, max_length=20); collab: str | None = Field(default=None, max_length=40); sound: str | None = Field(default=None, max_length=80); audience: str = Field(default="public", max_length=12); edit: VideoEdit | None = None; poll: PostPoll | None = None
 @app.post("/posts")
 def create_post(b: PostIn, u: M.User = Depends(write_limit("post")), db: Session = Depends(get_db)):
+    from .routes_trust import assert_not_restricted
+    assert_not_restricted(u)
     if b.id and (ex := db.get(M.Post, b.id)):  # v4 idempotent create (offline outbox re-send)
         if ex.author_id != u.id: raise HTTPException(409, 'Post id exists')
         return post_json(db, ex, u)
@@ -477,7 +484,11 @@ def admin_user(uid: str, b: dict, a: M.User = Depends(require(*STAFF)), db: Sess
     if "role" in b:
         if b["role"] not in ("owner", "creator", "editor", "analyst", "viewer", "fan"): raise HTTPException(400, "Unknown role")
         u.role = b["role"]
-    if "suspended" in b: u.suspended = bool(b["suspended"])
+    if "suspended" in b:
+        u.suspended = bool(b["suspended"]); s = dict(u.settings or {})
+        if u.suspended: s["suspendedAt"] = M.now_ms()
+        else: s.pop("suspendedAt", None)
+        u.settings = s
     if "mfaRequired" in b: u.mfa_required = bool(b["mfaRequired"])
     audit(db, a.handle, "admin.user_update", f"{u.handle} {b}"); db.commit(); return user_admin_json(u)
 @app.get("/admin/reports")
@@ -536,7 +547,11 @@ def admin_privacy(limit: int = Query(PAGE_MAX, ge=1), offset: int = Query(0, ge=
 def admin_privacy_act(rid: str, action: str, a: M.User = Depends(require(*STAFF)), db: Session = Depends(get_db)):
     r = db.get(M.PrivacyRequest, rid)
     if not r or action not in ("fulfil", "reject"): raise HTTPException(400, "Invalid")
-    r.status = "fulfilled" if action == "fulfil" else "rejected"; audit(db, a.handle, f"privacy.{action}", rid); db.commit(); return {"ok": True}
+    r.status = "fulfilled" if action == "fulfil" else "rejected"
+    if action == "fulfil" and r.kind == "deletion" and (u := db.get(M.User, r.user_id)) and not (u.settings or {}).get("deletedAt"):
+        from .routes_trust import purge_user
+        purge_user(db, u, a.handle)
+    audit(db, a.handle, f"privacy.{action}", rid); db.commit(); return {"ok": True}
 @app.post("/admin/retention/dry-run")
 def retention_dry_run(b: dict, a: M.User = Depends(require(*STAFF)), db: Session = Depends(get_db)):
     try: days = max(1, min(int(b.get("days", 365)), 36500))

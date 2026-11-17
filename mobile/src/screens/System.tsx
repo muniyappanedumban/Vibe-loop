@@ -50,6 +50,9 @@ export function Settings({ route, navigation }: any) {
             <Row icon="fingerprint" title="Biometric for publish & payout" right={<Toggle value={s.biometric} onChange={v => set('biometric', v)} label="Biometric" />} />
             <Row icon="layers" title="Your devices" sub="Where you're signed in" onPress={() => navigation.navigate('Devices')} />
             <Row icon="clock" title="Account activity" sub="Sign-ins and security changes" onPress={() => navigation.navigate('AccountActivity')} />
+            <Row icon="flag" title="Account standing" sub="Removed content, limits, appeals" onPress={() => navigation.navigate('AccountStanding')} />
+            <Row icon="download" title="Download my data" onPress={() => navigation.navigate('MyData')} />
+            <Row icon="close" tint={C.danger} title="Delete account" onPress={() => navigation.navigate('DeleteAccount')} />
           </Card>
         </Section> : null}
         {show_('privacy') ? <Section title="Privacy & data">

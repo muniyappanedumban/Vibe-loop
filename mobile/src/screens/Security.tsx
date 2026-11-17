@@ -36,6 +36,13 @@ export function SecurityCenter({ navigation }: any) {
         {sec.sessionList !== false ? <Row icon="layers" title="Your devices" sub="See where you're signed in and sign devices out" onPress={() => navigation.navigate('Devices')} /> : null}
         <Row icon="clock" title="Account activity" sub="Sign-ins, new devices and security changes" onPress={() => navigation.navigate('AccountActivity')} />
       </Card>
+      <Section title="Privacy & standing">
+        <Card>
+          <Row icon="flag" title="Account standing" sub="Removed content, limits and your appeals" onPress={() => navigation.navigate('AccountStanding')} />
+          <Row icon="download" title="Download my data" sub="A copy of everything we keep about you" onPress={() => navigation.navigate('MyData')} />
+          <Row icon="close" tint={C.danger} title="Delete account" sub="Erased after a grace period you can cancel" onPress={() => navigation.navigate('DeleteAccount')} />
+        </Card>
+      </Section>
       {sec.newDeviceAlerts !== false ? <Text style={[T.small, { marginTop: S.md }]}>You'll get a notification whenever your account signs in on a new device.</Text> : null}
     </Screen>
   );

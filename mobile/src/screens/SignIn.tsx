@@ -23,22 +23,22 @@ export const handleProblem = (h: string) => {
 export default function SignIn({ navigation, route }: any) {
   const sess = useSession(); const adding = !!route?.params?.add;
   const [tab, setTab] = useState<'in' | 'up'>('in'); const [step, setStep] = useState<'id' | 'code' | 'mfa'>('id'); const [mfaTicket, setMfaTicket] = useState(''); const [mfaCode, setMfaCode] = useState('');
-  const [ident, setIdent] = useState(''); const [handle, setHandle] = useState(''); const [name, setName] = useState(''); const [email, setEmail] = useState('');
+  const [ident, setIdent] = useState(''); const [handle, setHandle] = useState(''); const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [dob, setDob] = useState('');
   const [ticket, setTicket] = useState<OtpTicket | null>(null); const [code, setCode] = useState(''); const [busy, setBusy] = useState(false); const [wait, setWait] = useState(0);
   const [url, setUrl] = useState(sess.apiUrl); const [showUrl, setShowUrl] = useState(false); const [ping, setPing] = useState<string | null>(null);
   const codeRef = useRef<any>(null); const { toast, show } = useToast();
   useEffect(() => { if (!wait) return; const t = setTimeout(() => setWait(w => w - 1), 1000); return () => clearTimeout(t); }, [wait]);
-  const maxAcc = Math.min(MAX_ACCOUNTS, useLimit('maxAccounts', MAX_ACCOUNTS)); const resendSec = useLimit('otpResendSec', 0); const signupOpen = useAccess()?.signupOpen !== false;
+  const maxAcc = Math.min(MAX_ACCOUNTS, useLimit('maxAccounts', MAX_ACCOUNTS)); const resendSec = useLimit('otpResendSec', 0); const signupOpen = useAccess()?.signupOpen !== false; const safety = useConfig(s => (s.cfg as any).safety); const ageGate = safety?.ageGate !== false;
   useEffect(() => { if (!signupOpen && tab === 'up') setTab('in'); }, [signupOpen, tab]);
   const full = !adding ? false : sess.accounts.length >= maxAcc;
   const identifier = tab === 'up' ? '@' + handle.replace(/^@/, '').toLowerCase() : ident.trim();
 
   const send = async () => {
     sess.setApiUrl(url);
-    if (tab === 'up') { const hp = handleProblem(handle); if (hp) return show(hp, 'err'); if (name.trim().length < 2) return show('Add your display name', 'err'); if (!/^\S+@\S+\.\S+$/.test(email)) return show('Add an email for codes & recovery', 'err'); }
+    if (tab === 'up') { const hp = handleProblem(handle); if (hp) return show(hp, 'err'); if (name.trim().length < 2) return show('Add your display name', 'err'); if (ageGate && !/^\d{4}-\d{2}-\d{2}$/.test(dob)) return show('Add your date of birth as YYYY-MM-DD', 'err'); if (!/^\S+@\S+\.\S+$/.test(email)) return show('Add an email for codes & recovery', 'err'); }
     else if (ident.trim().length < 3) return show('Enter your @ID or email', 'err');
     setBusy(true);
-    try { const t = tab === 'up' ? await register(handle, name, email) : await requestOtp(ident); setTicket(t); setStep('code'); setCode(''); setWait(Math.max(30, resendSec)); setTimeout(() => codeRef.current?.focus(), 200); }
+    try { const t = tab === 'up' ? await register(handle, name, email, dob || undefined) : await requestOtp(ident); setTicket(t); setStep('code'); setCode(''); setWait(Math.max(30, resendSec)); setTimeout(() => codeRef.current?.focus(), 200); }
     catch (e: any) { show(e.message, 'err'); if (e instanceof ApiError && e.status === 429) setWait(Math.max(e.retryAfter ?? 60, resendSec, 1)); } finally { setBusy(false); }
   };
   const verify = async (c = code) => {
@@ -51,7 +51,12 @@ export default function SignIn({ navigation, route }: any) {
     }
     catch (e: any) { show(e.message, 'err'); setCode(''); } finally { setBusy(false); }
   };
-  const goHome = () => navigation.reset({ index: 0, routes: [{ name: useSession.getState().module === 'chat' ? 'ChatMain' : 'Main' }] });
+  const goHome = async () => {
+    // signed back in during a deletion grace period → show the keep-my-account screen first
+    const del = await call<any>('GET', '/me/deletion').catch(() => null);
+    const home = { name: useSession.getState().module === 'chat' ? 'ChatMain' : 'Main' };
+    navigation.reset(del?.scheduled ? { index: 1, routes: [home, { name: 'DeleteAccount' }] } : { index: 0, routes: [home] });
+  };
   const verify2 = async () => {
     const c = mfaCode.trim(); if (c.replace(/-/g, '').length !== 6 && c.replace(/-/g, '').length !== 16) return show('Enter the 6-digit code or a recovery code', 'err');
     setBusy(true);
@@ -85,6 +90,7 @@ export default function SignIn({ navigation, route }: any) {
             <Field label="Your @ID (public username)" value={handle} onChangeText={t => setHandle(t.replace(/\s/g, '').toLowerCase())} autoCapitalize="none" autoCorrect={false} placeholder="@yourname" />
             <Text style={[T.small, { marginTop: -6, marginBottom: 10, color: handle && handleProblem(handle) ? C.danger : C.inkSoft }]}>{handle ? handleProblem(handle) ?? `✓ dendo.one/@${handle.replace(/^@/, '')} looks good` : 'Your @ID is public. Your sign-in stays private.'}</Text>
             <Field label="Display name" value={name} onChangeText={setName} placeholder="Riya Kapoor" />
+            {ageGate ? <Field label={`Date of birth (YYYY-MM-DD) — you must be ${safety?.minAge ?? 13}+`} value={dob} onChangeText={t => setDob(t.replace(/[^0-9-]/g, '').slice(0, 10))} keyboardType="numbers-and-punctuation" placeholder="2004-08-21" /> : null}
             <Field label="Email (for codes & recovery — never shown)" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="you@example.com" />
           </>)}
           <Btn title={busy ? 'Sending…' : wait ? `Try again in ${wait}s` : 'Send login code'} icon="send" disabled={busy || wait > 0} onPress={send} />

@@ -47,7 +47,9 @@ async def upload(file: UploadFile = File(...), u: M.User = Depends(write_limit("
     if kind == "video":
         from .routes_uploads import probe_duration
         dur = probe_duration(os.path.join(MEDIA_DIR, f"{mid}.{ext}"))
-    db.add(M.MediaFile(id=mid, owner_id=u.id, mime=mime, size=len(data), kind=kind, name=(file.filename or "")[:200] or None, duration_sec=dur)); audit(db, u.handle, "media.upload", f"{mid} {mime} {len(data)}B"); db.commit()
+    mf = M.MediaFile(id=mid, owner_id=u.id, mime=mime, size=len(data), kind=kind, name=(file.filename or "")[:200] or None, duration_sec=dur); db.add(mf)
+    from .routes_trust import on_new_media
+    on_new_media(db, mf, os.path.join(MEDIA_DIR, f"{mid}.{ext}"), u); audit(db, u.handle, "media.upload", f"{mid} {mime} {len(data)}B"); db.commit()
     return {"url": f"/media/{mid}.{ext}", "id": mid, "mime": mime, "size": len(data), "kind": kind}
 
 NAME_RE = re.compile(r"^([A-Za-z0-9]{1,40})\.([a-z0-9]{1,5})$")  # <random id>.<ext> only — no separators, no dot-dot, no NUL
@@ -99,6 +101,9 @@ def serve(name: str, exp: int | None = Query(default=None), sig: str | None = Qu
     if not m or os.path.dirname(os.path.abspath(path)) != os.path.abspath(MEDIA_DIR) or not os.path.isfile(path): raise HTTPException(404, "Not found")
     private = m.view_once or (not m.public and db.scalar(select(M.MediaGrant.conv_id).where(M.MediaGrant.media_id == m.id).limit(1)) is not None)
     if private and not can_read_private(db, m, name, authorization, exp, sig): raise HTTPException(404, "Not found")  # 404, not 403: don't confirm existence
+    if m.scan_status != "clean":
+        from .routes_trust import can_view_held
+        if not can_view_held(db, m, authorization): raise HTTPException(404, "Not found")  # held for a safety check, or removed
     hdr = {"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" if m.view_once else "private, max-age=3600" if private else "public, max-age=86400",
            "Content-Security-Policy": "default-src 'none'; media-src 'self'; img-src 'self'; sandbox", "Cross-Origin-Resource-Policy": "same-site"}
     if m.kind not in ("image", "video"):  # documents/audio/anything else download, never render inline

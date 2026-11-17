@@ -67,3 +67,6 @@ is shown with a **Use** button. Real emails need MSG91 set up in Admin → Plugs
 - **Maintenance / "Update required" screen** — turned on in Admin → User App Settings.
 
 More: `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/SCALING.md`.
+
+## Operations
+Backups, restore tests, incident playbooks and privacy requests: `docs/RUNBOOK.md`. Scripts: `scripts/ops/`.

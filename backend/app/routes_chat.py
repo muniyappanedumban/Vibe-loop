@@ -251,6 +251,8 @@ def send(cid: str, b: MsgIn, u: M.User = Depends(write_limit("message")), db: Se
         if ex.sender != u.id or ex.conv_id != c.id: raise HTTPException(409, "Message id exists")
         return msg_json(db, ex, u)
     check_can_send(db, c, u)
+    from .routes_trust import check_message
+    check_message(db, u, c, b.text)
     now = M.now_ms(); kind = "viewonce" if b.viewOnce else ("poll" if b.poll else (b.kind if b.kind in ("voice", "snap") else ("file" if b.attachment else b.kind)))
     from .realtime import feature
     flag = {"voice": "voiceNotes", "snap": "snaps"}.get(kind)

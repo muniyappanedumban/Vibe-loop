@@ -47,6 +47,20 @@ SETTINGS = [
     _s("security.twoFactor", "global", "Two-factor sign-in (authenticator app)", "bool", True, True, "Off: users can't turn it on and sign-in skips the 2FA step (existing setups are kept)."),
     _s("security.newDeviceAlerts", "global", "New-device sign-in alerts", "bool", True, True, "Push + Account activity entry when an account signs in on a new device."),
     _s("security.sessionList", "global", "Users can see and sign out their devices", "bool", True, True),
+    _s("privacy.selfDelete", "global", "Users can delete their own account", "bool", True, True),
+    _s("privacy.deletionGraceDays", "global", "Days before a deleted account is erased (can cancel meanwhile)", "int", 30, True, min=0, max=90),
+    _s("privacy.selfExport", "global", "Users can download their data", "bool", True, True),
+    _s("safety.ageGate", "global", "Ask birth date at sign-up", "bool", True, True, "Set per country with a country layer."),
+    _s("safety.minAge", "global", "Minimum age to sign up", "int", 13, True, min=13, max=21),
+    _s("safety.teenDefaults", "global", "Under-18s start private (profile private, only friends can message)", "bool", True, True),
+    _s("safety.appeals", "global", "Users can appeal bans, removed posts and blocked media", "bool", True, True),
+    _s("safety.appealWindowDays", "global", "Days to appeal after an action", "int", 30, True, min=1, max=365),
+    _s("safety.scanUploads", "global", "Hold new uploads until scanned or reviewed", "bool", False, True, "Uses the Scanner plug when connected; otherwise uploads wait in the admin Scan Queue."),
+    _s("safety.hashBlocklist", "global", "Refuse files on the hash blocklist", "bool", True, True),
+    _s("spam.newAccountHours", "global", "Accounts younger than this are 'new' (hours, 0 = off)", "int", 24, True, min=0, max=720),
+    _s("spam.newAccountDmPerHour", "global", "New accounts: max new chats started per hour", "int", 10, True, min=1, max=500),
+    _s("spam.bulkSameText", "global", "Flag same message sent to this many chats in 10 min (0 = off)", "int", 8, True, min=0, max=500),
+    _s("spam.autoRestrict", "global", "Auto-restrict flagged spammers for 24 h", "bool", True, True),
     _s("limits.maxAccounts", "global", "Max accounts per email", "int", 5, True, min=1, max=10),
     _s("access.maintenance", "global", "Maintenance mode", "bool", False, True, "On: non-staff API calls get 503; the app shows the message."),
     _s("access.maintenanceMessage", "global", "Maintenance message", "str", "We're tuning things up — back soon.", maxLen=200),
@@ -55,7 +69,7 @@ SETTINGS = [
     _s("limits.autoHideReports", "global", "Auto-hide a post after N reports (0 = off)", "int", 5, True, min=0, max=1000),
 ]
 BY_PATH = {s["path"]: s for s in SETTINGS}
-OWNED_TOP = ("defaults", "access", "security")  # top-level keys this module owns entirely; "limits" is shared (fees etc. stay elsewhere)
+OWNED_TOP = ("defaults", "access", "security", "privacy", "safety", "spam")  # top-level keys this module owns entirely; "limits" is shared (fees etc. stay elsewhere)
 LEGACY_LIMITS = {"maxAccounts", "maxGroupSize", "statusHours", "editWindowMin", "undoWindowMin"}
 
 def base_values() -> dict:

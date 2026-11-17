@@ -191,6 +191,10 @@ class MediaFile(Base):
     kind: Mapped[str] = mapped_column(String(10), default="image", server_default="image")  # image|video|audio|file
     view_once: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # v6 snap media: owner or 60 s signed link only
     name: Mapped[str | None] = mapped_column(String(200), nullable=True); duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Trust & safety: clean | pending (held until scanned / reviewed) | blocked. Only owner + staff can open non-clean media.
+    scan_status: Mapped[str] = mapped_column(String(10), default="clean", server_default="clean", index=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    scan_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 class Tribe(Base):
     __tablename__ = "tribes"
@@ -561,3 +565,45 @@ class SecurityEvent(Base):
     at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
     kind: Mapped[str] = mapped_column(String(40)); detail: Mapped[str] = mapped_column(String(300), default="")
     ip: Mapped[str] = mapped_column(String(64), default="")
+
+
+# ---------- trust & safety: appeals, spam flags, hash blocklist, incidents ----------
+class Appeal(Base):
+    __tablename__ = "appeals"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("apl"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(10))  # ban | post | media | restrict
+    target: Mapped[str] = mapped_column(String(80), default="")
+    reason: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(12), default="open", index=True)  # open | upheld | reversed
+    note: Mapped[str] = mapped_column(String(500), default="")
+    decided_by: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+    decided_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+class SpamFlag(Base):
+    __tablename__ = "spam_flags"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(30)); detail: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(12), default="open", index=True)  # open | cleared | actioned
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+
+class BlockedHash(Base):
+    """Exact SHA-256 of files that must never be stored or served (known abuse material lists, past takedowns)."""
+    __tablename__ = "blocked_hashes"
+    sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    label: Mapped[str] = mapped_column(String(120), default=""); added_by: Mapped[str] = mapped_column(String(60), default="")
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class Incident(Base):
+    __tablename__ = "incidents"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("inc"))
+    severity: Mapped[str] = mapped_column(String(10), default="medium", index=True)  # low | medium | high | critical
+    kind: Mapped[str] = mapped_column(String(30), default="manual")
+    title: Mapped[str] = mapped_column(String(200)); detail: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(15), default="open", index=True)  # open | investigating | resolved
+    user_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    timeline: Mapped[list] = mapped_column(JSON, default=list)
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+    resolved_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

@@ -14,7 +14,7 @@ def db_do(fn):
 
 # ---------- OTP / identity ----------
 def test_register_and_otp_happy_path(client):
-    r = client.post("/auth/register", json={"handle": "@New.Person", "name": "New", "email": "np@example.com"}).json()
+    r = client.post("/auth/register", json={"birthDate": "2000-01-01", "handle": "@New.Person", "name": "New", "email": "np@example.com"}).json()
     assert r["sent"] and r["channel"] == "email" and r["to"] == "n***@example.com" and r["expiresIn"] == 300 and len(r["demoCode"]) == 6
     v = client.post("/auth/otp/verify", json={"identifier": "@new.person", "code": r["demoCode"]})
     assert v.status_code == 200 and v.json()["user"]["handle"] == "@new.person" and v.json()["user"]["verified"]
@@ -61,13 +61,13 @@ def test_rate_limit_429(client):
 
 def test_email_cap(client):
     for i in range(3):  # riya's email already has 2 accounts
-        assert client.post("/auth/register", json={"handle": f"riya.alt{i}", "name": "R", "email": "riya@vibeloop.app"}).status_code == 200
-    r = client.post("/auth/register", json={"handle": "riya.alt9", "name": "R", "email": "riya@vibeloop.app"})
+        assert client.post("/auth/register", json={"birthDate": "2000-01-01", "handle": f"riya.alt{i}", "name": "R", "email": "riya@vibeloop.app"}).status_code == 200
+    r = client.post("/auth/register", json={"birthDate": "2000-01-01", "handle": "riya.alt9", "name": "R", "email": "riya@vibeloop.app"})
     assert r.status_code == 409 and r.json()["detail"] == "This email already has 5 accounts"
     assert client.get("/me/accounts-for-email", headers=login(client, H["riya"])).json()["count"] == 5
 
 def test_handle_rules(client, riya):
-    reg = lambda h: client.post("/auth/register", json={"handle": h, "name": "X", "email": "x@example.com"}).status_code
+    reg = lambda h: client.post("/auth/register", json={"birthDate": "2000-01-01", "handle": h, "name": "X", "email": "x@example.com"}).status_code
     assert reg("ab") == 400 and reg("Bad-Handle") == 400 and reg("a" * 21) in (400, 422)
     assert reg("@admin") == 409 and reg("riya.makes") == 409
     client.put("/admin/kv/reserved/@Brand.X", headers=login(client, "admin@vibeloop.app"), json={"on": True})

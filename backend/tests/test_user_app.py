@@ -25,10 +25,10 @@ def test_validation(client, admin):
 
 def test_signup_closed_and_max_accounts(client, admin):
     put(client, admin, "base", {"access": {"signupOpen": False}})
-    r = client.post("/auth/register", json={"email": "new@x.io", "handle": "newbie1", "name": "New"})
+    r = client.post("/auth/register", json={"birthDate": "2000-01-01", "email": "new@x.io", "handle": "newbie1", "name": "New"})
     assert r.status_code == 403
     put(client, admin, "base", {"limits": {"maxAccounts": 1}})
-    r = client.post("/auth/register", json={"email": "riya@vibeloop.app", "handle": "riya2x", "name": "R"})
+    r = client.post("/auth/register", json={"birthDate": "2000-01-01", "email": "riya@vibeloop.app", "handle": "riya2x", "name": "R"})
     assert r.status_code == 409 and "1 accounts" in r.json()["detail"]
 
 def test_maintenance_and_min_version(client, admin, riya):

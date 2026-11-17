@@ -105,7 +105,7 @@ DEFAULT_SLABS = [{"key": "starter", "name": "Starter", "minFollowers": 0, "maxFo
                  {"key": "pro", "name": "Pro", "minFollowers": 10000}]
 DEFAULT_LANGS = {"available": ["en", "hi", "ta", "te", "kn", "ml", "mr", "bn"], "default": "en"}
 LAYER_RE = re.compile(r"^(base|country:[A-Z]{2}|zone:[A-Z0-9_-]{1,30}|slab:[a-z0-9_-]{1,30}|lang:[a-z]{2,3})$")
-TOP_KEYS = {"modules": dict, "nav": dict, "screens": dict, "features": dict, "limits": dict, "fees": dict, "languages": dict, "banner": (dict, type(None)), "theme": dict, "moduleNames": dict, "rtc": dict, "defaults": dict, "access": dict, "security": dict}
+TOP_KEYS = {"modules": dict, "nav": dict, "screens": dict, "features": dict, "limits": dict, "fees": dict, "languages": dict, "banner": (dict, type(None)), "theme": dict, "moduleNames": dict, "rtc": dict, "defaults": dict, "access": dict, "security": dict, "privacy": dict, "safety": dict, "spam": dict}
 
 def deep_merge(a, b):
     """b over a. dicts merge recursively; nav lists merge by item key; other values replace."""

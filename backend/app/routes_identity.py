@@ -29,11 +29,13 @@ def resolve(db: Session, identifier: str) -> M.User | None:
     """@handle → that account. email → newest unverified account (just registered) else oldest verified account."""
     ident = identifier.strip()
     if "@" in ident[1:]:
-        accts = db.scalars(select(M.User).where(M.User.email == ident.lower(), M.User.suspended == False).order_by(M.User.created_at)).all()  # noqa: E712
+        # suspended accounts can still sign in — every endpoint except appeals / standing / export / delete answers 403
+        accts = db.scalars(select(M.User).where(M.User.email == ident.lower()).order_by(M.User.created_at)).all()
+        accts = [a for a in accts if not (a.settings or {}).get("deletedAt")]
         unv = [a for a in accts if not a.verified]
         return unv[-1] if unv else (accts[0] if accts else None)
     u = find_by_handle(db, ident)
-    return u if u and not u.suspended else None
+    return u if u and not (u.settings or {}).get("deletedAt") else None
 
 def sent_shape(to: str, code: str | None) -> dict:
     d = {"sent": True, "channel": "email", "to": to, "expiresIn": OTP_TTL_MS // 1000}
@@ -73,6 +75,7 @@ def log_limited(db: Session, identifier: str, ip: str):
 # ---------- auth ----------
 class RegisterIn(BaseModel):
     handle: str = Field(min_length=1, max_length=21); name: str = Field(min_length=1, max_length=60); email: str = Field(min_length=5, max_length=200)
+    birthDate: str | None = Field(default=None, max_length=10)
 @router.post("/auth/register")
 def register(b: RegisterIn, req: Request, db: Session = Depends(get_db)):
     from .v2common import kill_on
@@ -84,11 +87,14 @@ def register(b: RegisterIn, req: Request, db: Session = Depends(get_db)):
     if err := handle_problem(db, b.handle): raise HTTPException(*err)
     if db.scalar(select(func.count()).select_from(M.User).where(M.User.email == email)) >= (mx := ua_setting(db, "limits.maxAccounts")):
         raise HTTPException(409, f"This email already has {mx} accounts")
+    from .routes_trust import check_age, apply_age
+    age = check_age(db, b.birthDate)
     ip = client_ip(req)
     try: enforce("register", email, ip)
     except HTTPException: log_limited(db, email, ip); raise
     u = M.User(email=email, handle=stored_handle(b.handle), name=b.name.strip(), password_hash="!otp-only", role="creator", verified=False,
                hue=secrets.randbelow(360), profile={})
+    apply_age(db, u, b.birthDate, age)
     db.add(u); db.flush(); audit(db, u.handle, "auth.register")
     return issue_otp(db, u, email, ip)
 

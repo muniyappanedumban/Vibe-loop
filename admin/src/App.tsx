@@ -14,12 +14,11 @@ import type { ApiUser, Overview, Report, ApiPayout, AuditRow, PrivacyReq, ApiAnn
 
 /* Demo-only state (abuse rules / flagged accounts) — everything else comes from the API. */
 const Ctx = createContext<{ s: State; dispatch: Dispatch<Action> }>(null!);
-const useStore = () => useContext(Ctx);
 
 export const PAGES = [
   ['dashboard', 'Mission Control'], ['users', 'Members'], ['moderation', 'Mod Queue'], ['payouts', 'Cashouts'],
   ['health', 'Vitals'], ['costs', 'Burn Rate'], ['flags', 'Switchboard'], ['audit', 'Paper Trail'],
-  ['privacy', 'Privacy Desk'], ['abuse', 'Spam Shield'], ['revenue', 'Revenue Pulse'], ['announcements', 'Megaphone'], ['roles', 'Role Matrix'],
+  ['privacy', 'Privacy Desk'], ['abuse', 'Spam Shield'], ['appeals', 'Appeals'], ['scan', 'Scan Queue'], ['incidents', 'Incidents'], ['revenue', 'Revenue Pulse'], ['announcements', 'Megaphone'], ['roles', 'Role Matrix'],
   ['navigation', 'Nav Builder'], ['themes', 'Theme Studio'], ['userapp', 'User App Settings'], ['switches', 'All Switches'], ['screens', 'Screen Switches'], ['limits', 'Feature Dials'], ['zones', 'Zones'], ['slabs', 'Tiers'], ['languages', 'Lingo'], ['preview', 'Preview Room'],
   ['otp', 'Login Watch'], ['identity', 'ID Desk'], ['chat', 'Hush & Hoods'],
   ['realtime', 'Realtime Monitor'], ['calls', 'Call Log'], ['push', 'Push Center'], ['e2ee', 'E2EE & Keys'],
@@ -172,7 +171,8 @@ function Dashboard() {
             <li><a href="#/moderation"><Icon name="moderation" /><span>Open reports</span><b>{o.openReports}</b></a></li>
             <li><a href="#/payouts"><Icon name="payouts" /><span>Payouts awaiting approval</span><b>{o.pendingPayouts}</b></a></li>
             <li><a href="#/privacy"><Icon name="privacy" /><span>Open privacy requests</span><b>{o.pendingPrivacy}</b></a></li>
-            <li><a href="#/abuse"><Icon name="abuse" /><span>Accounts flagged (demo)</span><b>3</b></a></li>
+            <li><a href="#/abuse"><Icon name="abuse" /><span>Spam flags & appeals</span><b>→</b></a></li>
+            <li><a href="#/incidents"><Icon name="incidents" /><span>Active incidents</span><b>→</b></a></li>
           </ul>
         </Card>
       </div>
@@ -372,17 +372,125 @@ function Privacy() {
   }}</Gate>;
 }
 
+/* ===================== Trust & safety (live API) ===================== */
+type SpamFlagRow = { id: number; kind: string; detail: string; status: string; at: number; user: { id: string; handle: string; name: string; suspended: boolean; restrictedUntil: number | null; score: number; why: string[] } };
+type Watch = { id: string; handle: string; name: string; score: number; why: string[] };
 function Abuse() {
-  const { s, dispatch } = useStore();
+  const [status, setStatus] = useState('open');
+  const r = useApi<{ flags: SpamFlagRow[]; watchlist: Watch[] }>('/admin/spam?status=' + status); const { run, busy } = useAct();
+  const act = (f: SpamFlagRow, action: string) => run(() => api(`/admin/spam/${f.id}`, { method: 'POST', body: { action } }), `${f.user.handle}: ${action}`, r.reload);
+  const Score = ({ v }: { v: number }) => <div className="score" style={{ ['--p' as string]: v }}><span>{v}</span></div>;
   return <>
-    <NotReady>Demo data — abuse detection is not part of the backend yet. Toggles here are local to this tab and not saved.</NotReady>
+    <p className="note">Rules and limits live in <a className="link" href="#/userapp">User App Settings → Global → spam.*</a>: new-account chat limit, bulk same-text detection, auto-restrict.</p>
     <div className="grid g2">
-      <Card title="Detection rules" extra={<Demo />}>{s.rules.map(r => <div key={r.id} className="frow"><div className="grow"><b>{r.name}</b><small>{r.desc} · {r.hits} hits (7d)</small></div><Toggle label={r.name} on={r.on} onClick={() => dispatch({ type: 'rule.toggle', id: r.id })} /></div>)}</Card>
-      <Card title="Flagged accounts" extra={<Demo />}><div className="mlist">{s.flagged.map(f => <div key={f.id} className="mitem">
-        <div className="score" style={{ ['--p' as string]: f.score }}><span>{f.score}</span></div>
-        <div className="grow"><b>{f.handle}</b><small>{f.signal}</small></div><St v={f.status} />
-        {f.status === 'review' && <div className="row"><button className="btn sm ghost" onClick={() => dispatch({ type: 'flagged.set', id: f.id, status: 'cleared' })}>Clear</button><button className="btn sm danger" onClick={() => dispatch({ type: 'flagged.set', id: f.id, status: 'suspended' })}>Suspend</button></div>}
-      </div>)}</div></Card>
+      <Card title="Spam flags" extra={<div className="row"><LivePill /><select value={status} onChange={e => setStatus(e.target.value)}>{['open', 'actioned', 'cleared', 'all'].map(x => <option key={x}>{x}</option>)}</select></div>}>
+        {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !r.data ? <p className="loading">Loading…</p> : <div className="mlist">
+          {r.data.flags.map(f => <div key={f.id} className="mitem"><Score v={f.user.score} />
+            <div className="grow"><b>{f.user.handle}</b> <small className="muted">{f.kind.replace(/_/g, ' ')} · {ago(f.at)}</small><small>{f.detail}</small><small className="muted">{f.user.why.join(' · ')}</small>
+              <div className="row mt">{f.user.suspended ? <Pill tone="red">suspended</Pill> : f.user.restrictedUntil ? <Pill tone="amber">restricted</Pill> : null}<St v={f.status} /></div></div>
+            {f.status === 'open' && <div className="row"><button className="btn sm ghost" disabled={busy} onClick={() => act(f, 'clear')}>Clear</button><button className="btn sm ghost" disabled={busy} onClick={() => act(f, 'restrict')}>Restrict 7d</button><button className="btn sm danger" disabled={busy} onClick={() => act(f, 'suspend')}>Suspend</button></div>}
+          </div>)}
+          {!r.data.flags.length && <p className="empty">No {status} flags.</p>}
+        </div>}
+      </Card>
+      <Card title="Watchlist · new accounts (7 days) scoring ≥ 40">
+        {!r.data ? <p className="loading">Loading…</p> : <div className="mlist">{r.data.watchlist.map(w => <div key={w.id} className="mitem"><Score v={w.score} /><div className="grow"><b>{w.handle}</b><small>{w.why.join(' · ')}</small></div><a className="btn sm ghost" href={`#/users?open=${w.id}`}>Open</a></div>)}
+          {!r.data.watchlist.length && <p className="empty">Nobody suspicious right now.</p>}</div>}
+      </Card>
+    </div>
+  </>;
+}
+
+type AppealRow = { id: string; kind: string; target: string; reason: string; status: string; note: string; at: number; decidedAt: number | null; user: { id: string; handle: string; name: string; suspended: boolean }; content?: { text?: string; media?: string | null; mediaId?: string; kind?: string; status?: string; note?: string } };
+function Appeals() {
+  const [status, setStatus] = useState('open'); const r = useApi<AppealRow[]>('/admin/appeals?status=' + status); const { run, busy } = useAct();
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const decide = (a: AppealRow, decision: 'uphold' | 'reverse') => run(() => api(`/admin/appeals/${a.id}/decide`, { method: 'POST', body: { decision, note: notes[a.id] ?? '' } }), `Appeal ${decision === 'reverse' ? 'reversed' : 'upheld'}`, r.reload);
+  const what: Record<string, string> = { ban: 'Account suspension', post: 'Removed post', media: 'Blocked file', restrict: 'Spam restriction' };
+  return <Card title={r.data ? `${r.data.length} ${status} appeals` : 'Appeals'} extra={<div className="row"><LivePill /><select value={status} onChange={e => setStatus(e.target.value)}>{['open', 'upheld', 'reversed', 'all'].map(x => <option key={x}>{x}</option>)}</select></div>}>
+    <p className="note">Members appeal from the app (Account standing). Reversing lifts the suspension or restriction, restores the post, or clears the file. The member is notified either way.</p>
+    {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !r.data ? <p className="loading">Loading…</p> : <div className="mlist">
+      {r.data.map(a => <div key={a.id} className="mitem" style={{ alignItems: 'flex-start' }}>
+        <div className="grow"><b>{what[a.kind] ?? a.kind}</b> <small className="muted">· {a.user.handle} · {ago(a.at)}</small>
+          <p style={{ margin: '6px 0' }}>“{a.reason}”</p>
+          {a.content?.text ? <small className="muted">Post: {a.content.text.slice(0, 200) || '(no text)'}</small> : null}
+          {a.content?.mediaId ? <small className="muted">File {a.content.mediaId} · {a.content.kind} · {a.content.note}</small> : null}
+          {a.status === 'open' ? <input style={{ marginTop: 8, width: '100%' }} placeholder="Note to the member (optional)" value={notes[a.id] ?? ''} onChange={e => setNotes({ ...notes, [a.id]: e.target.value })} /> : <small>Decision: <St v={a.status} /> {a.note}</small>}
+        </div>
+        {a.status === 'open' && <div className="row"><button className="btn sm ghost" disabled={busy} onClick={() => decide(a, 'uphold')}>Keep decision</button><button className="btn sm prism" disabled={busy} onClick={() => decide(a, 'reverse')}>Reverse</button></div>}
+      </div>)}
+      {!r.data.length && <p className="empty">No {status} appeals.</p>}
+    </div>}
+  </Card>;
+}
+
+/** Image/video preview for held media — fetched with the staff token (held files aren't public). */
+function HeldMedia({ url, kind }: { url: string; kind: string }) {
+  const [src, setSrc] = useState<string | null>(null); const [show, setShow] = useState(false);
+  useEffect(() => { if (!show) return; let u = ''; fetch(API_URL + url, { headers: { Authorization: 'Bearer ' + getToken() } }).then(r => r.ok ? r.blob() : null).then(b => { if (b) { u = URL.createObjectURL(b); setSrc(u); } }); return () => { if (u) URL.revokeObjectURL(u); }; }, [show, url]);
+  if (!show) return <button className="btn sm ghost" onClick={() => setShow(true)}>Show (blurred)</button>;
+  if (!src) return <small className="muted">Loading…</small>;
+  return kind === 'video' ? <video src={src} controls style={{ maxWidth: 220, filter: 'blur(14px)' }} onClick={e => ((e.target as HTMLElement).style.filter = 'none')} />
+    : <img src={src} alt="held upload" style={{ maxWidth: 220, filter: 'blur(14px)', cursor: 'pointer' }} onClick={e => ((e.target as HTMLElement).style.filter = 'none')} />;
+}
+type ScanRow = { id: string; owner: string; kind: string; mime: string; size: number; status: string; note: string | null; sha256: string | null; at: number; url: string };
+function ScanQueue() {
+  const [status, setStatus] = useState('pending'); const r = useApi<ScanRow[]>('/admin/scan-queue?status=' + status);
+  const hl = useApi<{ sha256: string; label: string; addedBy: string; at: number }[]>('/admin/hash-blocklist'); const { run, busy } = useAct();
+  const [hash, setHash] = useState(''); const [label, setLabel] = useState('');
+  const verdict = (m: ScanRow, v: 'clean' | 'blocked', list = false) => run(() => api(`/admin/media/${m.id}/scan`, { method: 'POST', body: { verdict: v, addToBlocklist: list, label: list ? 'moderator block' : '' } }), v === 'clean' ? 'Cleared' : 'Blocked', () => { r.reload(); hl.reload(); });
+  return <>
+    <p className="note">With <a className="link" href="#/userapp">safety.scanUploads</a> on, new uploads are held until the <a className="link" href="#/plugs">Scanner plug</a> clears them or a moderator does here. Files on the hash blocklist are always refused, and an incident is opened.</p>
+    <div className="grid g2-1">
+      <Card title={r.data ? `${r.data.length} ${status}` : 'Scan Queue'} extra={<div className="row"><LivePill /><select value={status} onChange={e => setStatus(e.target.value)}>{['pending', 'blocked', 'all'].map(x => <option key={x}>{x}</option>)}</select></div>}>
+        {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !r.data ? <p className="loading">Loading…</p> : <div className="mlist">
+          {r.data.map(m => <div key={m.id} className="mitem" style={{ alignItems: 'flex-start' }}>
+            <HeldMedia url={m.url} kind={m.kind} />
+            <div className="grow"><b>{m.owner}</b> <small className="muted">{m.kind} · {(m.size / 1024).toFixed(0)} KB · {ago(m.at)}</small><small>{m.note}</small><small className="mono muted">{m.sha256?.slice(0, 24)}…</small><St v={m.status} /></div>
+            <div className="row">{m.status !== 'clean' && <button className="btn sm ghost" disabled={busy} onClick={() => verdict(m, 'clean')}>Clear</button>}{m.status !== 'blocked' && <><button className="btn sm danger" disabled={busy} onClick={() => verdict(m, 'blocked')}>Block</button><button className="btn sm danger" disabled={busy} onClick={() => verdict(m, 'blocked', true)}>Block + blocklist</button></>}</div>
+          </div>)}
+          {!r.data.length && <p className="empty">Nothing {status}.</p>}
+        </div>}
+      </Card>
+      <Card title={`Hash blocklist${hl.data ? ` · ${hl.data.length}` : ''}`}>
+        <div className="row"><input placeholder="SHA-256 (64 hex)" value={hash} onChange={e => setHash(e.target.value.trim())} className="mono" /><input placeholder="Label" value={label} onChange={e => setLabel(e.target.value)} />
+          <button className="btn sm prism" disabled={busy || !/^[0-9a-fA-F]{64}$/.test(hash)} onClick={() => run(() => api<{ matchedExisting: number }>('/admin/hash-blocklist', { method: 'POST', body: { sha256: hash, label } }), 'Added', x => { setHash(''); setLabel(''); hl.reload(); r.reload(); if (x?.matchedExisting) alert(`${x.matchedExisting} stored file(s) matched and were blocked`); })}>Add</button></div>
+        <div className="mlist mt">{hl.data?.map(h => <div key={h.sha256} className="mitem"><div className="grow"><code className="mono">{h.sha256.slice(0, 20)}…</code><small>{h.label} · {h.addedBy} · {ago(h.at)}</small></div><button className="btn sm ghost" disabled={busy} onClick={() => run(() => api(`/admin/hash-blocklist/${h.sha256}`, { method: 'DELETE' }), 'Removed', hl.reload)}>Remove</button></div>)}</div>
+      </Card>
+    </div>
+  </>;
+}
+
+type IncidentRow = { id: string; severity: string; kind: string; title: string; detail: string; status: string; userId: string | null; timeline: { at: number; by: string; note: string }[]; at: number; resolvedAt: number | null };
+function Incidents() {
+  const [status, setStatus] = useState('active'); const r = useApi<IncidentRow[]>('/admin/incidents?status=' + status); const { run, busy } = useAct();
+  const [f, setF] = useState({ title: '', severity: 'medium', detail: '' }); const [notes, setNotes] = useState<Record<string, string>>({});
+  const tone: Record<string, string> = { critical: 'red', high: 'red', medium: 'amber', low: 'gray' };
+  const upd = (i: IncidentRow, body: Record<string, string>) => run(() => api(`/admin/incidents/${i.id}`, { method: 'PATCH', body: { ...body, note: notes[i.id] ?? '' } }), 'Updated', () => { setNotes({ ...notes, [i.id]: '' }); r.reload(); });
+  return <>
+    <p className="note">Playbooks: <code>docs/RUNBOOK.md</code>. Auto-opened for blocklisted uploads, scanner child-safety flags and mass-messaging waves.</p>
+    <div className="grid g2-1">
+      <Card title={r.data ? `${r.data.length} ${status} incidents` : 'Incidents'} extra={<div className="row"><LivePill /><select value={status} onChange={e => setStatus(e.target.value)}>{['active', 'open', 'investigating', 'resolved', 'all'].map(x => <option key={x}>{x}</option>)}</select></div>}>
+        {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !r.data ? <p className="loading">Loading…</p> : <div className="mlist">
+          {r.data.map(i => <div key={i.id} className="mitem" style={{ alignItems: 'flex-start' }}>
+            <div className="grow"><div className="row"><Pill tone={tone[i.severity] ?? 'gray'}>{i.severity}</Pill><b>{i.title}</b><St v={i.status} /></div>
+              <small className="muted">{i.kind} · opened {ago(i.at)}{i.userId ? ` · user ${i.userId}` : ''}</small>{i.detail && <small style={{ whiteSpace: 'pre-wrap' }}>{i.detail}</small>}
+              <ul className="small" style={{ margin: '6px 0 0', paddingLeft: 16 }}>{i.timeline.map((t, k) => <li key={k}><span className="muted">{when(t.at)} · {t.by}:</span> {t.note}</li>)}</ul>
+              {i.status !== 'resolved' && <div className="row mt"><input placeholder="Timeline note" value={notes[i.id] ?? ''} onChange={e => setNotes({ ...notes, [i.id]: e.target.value })} style={{ flex: 1 }} />
+                <button className="btn sm ghost" disabled={busy || !(notes[i.id] ?? '').trim()} onClick={() => upd(i, {})}>Add note</button>
+                {i.status === 'open' && <button className="btn sm ghost" disabled={busy} onClick={() => upd(i, { status: 'investigating' })}>Investigating</button>}
+                <button className="btn sm prism" disabled={busy} onClick={() => upd(i, { status: 'resolved' })}>Resolve</button></div>}
+            </div>
+          </div>)}
+          {!r.data.length && <p className="empty">No {status} incidents.</p>}
+        </div>}
+      </Card>
+      <Card title="Open an incident">
+        <label className="lbl">Title</label><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="What's happening" />
+        <label className="lbl">Severity</label><select value={f.severity} onChange={e => setF({ ...f, severity: e.target.value })}>{['low', 'medium', 'high', 'critical'].map(x => <option key={x}>{x}</option>)}</select>
+        <label className="lbl">Details</label><textarea rows={4} value={f.detail} onChange={e => setF({ ...f, detail: e.target.value })} />
+        <button className="btn prism mt" disabled={busy || f.title.trim().length < 3} onClick={() => run(() => api('/admin/incidents', { method: 'POST', body: f }), 'Incident opened', () => { setF({ title: '', severity: 'medium', detail: '' }); r.reload(); })}>Open incident</button>
+      </Card>
     </div>
   </>;
 }
@@ -2010,7 +2118,7 @@ function Tabs<T extends string>({ v, set, opts }: { v: T; set: (t: T) => void; o
   return <div className="tabs">{opts.map(([k, l]) => <button key={k} className={v === k ? 'on' : ''} onClick={() => set(k)}>{l}</button>)}</div>;
 }
 
-const VIEWS: Record<Slug, () => ReactNode> = { dashboard: Dashboard, users: Users, moderation: Moderation, payouts: Payouts, health: Health, costs: Costs, flags: Flags, audit: Audit, privacy: Privacy, abuse: Abuse, revenue: Revenue, announcements: Announcements, roles: Roles, settings: SettingsPage, emoji: Emoji, features: Features, search: GlobalSearch,
+const VIEWS: Record<Slug, () => ReactNode> = { dashboard: Dashboard, users: Users, moderation: Moderation, payouts: Payouts, health: Health, costs: Costs, flags: Flags, audit: Audit, privacy: Privacy, abuse: Abuse, appeals: Appeals, scan: ScanQueue, incidents: Incidents, revenue: Revenue, announcements: Announcements, roles: Roles, settings: SettingsPage, emoji: Emoji, features: Features, search: GlobalSearch,
   navigation: NavigationPage, userapp: UserAppSettingsPage, switches: AllSwitchesPage, themes: ThemesPage, screens: ScreensPage, limits: LimitsPage, zones: ZonesPage, slabs: SlabsPage, languages: LanguagesPage, preview: PreviewPage, otp: OtpPage, identity: IdentityPage, chat: ChatPage, learn: LearnPage, realtime: RealtimePage, calls: CallsPage, push: PushPage, e2ee: E2eePage,
   cashflow: CashFlowPage, money: MoneyPage, plans: PlansPage, countries: CountriesPage, boosts: BoostsPage, stash: StashPage, plugs: PlugsPage, promos: PromosPage, uploads: UploadsPage,
   pages: PagesPage, blog: BlogPage, reviews: ReviewsPage, speakup: SpeakUpPage };

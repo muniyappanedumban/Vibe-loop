@@ -1,0 +1,56 @@
+# Nightly database backup (02:30 UTC) + weekly restore test (Sun 04:00 UTC).
+# Needs secret keys: MIGRATE_DATABASE_URL (direct to primary), BACKUP_ADMIN_URL (role with CREATEDB), optional S3_URI + AWS creds.
+# A failed job = backups are not safe: alert on kube_job_failed{job_name=~"vibeloop-(backup|restore-test).*"} and open an incident.
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: vibeloop-backup }
+spec:
+  schedule: "30 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              command: ["sh", "-c", "apk add --no-cache bash coreutils aws-cli >/dev/null && DATABASE_URL=\"$MIGRATE_DATABASE_URL\" bash /ops/backup-db.sh"]
+              env:
+                - { name: BACKUP_DIR, value: /backups }
+                - { name: KEEP_DAYS, value: "14" }
+                - { name: MIGRATE_DATABASE_URL, valueFrom: { secretKeyRef: { name: vibeloop-api, key: MIGRATE_DATABASE_URL } } }
+                - { name: S3_URI, valueFrom: { secretKeyRef: { name: vibeloop-api, key: S3_URI, optional: true } } }
+              volumeMounts: [{ name: backups, mountPath: /backups }, { name: ops, mountPath: /ops }]
+          volumes:
+            - { name: backups, persistentVolumeClaim: { claimName: vibeloop-backups } }
+            - { name: ops, configMap: { name: vibeloop-ops-scripts, defaultMode: 0755 } }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: vibeloop-restore-test }
+spec:
+  schedule: "0 4 * * 0"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: restore-test
+              image: postgres:16-alpine
+              command: ["sh", "-c", "apk add --no-cache bash coreutils >/dev/null && bash /ops/restore-test.sh"]
+              env:
+                - { name: BACKUP_DIR, value: /backups }
+                - { name: ADMIN_URL, valueFrom: { secretKeyRef: { name: vibeloop-api, key: BACKUP_ADMIN_URL } } }
+              volumeMounts: [{ name: backups, mountPath: /backups }, { name: ops, mountPath: /ops }]
+          volumes:
+            - { name: backups, persistentVolumeClaim: { claimName: vibeloop-backups } }
+            - { name: ops, configMap: { name: vibeloop-ops-scripts, defaultMode: 0755 } }
+# Create the scripts ConfigMap from the repo:
+#   kubectl create configmap vibeloop-ops-scripts --from-file=scripts/ops/backup-db.sh --from-file=scripts/ops/restore-test.sh

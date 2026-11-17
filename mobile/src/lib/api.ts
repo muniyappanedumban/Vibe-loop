@@ -55,7 +55,7 @@ export async function loadDeviceId() {
 }
 loadDeviceId();
 /** Platform gates from the server: force-update (426) or maintenance (503). App root shows a blocking screen. */
-export const useGate = create<{ kind: null | 'update' | 'maintenance'; message: string }>(() => ({ kind: null, message: '' }));
+export const useGate = create<{ kind: null | 'update' | 'maintenance' | 'suspended'; message: string }>(() => ({ kind: null, message: '' }));
 export async function call<T = any>(method: string, path: string, body?: any, timeoutMs = 12000): Promise<T> {
   const { apiUrl, token } = useSession.getState();
   const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), timeoutMs);
@@ -64,7 +64,8 @@ export async function call<T = any>(method: string, path: string, body?: any, ti
     const data = await r.json().catch(() => ({}));
     if (r.status === 426) useGate.setState({ kind: 'update', message: String(data.detail ?? 'Please update VibeLoop') });
     else if (r.status === 503 && (r.headers.get('retry-after') || /maint/i.test(String(data.detail ?? '')))) useGate.setState({ kind: 'maintenance', message: String(data.detail ?? 'Down for maintenance') });
-    else if (r.ok && useGate.getState().kind) useGate.setState({ kind: null, message: '' });
+    else if (r.status === 403 && data.detail === 'Account suspended') useGate.setState({ kind: 'suspended', message: '' });
+    else if (r.ok && useGate.getState().kind && useGate.getState().kind !== 'suspended') useGate.setState({ kind: null, message: '' });
     if (!r.ok) { const ra = parseInt(r.headers.get('retry-after') ?? '', 10); throw new ApiError(r.status, typeof data.detail === 'string' ? data.detail : `Request failed (${r.status})`, isFinite(ra) ? ra : undefined); }
     return data as T;
   } catch (e: any) {

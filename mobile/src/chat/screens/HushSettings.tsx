@@ -289,6 +289,9 @@ export function HushSecurity({ navigation }: any) {
         <CRow icon="lock" title="Two-factor sign-in" sub="Authenticator app + recovery codes" onPress={() => navigation.navigate('TwoFactor')} />
         <CRow icon="phone" title="Your devices" sub="See and sign out devices" onPress={() => navigation.navigate('Devices')} />
         <CRow icon="clock" title="Account activity" sub="Sign-ins and security changes" onPress={() => navigation.navigate('AccountActivity')} />
+        <CRow icon="shield" title="Account standing" sub="Removed content, limits, appeals" onPress={() => navigation.navigate('AccountStanding')} />
+        <CRow icon="share" title="Download my data" sub="Everything we keep about you" onPress={() => navigation.navigate('MyData')} />
+        <CRow icon="close" title="Delete account" sub="Erased after a grace period" onPress={() => navigation.navigate('DeleteAccount')} />
         <CRow icon="shield" title="Lockdown details" sub="Login method, codes, this device" onPress={() => navigation.navigate('ChatSecurity')} />
       </CCard>
       <CBtn kind="coral" icon="close" title="Sign out on all devices" style={{ marginTop: 16 }} onPress={() => signOutEverywhere().then(() => navigation.reset({ index: 0, routes: [{ name: useSession.getState().activeId ? 'ChatMain' : 'SignIn' }] })).catch(e => show(e.message, true))} />
