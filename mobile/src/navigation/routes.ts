@@ -112,5 +112,22 @@ export const SCREENS: { name: string; folder: string; query?: string }[] = [
   { name: 'Call', folder: '68c-voice-call', query: 'media=audio&autostart=false' },
   { name: 'Call', folder: '68d-face-call', query: 'media=video&autostart=false' },
   { name: 'ShareToChat', folder: '68-post2chat', query: 'type=post&id=p2&title=Marine Drive at golden hour' },
+  // login safety, privacy & standing (P0 steps 1–7)
+  { name: 'SecurityCenter', folder: '80-security-center' },
+  { name: 'TwoFactor', folder: '81-two-factor' },
+  { name: 'Devices', folder: '82-your-devices' },
+  { name: 'AccountActivity', folder: '83-account-activity' },
+  { name: 'AccountStanding', folder: '84-account-standing' },
+  { name: 'MyData', folder: '85-download-my-data' },
+  { name: 'DeleteAccount', folder: '86-delete-account' },
+  // add-ons batch 1
+  { name: 'GlowExtras', folder: '90-glow-extras' },
+  { name: 'DailySpark', folder: '91-daily-spark' },
+  { name: 'Capsules', folder: '92-time-capsules' },
+  { name: 'Kudos', folder: '93-kudos' },
+  { name: 'HushExtras', folder: '94-hush-extras' },
+  { name: 'SafeArrival', folder: '95-safe-arrival' },
+  { name: 'Pacts', folder: '96-pacts', query: 'convId=cv_u1' },
+  { name: 'HushTab', folder: '97-hush-tab', query: 'convId=cv_u1' },
 ];
 export const TAB_SCREENS = ['Home', 'Explore', 'Create', 'Motion', 'Profile'];

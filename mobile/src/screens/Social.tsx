@@ -154,6 +154,9 @@ export function Home({ navigation }: any) {
     : feed === 'Fresh' ? [...visible].sort((a, b) => b.at - a.at) : feed === 'Mood' ? visible.filter(p => p.mood === mood) : feed === 'Interests' ? visible.filter(p => p.interest === interest)
     : [...visible].sort((a, b) => (st.following.includes(b.by) ? 1 : 0) - (st.following.includes(a.by) ? 1 : 0) || b.at - a.at);
   const live = online() && srv.key === key && !srv.err;
+  const sparkOn = (useConfig(c => (c.cfg as any).addons?.glow?.dailySpark)) !== false;
+  const [spark, setSpark] = useState<{ question: string; answered: boolean; total: number } | null>(null);
+  useEffect(() => { if (sparkOn && online()) apiCall<any>('GET', '/addons/spark').then(setSpark).catch(() => {}); }, [sparkOn]);
   // live posts carry the same shape as /bootstrap posts; re-read from the store when present so likes/saves stay in sync
   const list = live ? srv.items.map(p => st.posts.find(q => q.id === p.id) ?? p).filter(p => !st.blocked.includes(p.by)) : local;
   return (
@@ -171,10 +174,13 @@ export function Home({ navigation }: any) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: S.lg }}>{tabs.map(f => <Chip key={f} label={f} active={feed === f} onPress={() => setFeed(f)} />)}</ScrollView>
       {feed === 'Mood' ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 8 }}>{MOODS.map(m => <Chip key={m} label={m} icon="smile" active={mood === m} onPress={() => setMood(m)} />)}</ScrollView> : null}
       {feed === 'Interests' ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginTop: 8 }}>{['Food', 'Travel', 'Finance', 'Art', 'Sports'].map(m => <Chip key={m} label={m} icon="hash" active={interest === m} onPress={() => setInterest(m)} />)}</ScrollView> : null}
-      <LinearGradient colors={[C.violetSoft, C.bg]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.oneQ}>
-        <VibeMoji id={311} size={44} />
-        <View style={{ flex: 1 }}><Text style={T.tiny}>ONE QUESTION · TODAY</Text><Text style={[T.h3, { marginTop: 2 }]}>What's a small habit that changed your year?</Text></View>
-      </LinearGradient>
+      {sparkOn ? <Pressable onPress={() => navigation.navigate('DailySpark')} accessibilityRole="button" accessibilityLabel="Open Daily Spark">
+        <LinearGradient colors={[C.violetSoft, C.bg]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.oneQ}>
+          <VibeMoji id={311} size={44} />
+          <View style={{ flex: 1 }}><Text style={T.tiny}>DAILY SPARK · {spark?.answered ? `${spark.total} ANSWERS` : 'ANSWER TO SEE OTHERS'}</Text><Text style={[T.h3, { marginTop: 2 }]}>{spark?.question ?? "What's a small habit that changed your year?"}</Text></View>
+        </LinearGradient>
+      </Pressable> : null}
+      <Pressable onPress={() => navigation.navigate('GlowExtras')} accessibilityRole="button" style={{ marginTop: 8, alignSelf: 'flex-start' }}><Text style={{ color: C.violet, fontWeight: '800' }}>Glow Extras · Time Capsules, Kudos →</Text></Pressable>
       <View style={{ height: S.lg }} />
       {list.map((p, i) => <React.Fragment key={p.id}><PostCard p={p} navigation={navigation} />{i === 0 ? <PromoSlot placement="feed" /> : null}{i === 2 ? <AdSlot place="feed" /> : null}</React.Fragment>)}
       {live && srv.loading && !list.length ? <Text style={[T.small, { textAlign: 'center', marginTop: 30 }]}>Loading {feed}…</Text>

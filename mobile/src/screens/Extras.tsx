@@ -129,6 +129,7 @@ export function SettingsHub({ navigation }: any) {
       <Card style={{ marginTop: 12 }}>
         <Row icon="bulb" tint={C.violet} title="Help & Support" sub="Help Hub, House Rules, Privacy Promise, SOS Lane, Hit Us Up" onPress={() => navigation.navigate('ContentHub')} />
         <Row icon="flag" tint={C.danger} title="Speak Up" sub="Report harassment, violations, scams" onPress={() => navigation.navigate('SpeakUp')} />
+        <Row icon="spark" tint={C.violet} title="Glow Extras" sub="Daily Spark, Time Capsules, Kudos" onPress={() => navigation.navigate('GlowExtras')} />
         <Row icon="send" tint={C.violet} title="Outbox" sub="Offline posts, messages & uploads" onPress={() => navigation.navigate('Outbox')} />
         <Row icon="users" tint="#14B88D" title="Five Faces" sub="Switch between up to 5 @IDs" onPress={() => navigation.navigate('Accounts')} />
         <Row icon="globe" tint={C.violet} title="Region & Lingo" sub="App language, country, zone & tier" onPress={() => navigation.navigate('LanguageRegion')} />

@@ -28,12 +28,21 @@ SETTINGS = [
     _s("defaults.glow.reactions", "glow", "Reaction set", "multi", REACTIONS, options=REACTIONS),
     _s("defaults.glow.hashtags", "glow", "Hashtags", "bool", True, True, "Off: tags are dropped from new posts."),
     _s("defaults.glow.mentions", "glow", "@mentions", "bool", True),
+    _s("addons.glow.dailySpark", "glow", "Add-on: Daily Spark (one question a day, everyone answers)", "bool", True, True),
+    _s("addons.glow.capsules", "glow", "Add-on: Time Capsules (sealed posts that open on a date)", "bool", True, True),
+    _s("addons.glow.capsuleMaxDays", "glow", "Time Capsules: furthest unlock date (days)", "int", 3650, True, min=1, max=36500),
+    _s("addons.glow.kudos", "glow", "Add-on: Kudos (thank-you badges + weekly board)", "bool", True, True),
+    _s("addons.glow.kudosPerDay", "glow", "Kudos each person can give per day", "int", 5, True, min=1, max=100),
     # ---------------- Hush ----------------
     _s("defaults.hush.whoCanMessage", "hush", "Default: who can message", "enum", "everyone", options=AUD3),
     _s("defaults.hush.readReceipts", "hush", "Default: read receipts on", "bool", True),
     _s("defaults.hush.lastSeen", "hush", "Default: who sees last seen", "enum", "everyone", options=AUD3),
     _s("defaults.hush.typing", "hush", "Default: typing indicators on", "bool", True),
     _s("defaults.hush.fadeTimer", "hush", "Default fade timer", "enum", "off", options=["off", "1h", "24h", "7d"]),
+    _s("addons.hush.pacts", "hush", "Add-on: Pacts (shared checklists in chats)", "bool", True, True),
+    _s("addons.hush.tab", "hush", "Add-on: Hush Tab (split expenses in chats)", "bool", True, True),
+    _s("addons.hush.safeArrival", "hush", "Add-on: Safe Arrival (check-in timer that alerts friends)", "bool", True, True),
+    _s("addons.hush.safeArrivalMaxHours", "hush", "Safe Arrival: longest timer (hours)", "int", 12, True, min=1, max=72),
     _s("limits.maxGroupSize", "hush", "Max group size", "int", 50, True, min=2, max=1024),
     _s("limits.fileMaxMB", "hush", "Max chat file size (MB)", "int", 100, True, min=1, max=1024),
     _s("limits.voiceNoteMaxSec", "hush", "Voice note max length (s)", "int", 300, True, min=5, max=300),
@@ -70,7 +79,7 @@ SETTINGS = [
     _s("limits.autoHideReports", "global", "Auto-hide a post after N reports (0 = off)", "int", 5, True, min=0, max=1000),
 ]
 BY_PATH = {s["path"]: s for s in SETTINGS}
-OWNED_TOP = ("defaults", "access", "security", "privacy", "safety", "spam")  # top-level keys this module owns entirely; "limits" is shared (fees etc. stay elsewhere)
+OWNED_TOP = ("defaults", "access", "security", "privacy", "safety", "spam", "addons")  # top-level keys this module owns entirely; "limits" is shared (fees etc. stay elsewhere)
 LEGACY_LIMITS = {"maxAccounts", "maxGroupSize", "statusHours", "editWindowMin", "undoWindowMin"}
 
 def base_values() -> dict:

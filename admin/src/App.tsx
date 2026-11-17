@@ -18,7 +18,7 @@ const Ctx = createContext<{ s: State; dispatch: Dispatch<Action> }>(null!);
 export const PAGES = [
   ['dashboard', 'Mission Control'], ['users', 'Members'], ['moderation', 'Mod Queue'], ['payouts', 'Cashouts'],
   ['health', 'Vitals'], ['costs', 'Burn Rate'], ['flags', 'Switchboard'], ['audit', 'Paper Trail'],
-  ['privacy', 'Privacy Desk'], ['abuse', 'Spam Shield'], ['appeals', 'Appeals'], ['scan', 'Scan Queue'], ['incidents', 'Incidents'], ['revenue', 'Revenue Pulse'], ['announcements', 'Megaphone'], ['roles', 'Role Matrix'],
+  ['privacy', 'Privacy Desk'], ['abuse', 'Spam Shield'], ['appeals', 'Appeals'], ['scan', 'Scan Queue'], ['incidents', 'Incidents'], ['extras', 'Extras'], ['revenue', 'Revenue Pulse'], ['announcements', 'Megaphone'], ['roles', 'Role Matrix'],
   ['navigation', 'Nav Builder'], ['themes', 'Theme Studio'], ['userapp', 'User App Settings'], ['switches', 'All Switches'], ['screens', 'Screen Switches'], ['limits', 'Feature Dials'], ['zones', 'Zones'], ['slabs', 'Tiers'], ['languages', 'Lingo'], ['preview', 'Preview Room'],
   ['otp', 'Login Watch'], ['identity', 'ID Desk'], ['chat', 'Hush & Hoods'],
   ['realtime', 'Realtime Monitor'], ['calls', 'Call Log'], ['push', 'Push Center'], ['e2ee', 'E2EE & Keys'],
@@ -458,6 +458,39 @@ function ScanQueue() {
         <div className="mlist mt">{hl.data?.map(h => <div key={h.sha256} className="mitem"><div className="grow"><code className="mono">{h.sha256.slice(0, 20)}…</code><small>{h.label} · {h.addedBy} · {ago(h.at)}</small></div><button className="btn sm ghost" disabled={busy} onClick={() => run(() => api(`/admin/hash-blocklist/${h.sha256}`, { method: 'DELETE' }), 'Removed', hl.reload)}>Remove</button></div>)}</div>
       </Card>
     </div>
+  </>;
+}
+
+type AddonStat = { on: boolean; week: number; alertedNow?: number };
+function Extras() {
+  const r = useApi<{ glow: Record<string, AddonStat>; hush: Record<string, AddonStat> }>('/admin/addons');
+  const q = useApi<{ day: string; question: string; custom: boolean; answers: number }[]>('/admin/addons/spark'); const { run, busy } = useAct();
+  const [edit, setEdit] = useState<Record<string, string>>({});
+  const names: Record<string, [string, string]> = { dailySpark: ['Daily Spark', 'addons.glow.dailySpark'], capsules: ['Time Capsules', 'addons.glow.capsules'], kudos: ['Kudos', 'addons.glow.kudos'],
+    pacts: ['Pacts', 'addons.hush.pacts'], tab: ['Hush Tab', 'addons.hush.tab'], safeArrival: ['Safe Arrival', 'addons.hush.safeArrival'] };
+  const today = new Date().toISOString().slice(0, 10);
+  return <>
+    <p className="note">Turn each add-on on or off (globally or per country) in <a className="link" href="#/userapp">User App Settings</a> → Glow / Hush → <code>addons.*</code>. Switched-off add-ons disappear from the app and the API refuses them.</p>
+    <div className="grid g2">
+      {(['glow', 'hush'] as const).map(m => <Card key={m} title={m === 'glow' ? 'Glow add-ons' : 'Hush add-ons'} extra={<LivePill />}>
+        {r.error ? <ApiErr msg={r.error} retry={r.reload} /> : !r.data ? <p className="loading">Loading…</p> : <div className="mlist">
+          {Object.entries(r.data[m]).map(([k, v]) => <div key={k} className="mitem"><div className="grow"><b>{names[k]?.[0] ?? k}</b><small className="mono muted">{names[k]?.[1]}</small></div>
+            <small>{v.week} this week{v.alertedNow ? ` · ${v.alertedNow} overdue now` : ''}</small>{v.on ? <Pill tone="mint">on</Pill> : <Pill tone="gray">off</Pill>}</div>)}
+        </div>}
+      </Card>)}
+    </div>
+    <Card title="Daily Spark questions" extra={<LivePill />}>
+      <p className="note">Days without a custom question use the built-in rotation. Changing today's question keeps existing answers.</p>
+      {q.error ? <ApiErr msg={q.error} retry={q.reload} /> : !q.data ? <p className="loading">Loading…</p> :
+      <table><thead><tr><th>Day</th><th>Question</th><th>Answers</th><th /></tr></thead><tbody>
+        {q.data.map(x => <tr key={x.day} className={x.day < today ? 'dim' : ''}><td className="mono">{x.day}{x.day === today ? <> <Pill tone="violet">today</Pill></> : null}</td>
+          <td>{x.day >= today ? <input style={{ width: '100%' }} value={edit[x.day] ?? x.question} onChange={e => setEdit({ ...edit, [x.day]: e.target.value })} /> : x.question} {x.custom ? <Pill tone="amber">custom</Pill> : null}</td>
+          <td className="num">{x.answers}</td>
+          <td className="r">{x.day >= today && <div className="row">
+            <button className="btn sm prism" disabled={busy || !(edit[x.day] ?? '').trim() || edit[x.day] === x.question} onClick={() => run(() => api('/admin/addons/spark', { method: 'PUT', body: { day: x.day, text: edit[x.day] } }), 'Saved', q.reload)}>Save</button>
+            {x.custom && <button className="btn sm ghost" disabled={busy} onClick={() => run(() => api(`/admin/addons/spark/${x.day}`, { method: 'DELETE' }), 'Back to rotation', q.reload)}>Reset</button>}</div>}</td></tr>)}
+      </tbody></table>}
+    </Card>
   </>;
 }
 
@@ -2118,7 +2151,7 @@ function Tabs<T extends string>({ v, set, opts }: { v: T; set: (t: T) => void; o
   return <div className="tabs">{opts.map(([k, l]) => <button key={k} className={v === k ? 'on' : ''} onClick={() => set(k)}>{l}</button>)}</div>;
 }
 
-const VIEWS: Record<Slug, () => ReactNode> = { dashboard: Dashboard, users: Users, moderation: Moderation, payouts: Payouts, health: Health, costs: Costs, flags: Flags, audit: Audit, privacy: Privacy, abuse: Abuse, appeals: Appeals, scan: ScanQueue, incidents: Incidents, revenue: Revenue, announcements: Announcements, roles: Roles, settings: SettingsPage, emoji: Emoji, features: Features, search: GlobalSearch,
+const VIEWS: Record<Slug, () => ReactNode> = { dashboard: Dashboard, users: Users, moderation: Moderation, payouts: Payouts, health: Health, costs: Costs, flags: Flags, audit: Audit, privacy: Privacy, abuse: Abuse, appeals: Appeals, scan: ScanQueue, incidents: Incidents, extras: Extras, revenue: Revenue, announcements: Announcements, roles: Roles, settings: SettingsPage, emoji: Emoji, features: Features, search: GlobalSearch,
   navigation: NavigationPage, userapp: UserAppSettingsPage, switches: AllSwitchesPage, themes: ThemesPage, screens: ScreensPage, limits: LimitsPage, zones: ZonesPage, slabs: SlabsPage, languages: LanguagesPage, preview: PreviewPage, otp: OtpPage, identity: IdentityPage, chat: ChatPage, learn: LearnPage, realtime: RealtimePage, calls: CallsPage, push: PushPage, e2ee: E2eePage,
   cashflow: CashFlowPage, money: MoneyPage, plans: PlansPage, countries: CountriesPage, boosts: BoostsPage, stash: StashPage, plugs: PlugsPage, promos: PromosPage, uploads: UploadsPage,
   pages: PagesPage, blog: BlogPage, reviews: ReviewsPage, speakup: SpeakUpPage };

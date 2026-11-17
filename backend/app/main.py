@@ -46,7 +46,9 @@ async def lifespan(_app):
     if n: import logging; logging.getLogger("vibeloop").warning("removed %d abandoned upload sessions", n)
     import threading as _thr
     from .routes_trust import purge_loop
-    _stop = _thr.Event(); _thr.Thread(target=purge_loop, args=(_stop,), daemon=True, name="purge").start()  # erase accounts past their deletion date (hourly)
+    _stop = _thr.Event(); _thr.Thread(target=purge_loop, args=(_stop,), daemon=True, name="purge").start()
+    from .routes_addons import addons_loop
+    _thr.Thread(target=addons_loop, args=(_stop,), daemon=True, name="addons").start()  # Safe Arrival overdue alerts (every minute)  # erase accounts past their deletion date (hourly)
     yield
     _stop.set()
     # Graceful shutdown (SIGTERM from gunicorn/k8s): the server has stopped accepting and drained in-flight requests by now.
@@ -70,7 +72,8 @@ app.add_middleware(RequestContextMiddleware)
 from .routes_media import router as media_router
 app.include_router(media_router)
 app.include_router(routes_identity.router)
-from . import routes_security, routes_trust
+from . import routes_security, routes_trust, routes_addons
+app.include_router(routes_addons.router)
 app.include_router(routes_security.router)
 app.include_router(routes_trust.router)
 app.include_router(routes_chat.router)

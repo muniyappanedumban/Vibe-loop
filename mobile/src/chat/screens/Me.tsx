@@ -72,6 +72,7 @@ export function ChatMe({ navigation }: any) {
         <CRow icon="globe" title="Region & Lingo" sub={`${LANG_NAMES[useConfig.getState().cfg.resolvedFor.lang] ?? 'English'} · ${useConfig.getState().cfg.resolvedFor.country}`} onPress={() => navigation.navigate('LanguageRegion')} />
         <CRow icon="spark" title="BubbleMoji" sub="1000 chat emoji" onPress={() => navigation.navigate('BubbleMojiGallery')} />
         <CRow icon="star" title="Star Box" onPress={() => navigation.navigate('Starred')} />
+        <CRow icon="spark" title="Hush Extras" sub="Safe Arrival, Pacts, Hush Tab" onPress={() => navigation.navigate('HushExtras')} />
         {feats.hushSettings !== false ? <CRow icon="gear" title="Hush Control Room" sub="All Hush settings: privacy, pings, chats, calls, security" onPress={() => navigation.navigate('HushSettings')} /> : null}
         <CRow icon="shield" title="Lockdown" sub="Sessions, encryption status" onPress={() => navigation.navigate('ChatSecurity')} />
         <CRow icon="board" title="Help & Support" sub="Help Hub, House Rules, Privacy Promise, SOS Lane" onPress={() => navigation.navigate('ContentHub')} />

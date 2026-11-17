@@ -607,3 +607,58 @@ class Incident(Base):
     timeline: Mapped[list] = mapped_column(JSON, default=list)
     at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
     resolved_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+# ---------- add-ons batch 1 ----------
+class SparkQuestion(Base):
+    """Daily Spark: one question per day (YYYY-MM-DD, UTC), set by staff or auto-picked from the pool."""
+    __tablename__ = "spark_questions"
+    day: Mapped[str] = mapped_column(String(10), primary_key=True); text: Mapped[str] = mapped_column(String(200))
+    set_by: Mapped[str] = mapped_column(String(60), default=""); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class SparkAnswer(Base):
+    __tablename__ = "spark_answers"
+    __table_args__ = (UniqueConstraint("day", "user_id", name="uq_spark_answer_day_user"),)
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("spa"))
+    day: Mapped[str] = mapped_column(String(10), index=True); user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    text: Mapped[str] = mapped_column(String(280)); cheers: Mapped[list] = mapped_column(JSON, default=list); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class Capsule(Base):
+    """Time Capsule: sealed until unlock_at; then visible to the owner (me) or friends."""
+    __tablename__ = "capsules"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("cap"))
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(80)); text: Mapped[str] = mapped_column(Text); media_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    audience: Mapped[str] = mapped_column(String(10), default="me"); unlock_at: Mapped[int] = mapped_column(BigInteger, index=True)
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class Kudos(Base):
+    __tablename__ = "kudos"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("kd"))
+    from_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True); to_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20)); note: Mapped[str] = mapped_column(String(140), default=""); at: Mapped[int] = mapped_column(BigInteger, default=now_ms, index=True)
+
+class Pact(Base):
+    """Hush Pacts: a shared checklist inside a conversation; every member can add and tick items."""
+    __tablename__ = "pacts"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("pct"))
+    conv_id: Mapped[str] = mapped_column(String(40), index=True); created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(80)); items: Mapped[list] = mapped_column(JSON, default=list); due_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class Tab(Base):
+    """Hush Tab: a shared expense in a conversation, split between members; settle-ups are recorded (no money moves)."""
+    __tablename__ = "tabs"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("tab"))
+    conv_id: Mapped[str] = mapped_column(String(40), index=True); paid_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(80)); amount: Mapped[int] = mapped_column(Integer)  # minor units (paise)
+    currency: Mapped[str] = mapped_column(String(3), default="INR"); split: Mapped[dict] = mapped_column(JSON, default=dict)  # uid → share (minor units)
+    settled: Mapped[list] = mapped_column(JSON, default=list); at: Mapped[int] = mapped_column(BigInteger, default=now_ms)
+
+class SafeArrival(Base):
+    """Safe Arrival: 'I'll be home by X' — if not checked in by then, chosen watchers get an alert."""
+    __tablename__ = "safe_arrivals"
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: nid("sa"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    note: Mapped[str] = mapped_column(String(120), default=""); watchers: Mapped[list] = mapped_column(JSON, default=list)
+    due_at: Mapped[int] = mapped_column(BigInteger, index=True); status: Mapped[str] = mapped_column(String(10), default="active", index=True)  # active|arrived|alerted|cancelled
+    at: Mapped[int] = mapped_column(BigInteger, default=now_ms); closed_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

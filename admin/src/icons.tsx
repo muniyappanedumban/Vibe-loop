@@ -11,6 +11,7 @@ const P: Record<string, string> = {
   abuse: 'M12 3l10 18H2zM12 10v5M12 18v.5',
   appeals: 'M4 4h16v12H8l-4 4zM8 9h8M8 12h5',
   scan: 'M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4M7 12h10',
+  extras: 'M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z',
   incidents: 'M12 2l9 4v6c0 5-4 9-9 10-5-1-9-5-9-10V6zM12 8v5M12 16v.5',
   revenue: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
   announcements: 'M3 10v4h4l7 5V5L7 10zM18 8a5 5 0 0 1 0 8',
