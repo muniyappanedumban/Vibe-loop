@@ -144,10 +144,12 @@ export function ChatRoom({ navigation, route }: any) {
   const nameOf = (from: string) => (from === 'me' ? 'You' : c.members.find(m => m.id === from)?.name ?? 'Member');
   return (
     <View style={{ flex: 1, backgroundColor: CC.bg }}>
-      <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insTop, paddingHorizontal: 18, paddingBottom: 170 }}>
-        <CHeader title={c.title} sub={typingNow ? 'typing…' : c.group ? `${c.members.length + 1} members` : c.request ? 'Message request' : c.members[0]?.lastSeen ? (Date.now() - c.members[0].lastSeen < 120_000 ? 'online' : `last seen ${when(c.members[0].lastSeen)}`) : c.fadeSec ? `Fade Chat · ${c.fadeSec / 3600}h` : 'last seen hidden'} right={<View style={{ flexDirection: 'row', gap: 6 }}>
-          {callsOn && !c.group && !c.request ? <>{audioOk ? <CIconBtn name="phone" label="Voice call" onPress={() => navigation.navigate('Call', { peer: c.members[0], media: 'audio' })} /> : null}{videoOk ? <CIconBtn name="video" label="Video call" onPress={() => navigation.navigate('Call', { peer: c.members[0], media: 'video' })} /> : null}</> : null}
-          <CIconBtn name="more" label="Chat settings" onPress={() => setSettings(!settings)} /></View>} />
+      <View style={{ paddingTop: insTop, paddingHorizontal: 18, backgroundColor: CC.bg }}>
+          <CHeader title={c.title} sub={typingNow ? 'typing…' : c.group ? `${c.members.length + 1} members` : c.request ? 'Message request' : c.members[0]?.lastSeen ? (Date.now() - c.members[0].lastSeen < 120_000 ? 'online' : `last seen ${when(c.members[0].lastSeen)}`) : c.fadeSec ? `Fade Chat · ${c.fadeSec / 3600}h` : 'last seen hidden'} right={<View style={{ flexDirection: 'row', gap: 6 }}>
+            {callsOn && !c.group && !c.request ? <>{audioOk ? <CIconBtn name="phone" label="Voice call" onPress={() => navigation.navigate('Call', { peer: c.members[0], media: 'audio' })} /> : null}{videoOk ? <CIconBtn name="video" label="Video call" onPress={() => navigation.navigate('Call', { peer: c.members[0], media: 'video' })} /> : null}</> : null}
+            <CIconBtn name="more" label="Chat settings" onPress={() => setSettings(!settings)} /></View>} />
+      </View>
+      <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 8, paddingHorizontal: 18, paddingBottom: 170 }}>
         {settings ? <ConvSettings c={c} onDone={() => setSettings(false)} show={show} /> : null}
         {c.request ? (
           <CCard style={{ marginBottom: 12, borderColor: CC.sun }}>
