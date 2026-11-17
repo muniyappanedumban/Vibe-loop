@@ -469,7 +469,7 @@ function Extras() {
   const names: Record<string, [string, string]> = { dailySpark: ['Daily Spark', 'addons.glow.dailySpark'], capsules: ['Time Capsules', 'addons.glow.capsules'], kudos: ['Kudos', 'addons.glow.kudos'],
     pacts: ['Pacts', 'addons.hush.pacts'], tab: ['Hush Tab', 'addons.hush.tab'], safeArrival: ['Safe Arrival', 'addons.hush.safeArrival'] };
   const today = new Date().toISOString().slice(0, 10);
-  const batches = [2, 3, 4, 5, 6, 7, 8, 9];
+  const batches = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
   const [more, setMore] = useState<({ n: number; title: string; module: string; items: { name: string; flag: string; on: boolean; week: number }[] } | { n: number; error: string })[]>([]);
   useEffect(() => { Promise.all(batches.map(n => api<{ title: string; module: string; items: { name: string; flag: string; on: boolean; week: number }[] }>(`/admin/addons/b${n}`).then(r => ({ n, ...r })).catch(e => ({ n, error: (e as Error).message })))).then(setMore); }, []);
   return <>

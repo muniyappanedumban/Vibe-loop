@@ -75,7 +75,7 @@ app.include_router(routes_identity.router)
 from . import routes_security, routes_trust, routes_addons
 app.include_router(routes_addons.router)
 import importlib as _il
-for _n in range(2, 10):  # add-on batches (models register on import)
+for _n in range(2, 18):  # add-on batches (models register on import)
     app.include_router(_il.import_module(f".routes_addons_b{_n}", __package__).router)
 app.include_router(routes_security.router)
 app.include_router(routes_trust.router)

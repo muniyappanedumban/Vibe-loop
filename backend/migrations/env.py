@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.db import Base
 from app import models  # noqa: F401
 import importlib as _il
-for _n in range(2, 10):  # add-on batch models live in their route modules
+for _n in range(2, 18):  # add-on batch models live in their route modules
     try: _il.import_module(f'app.routes_addons_b{_n}')
     except ModuleNotFoundError: pass
 from app.config import DATABASE_URL

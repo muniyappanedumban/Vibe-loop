@@ -79,7 +79,7 @@ SETTINGS = [
     _s("limits.autoHideReports", "global", "Auto-hide a post after N reports (0 = off)", "int", 5, True, min=0, max=1000),
 ]
 import importlib as _il
-for _n in range(2, 10):  # add-on batches contribute their own switches
+for _n in range(2, 18):  # add-on batches contribute their own switches
     try: SETTINGS += _il.import_module(f".addon_settings_b{_n}", __package__).SETTINGS
     except ModuleNotFoundError: pass
 BY_PATH = {s["path"]: s for s in SETTINGS}
